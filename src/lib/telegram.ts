@@ -87,6 +87,14 @@ export class TelegramService {
 
   private constructor() {
     if (typeof window !== 'undefined') {
+      // Listen for the custom event from the layout script
+      window.addEventListener('telegramWebAppReady', (event: any) => {
+        console.log('Received telegramWebAppReady event');
+        this.webApp = event.detail.webApp;
+        this.setupWebApp();
+      });
+      
+      // Also try immediate initialization
       this.initializeWebApp();
     }
   }
@@ -101,11 +109,14 @@ export class TelegramService {
   private initializeWebApp() {
     try {
       let retryCount = 0;
-      const maxRetries = 50; // 5 seconds total
+      const maxRetries = 100; // 10 seconds total
       
       // Wait for Telegram WebApp to be available
       const checkTelegram = () => {
+        console.log(`Checking for Telegram WebApp... (attempt ${retryCount + 1}/${maxRetries})`);
+        
         if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+          console.log('Telegram WebApp found, initializing...');
           this.webApp = window.Telegram.WebApp;
           this.setupWebApp();
         } else if (retryCount < maxRetries) {
@@ -118,6 +129,7 @@ export class TelegramService {
         }
       };
       
+      // Start checking immediately
       checkTelegram();
     } catch (error) {
       console.error('Failed to initialize Telegram WebApp:', error);
@@ -126,14 +138,26 @@ export class TelegramService {
   }
 
   private setupFallbackMode() {
+    console.log('Setting up fallback mode...');
+    
     // For development or when not in Telegram
-    if (process.env.NODE_ENV === 'development' || typeof window !== 'undefined') {
-      // Check if we're on the specific domain
-      const isTargetDomain = typeof window !== 'undefined' && 
-        (window.location.hostname === 'telegram-earning-bot.vercel.app' || 
-         window.location.hostname === 'localhost');
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      const isDevelopment = process.env.NODE_ENV === 'development';
+      const isVercelApp = hostname.includes('vercel.app');
+      const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+      const hasUserParam = new URLSearchParams(window.location.search).get('user') === 'true';
       
-      if (isTargetDomain) {
+      console.log('Fallback mode conditions:', {
+        hostname,
+        isDevelopment,
+        isVercelApp,
+        isLocalhost,
+        hasUserParam
+      });
+      
+      // Allow fallback in development, on Vercel apps, localhost, or with user param
+      if (isDevelopment || isVercelApp || isLocalhost || hasUserParam) {
         this.user = {
           id: 123456789,
           first_name: 'Test',
@@ -144,6 +168,8 @@ export class TelegramService {
         };
         console.log('Using fallback user for testing:', this.user);
         this.isInitialized = true;
+      } else {
+        console.log('Fallback mode not activated - conditions not met');
       }
     }
   }
@@ -185,11 +211,19 @@ export class TelegramService {
           console.log('User data received:', this.user);
         } else {
           console.warn('Invalid user data structure:', userData);
-          this.setupFallbackMode();
+          // Don't immediately fall back, the user might be available later
+          console.log('Waiting for user data to become available...');
         }
       } else {
         console.warn('No user data available in initDataUnsafe');
-        this.setupFallbackMode();
+        // Check if we're in a Telegram environment but just don't have user data yet
+        if (TelegramService.isTelegramEnvironment()) {
+          console.log('In Telegram environment but no user data yet, will use fallback');
+          this.setupFallbackMode();
+        } else {
+          console.log('Not in Telegram environment, using fallback mode');
+          this.setupFallbackMode();
+        }
       }
       
       // Get start parameter (for referrals) with null check
@@ -228,6 +262,63 @@ export class TelegramService {
 
   public getStartParam(): string | null {
     return this.startParam;
+  }
+
+  public isReady(): boolean {
+    return this.isInitialized;
+  }
+
+  public waitForInitialization(): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (this.isInitialized) {
+        resolve(true);
+        return;
+      }
+
+      let attempts = 0;
+      const maxAttempts = 100; // 10 seconds
+      
+      const checkInitialization = () => {
+        if (this.isInitialized) {
+          resolve(true);
+        } else if (attempts < maxAttempts) {
+          attempts++;
+          setTimeout(checkInitialization, 100);
+        } else {
+          console.warn('TelegramService initialization timeout');
+          resolve(false);
+        }
+      };
+
+      checkInitialization();
+    });
+  }
+
+  public static isTelegramEnvironment(): boolean {
+    if (typeof window === 'undefined') return false;
+    
+    // Check user agent for Telegram
+    const userAgent = window.navigator.userAgent;
+    const isTelegramUserAgent = userAgent.includes('Telegram');
+    
+    // Check if Telegram WebApp is available
+    const hasTelegramWebApp = !!(window as any).Telegram?.WebApp;
+    
+    // Check if we have Telegram-specific URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasTelegramParams = urlParams.has('tgWebAppData') || 
+                             urlParams.has('tgWebAppVersion') ||
+                             urlParams.has('tgWebAppPlatform');
+    
+    console.log('Telegram environment check:', {
+      userAgent,
+      isTelegramUserAgent,
+      hasTelegramWebApp,
+      hasTelegramParams,
+      result: isTelegramUserAgent || hasTelegramWebApp || hasTelegramParams
+    });
+    
+    return isTelegramUserAgent || hasTelegramWebApp || hasTelegramParams;
   }
 
   public showAlert(message: string, callback?: () => void): void {

@@ -14,6 +14,12 @@ export const useAuth = () => {
     const initializeUser = async () => {
       try {
         const telegram = TelegramService.getInstance();
+        
+        // Wait for Telegram service to be initialized
+        console.log('Waiting for Telegram service initialization...');
+        await telegram.waitForInitialization();
+        console.log('Telegram service initialized, getting user data...');
+        
         const telegramUser = telegram.getUser();
         const startParam = telegram.getStartParam();
 
