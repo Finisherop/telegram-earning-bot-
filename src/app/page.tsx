@@ -6,6 +6,7 @@ import { ADMIN_SECRET_KEY } from '@/lib/constants';
 import UserDashboard from '@/components/UserDashboard';
 import AdminDashboard from '@/components/AdminDashboard';
 import LoadingScreen from '@/components/LoadingScreen';
+import TelegramDebug from '@/components/TelegramDebug';
 
 export default function Home() {
   const { user, loading } = useAuth();
@@ -46,6 +47,7 @@ export default function Home() {
       ) : (
         <UserDashboard user={user} />
       )}
+      <TelegramDebug />
     </div>
   );
 }

@@ -83,6 +83,7 @@ const Task = ({ user }: TaskProps) => {
   };
 
   const handleTaskClick = async (task: TaskType) => {
+    console.log('Task clicked:', task.title, task.type);
     const telegram = TelegramService.getInstance();
     const status = getTaskStatus(task.id);
 
@@ -99,50 +100,61 @@ const Task = ({ user }: TaskProps) => {
     telegram.hapticFeedback('medium');
 
     if (task.type === 'link' && task.url) {
+      console.log('Opening link:', task.url);
       // Open link and start completion process
       telegram.openLink(task.url);
       setCompletingTask(task.id);
       setTimer(10);
       setTimerTaskId(task.id);
+      toast.success('🔗 Link opened! Please wait 10 seconds to claim reward.');
       
       try {
         await completeTask(user.telegramId, task.id);
         await loadUserTasks();
+        console.log('Link task completed');
       } catch (error) {
-        toast.error('Failed to complete task');
+        console.error('Link task error:', error);
+        toast.error('Failed to complete task. Please try again.');
       }
     } else if (task.type === 'ads') {
+      console.log('Starting ad watch');
       // Simulate ad watching
       setCompletingTask(task.id);
       setTimer(10);
       setTimerTaskId(task.id);
-      toast.success('Watching ad... Please wait 10 seconds');
+      toast.success('📺 Watching ad... Please wait 10 seconds');
       
       try {
         await completeTask(user.telegramId, task.id);
         await loadUserTasks();
+        console.log('Ad task completed');
       } catch (error) {
-        toast.error('Failed to complete task');
+        console.error('Ad task error:', error);
+        toast.error('Failed to complete task. Please try again.');
       }
     }
   };
 
   const handleClaim = async (task: TaskType) => {
+    console.log('Claim task clicked:', task.title);
     const telegram = TelegramService.getInstance();
     telegram.hapticFeedback('heavy');
 
     try {
+      console.log(`Claiming task reward: ${task.reward} coins for task:`, task.id);
       await claimTask(user.telegramId, task.id, task.reward);
       await loadUserTasks();
       
       // Coin fly animation
-      toast.success(`+${task.reward} coins claimed! 🎉`);
+      toast.success(`💰 +${task.reward} coins claimed! 🎉`);
+      console.log('Task reward claimed successfully');
       
       if (task.type === 'ads') {
         setAdsWatchedToday(prev => prev + 1);
       }
     } catch (error) {
-      toast.error('Failed to claim reward');
+      console.error('Task claim error:', error);
+      toast.error('Failed to claim reward. Please try again.');
     }
   };
 

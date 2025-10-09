@@ -22,21 +22,41 @@ const ShopWithdrawal = ({ user }: ShopWithdrawalProps) => {
     const telegram = TelegramService.getInstance();
     const vipTier = VIP_TIERS[tier];
     
+    console.log(`VIP Purchase clicked: ${tier}`);
     telegram.hapticFeedback('medium');
     
+    // Show loading state
+    setIsProcessing(true);
+    
     try {
+      console.log(`Requesting payment for ${tier}: ${vipTier.price} Stars`);
+      
       const success = await telegram.requestStarsPayment(
         vipTier.price,
-        `${tier.toUpperCase()} Subscription - 30 days`
+        `${tier.toUpperCase()} Subscription - 30 days`,
+        tier
       );
       
+      console.log('Payment result:', success);
+      
       if (success) {
+        // Activate VIP subscription
         await activateSubscription(user.telegramId, tier, 30);
-        toast.success(`${tier.toUpperCase()} activated successfully! 🎉`);
+        toast.success(`🎉 ${tier.toUpperCase()} activated successfully!`);
         telegram.hapticFeedback('heavy');
+        
+        // Refresh page to show new VIP status
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+      } else {
+        toast.error('Payment was cancelled or failed.');
       }
     } catch (error) {
+      console.error('VIP purchase error:', error);
       toast.error('Payment failed. Please try again.');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -183,18 +203,19 @@ const ShopWithdrawal = ({ user }: ShopWithdrawalProps) => {
 
               <motion.button
                 onClick={() => handleVIPPurchase('vip1')}
-                disabled={user.vipTier === 'vip1' || user.vipTier === 'vip2'}
+                disabled={user.vipTier === 'vip1' || user.vipTier === 'vip2' || isProcessing}
                 className={`w-full py-3 rounded-xl font-bold transition-all ${
-                  user.vipTier === 'vip1' || user.vipTier === 'vip2'
+                  user.vipTier === 'vip1' || user.vipTier === 'vip2' || isProcessing
                     ? 'bg-white/20 text-white/60 cursor-not-allowed'
                     : 'bg-white text-blue-600 hover:bg-white/90'
                 }`}
                 whileTap={{ scale: 0.95 }}
-                whileHover={{ scale: user.vipTier === 'free' ? 1.02 : 1 }}
+                whileHover={{ scale: (user.vipTier === 'free' && !isProcessing) ? 1.02 : 1 }}
               >
-                {user.vipTier === 'vip1' ? '✅ Active' : 
+                {isProcessing ? '⏳ Processing...' :
+                 user.vipTier === 'vip1' ? '✅ Active' : 
                  user.vipTier === 'vip2' ? '👑 VIP 2 Active' :
-                 `Buy with ${VIP_TIERS.vip1.price} Stars ⭐`}
+                 `💰 Buy with ${VIP_TIERS.vip1.price} Stars ⭐`}
               </motion.button>
             </motion.div>
 
@@ -249,17 +270,18 @@ const ShopWithdrawal = ({ user }: ShopWithdrawalProps) => {
 
               <motion.button
                 onClick={() => handleVIPPurchase('vip2')}
-                disabled={user.vipTier === 'vip2'}
+                disabled={user.vipTier === 'vip2' || isProcessing}
                 className={`w-full py-3 rounded-xl font-bold transition-all ${
-                  user.vipTier === 'vip2'
+                  user.vipTier === 'vip2' || isProcessing
                     ? 'bg-white/20 text-white/60 cursor-not-allowed'
                     : 'bg-accent text-dark hover:bg-accent/90'
                 }`}
                 whileTap={{ scale: 0.95 }}
-                whileHover={{ scale: user.vipTier !== 'vip2' ? 1.02 : 1 }}
+                whileHover={{ scale: (user.vipTier !== 'vip2' && !isProcessing) ? 1.02 : 1 }}
               >
-                {user.vipTier === 'vip2' ? '✅ Active' : 
-                 `Buy with ${VIP_TIERS.vip2.price} Stars ⭐`}
+                {isProcessing ? '⏳ Processing...' :
+                 user.vipTier === 'vip2' ? '✅ Active' : 
+                 `💰 Buy with ${VIP_TIERS.vip2.price} Stars ⭐`}
               </motion.button>
             </motion.div>
           </div>

@@ -21,21 +21,39 @@ const Referral = ({ user }: ReferralProps) => {
   }, [user.telegramId]);
 
   const copyReferralLink = async () => {
+    console.log('Copy referral link clicked');
     const telegram = TelegramService.getInstance();
     telegram.hapticFeedback('medium');
 
     try {
       await navigator.clipboard.writeText(referralLink);
       setCopied(true);
-      toast.success('Referral link copied to clipboard!');
+      toast.success('📋 Referral link copied to clipboard!');
+      console.log('Referral link copied:', referralLink);
       
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
-      toast.error('Failed to copy link');
+      console.error('Copy link error:', error);
+      // Fallback for browsers that don't support clipboard API
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = referralLink;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        setCopied(true);
+        toast.success('📋 Referral link copied to clipboard!');
+        setTimeout(() => setCopied(false), 2000);
+      } catch (fallbackError) {
+        toast.error('Failed to copy link. Please copy manually.');
+      }
     }
   };
 
   const shareReferralLink = () => {
+    console.log('Share referral link clicked');
     const telegram = TelegramService.getInstance();
     telegram.hapticFeedback('medium');
     telegram.shareReferralLink(user.telegramId);

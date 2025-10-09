@@ -45,6 +45,7 @@ const Dashboard = ({ user }: DashboardProps) => {
   }, [user]);
 
   const startFarming = async () => {
+    console.log('Start farming clicked');
     const telegram = TelegramService.getInstance();
     telegram.hapticFeedback('medium');
     
@@ -52,19 +53,23 @@ const Dashboard = ({ user }: DashboardProps) => {
     const endTime = new Date(startTime.getTime() + 8 * 60 * 60 * 1000); // 8 hours
     
     try {
+      console.log('Starting farming for user:', user.telegramId);
       await updateUser(user.telegramId, {
         farmingStartTime: startTime,
         farmingEndTime: endTime,
       });
       
       setIsFarming(true);
-      toast.success('Farming started! Come back in 8 hours to claim your coins.');
+      toast.success('🚀 Farming started! Come back in 8 hours to claim your coins.');
+      console.log('Farming started successfully');
     } catch (error) {
-      toast.error('Failed to start farming');
+      console.error('Farming start error:', error);
+      toast.error('Failed to start farming. Please try again.');
     }
   };
 
   const claimFarming = async () => {
+    console.log('Claim farming clicked');
     const telegram = TelegramService.getInstance();
     telegram.hapticFeedback('heavy');
     
@@ -72,6 +77,7 @@ const Dashboard = ({ user }: DashboardProps) => {
     const reward = Math.floor(baseReward * user.farmingMultiplier);
     
     try {
+      console.log(`Claiming farming reward: ${reward} coins for user:`, user.telegramId);
       await updateUser(user.telegramId, {
         coins: user.coins + reward,
         xp: user.xp + Math.floor(reward / 10),
@@ -82,13 +88,16 @@ const Dashboard = ({ user }: DashboardProps) => {
       setCanClaim(false);
       setIsFarming(false);
       setFarmingProgress(0);
-      toast.success(`Claimed ${reward} coins! 🎉`);
+      toast.success(`💰 Claimed ${reward} coins! 🎉`);
+      console.log('Farming reward claimed successfully');
     } catch (error) {
-      toast.error('Failed to claim farming reward');
+      console.error('Farming claim error:', error);
+      toast.error('Failed to claim farming reward. Please try again.');
     }
   };
 
   const claimDaily = async () => {
+    console.log('Daily claim clicked');
     const telegram = TelegramService.getInstance();
     telegram.hapticFeedback('heavy');
     
@@ -97,6 +106,7 @@ const Dashboard = ({ user }: DashboardProps) => {
     const totalReward = baseReward + streakBonus;
     
     try {
+      console.log(`Claiming daily reward: ${totalReward} coins for user:`, user.telegramId);
       await updateUser(user.telegramId, {
         coins: user.coins + totalReward,
         xp: user.xp + Math.floor(totalReward / 10),
@@ -105,9 +115,11 @@ const Dashboard = ({ user }: DashboardProps) => {
       });
       
       setDailyClaimAvailable(false);
-      toast.success(`Daily reward claimed! +${totalReward} coins 🎉`);
+      toast.success(`🎁 Daily reward claimed! +${totalReward} coins 🎉`);
+      console.log('Daily reward claimed successfully');
     } catch (error) {
-      toast.error('Failed to claim daily reward');
+      console.error('Daily claim error:', error);
+      toast.error('Failed to claim daily reward. Please try again.');
     }
   };
 

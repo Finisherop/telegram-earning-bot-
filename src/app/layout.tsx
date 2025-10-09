@@ -25,13 +25,38 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <script src="https://telegram.org/js/telegram-web-app.js"></script>
         <script
           dangerouslySetInnerHTML={{
             __html: `
               // Telegram WebApp initialization
-              if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
-                window.Telegram.WebApp.ready();
-                window.Telegram.WebApp.expand();
+              console.log('Telegram WebApp script loaded');
+              
+              // Wait for Telegram WebApp to be available
+              function initTelegramWebApp() {
+                if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+                  console.log('Initializing Telegram WebApp...');
+                  window.Telegram.WebApp.ready();
+                  window.Telegram.WebApp.expand();
+                  
+                  // Log WebApp info
+                  console.log('WebApp initialized:', {
+                    version: window.Telegram.WebApp.version,
+                    platform: window.Telegram.WebApp.platform,
+                    colorScheme: window.Telegram.WebApp.colorScheme,
+                    user: window.Telegram.WebApp.initDataUnsafe?.user
+                  });
+                } else {
+                  console.log('Telegram WebApp not ready, retrying...');
+                  setTimeout(initTelegramWebApp, 100);
+                }
+              }
+              
+              // Start initialization when DOM is ready
+              if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initTelegramWebApp);
+              } else {
+                initTelegramWebApp();
               }
             `,
           }}
