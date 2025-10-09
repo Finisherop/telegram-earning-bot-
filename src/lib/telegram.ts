@@ -87,14 +87,6 @@ export class TelegramService {
 
   private constructor() {
     if (typeof window !== 'undefined') {
-      // Listen for the custom event from the layout script
-      window.addEventListener('telegramWebAppReady', (event: any) => {
-        console.log('Received telegramWebAppReady event');
-        this.webApp = event.detail.webApp;
-        this.setupWebApp();
-      });
-      
-      // Also try immediate initialization
       this.initializeWebApp();
     }
   }
@@ -108,29 +100,14 @@ export class TelegramService {
 
   private initializeWebApp() {
     try {
-      let retryCount = 0;
-      const maxRetries = 100; // 10 seconds total
-      
-      // Wait for Telegram WebApp to be available
-      const checkTelegram = () => {
-        console.log(`Checking for Telegram WebApp... (attempt ${retryCount + 1}/${maxRetries})`);
-        
-        if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
-          console.log('Telegram WebApp found, initializing...');
-          this.webApp = window.Telegram.WebApp;
-          this.setupWebApp();
-        } else if (retryCount < maxRetries) {
-          retryCount++;
-          // Retry after 100ms if Telegram is not ready
-          setTimeout(checkTelegram, 100);
-        } else {
-          console.warn('Telegram WebApp not available after retries, using fallback mode');
-          this.setupFallbackMode();
-        }
-      };
-      
-      // Start checking immediately
-      checkTelegram();
+      // Simple check for Telegram WebApp
+      if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+        this.webApp = window.Telegram.WebApp;
+        this.setupWebApp();
+      } else {
+        // Use fallback mode immediately
+        this.setupFallbackMode();
+      }
     } catch (error) {
       console.error('Failed to initialize Telegram WebApp:', error);
       this.setupFallbackMode();
@@ -138,49 +115,23 @@ export class TelegramService {
   }
 
   private setupFallbackMode() {
-    console.log('Setting up fallback mode...');
-    
-    // For development or when not in Telegram
-    if (typeof window !== 'undefined') {
-      const hostname = window.location.hostname;
-      const isDevelopment = process.env.NODE_ENV === 'development';
-      const isVercelApp = hostname.includes('vercel.app');
-      const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
-      const hasUserParam = new URLSearchParams(window.location.search).get('user') === 'true';
-      
-      console.log('Fallback mode conditions:', {
-        hostname,
-        isDevelopment,
-        isVercelApp,
-        isLocalhost,
-        hasUserParam
-      });
-      
-      // Allow fallback in development, on Vercel apps, localhost, or with user param
-      if (isDevelopment || isVercelApp || isLocalhost || hasUserParam) {
-        this.user = {
-          id: 123456789,
-          first_name: 'Test',
-          last_name: 'User',
-          username: 'testuser',
-          language_code: 'en',
-          is_premium: false
-        };
-        console.log('Using fallback user for testing:', this.user);
-        this.isInitialized = true;
-      } else {
-        console.log('Fallback mode not activated - conditions not met');
-      }
-    }
+    // Always create a default user - no complex conditions
+    this.user = {
+      id: 123456789,
+      first_name: 'User',
+      last_name: '',
+      username: 'user',
+      language_code: 'en',
+      is_premium: false
+    };
+    this.isInitialized = true;
   }
 
   private setupWebApp() {
     if (!this.webApp) return;
 
     try {
-      console.log('Initializing Telegram WebApp...');
-      
-      // Initialize WebApp safely
+      // Initialize WebApp
       if (typeof this.webApp.ready === 'function') {
         this.webApp.ready();
       }
@@ -188,67 +139,33 @@ export class TelegramService {
         this.webApp.expand();
       }
       
-      // Log WebApp data for debugging
-      console.log('WebApp initData:', this.webApp.initData || 'Not available');
-      console.log('WebApp initDataUnsafe:', this.webApp.initDataUnsafe || 'Not available');
-      console.log('WebApp version:', this.webApp.version || 'Unknown');
-      console.log('WebApp platform:', this.webApp.platform || 'Unknown');
-      
-      // Get user data with proper null checks
+      // Get user data
       if (this.webApp.initDataUnsafe?.user) {
-        // Validate user data structure
         const userData = this.webApp.initDataUnsafe.user;
         if (userData.id && userData.first_name) {
           this.user = {
             id: userData.id,
             first_name: userData.first_name,
-            last_name: userData.last_name || undefined,
-            username: userData.username || undefined,
+            last_name: userData.last_name || '',
+            username: userData.username || '',
             photo_url: userData.photo_url || undefined,
             language_code: userData.language_code || 'en',
             is_premium: userData.is_premium || false
           };
-          console.log('User data received:', this.user);
-        } else {
-          console.warn('Invalid user data structure:', userData);
-          // Don't immediately fall back, the user might be available later
-          console.log('Waiting for user data to become available...');
-        }
-      } else {
-        console.warn('No user data available in initDataUnsafe');
-        // Check if we're in a Telegram environment but just don't have user data yet
-        if (TelegramService.isTelegramEnvironment()) {
-          console.log('In Telegram environment but no user data yet, will use fallback');
-          this.setupFallbackMode();
-        } else {
-          console.log('Not in Telegram environment, using fallback mode');
-          this.setupFallbackMode();
         }
       }
       
-      // Get start parameter (for referrals) with null check
+      // Get start parameter (for referrals)
       if (this.webApp.initDataUnsafe?.start_param) {
         this.startParam = this.webApp.initDataUnsafe.start_param;
-        console.log('Start parameter:', this.startParam);
       }
       
-      // Set theme colors safely
-      try {
-        if (typeof this.webApp.setHeaderColor === 'function') {
-          this.webApp.setHeaderColor('#0088cc');
-        }
-        if (typeof this.webApp.setBackgroundColor === 'function') {
-          this.webApp.setBackgroundColor('#ffffff');
-        }
-        if (typeof this.webApp.enableClosingConfirmation === 'function') {
-          this.webApp.enableClosingConfirmation();
-        }
-      } catch (themeError) {
-        console.warn('Theme setup failed:', themeError);
+      // If no user data, use fallback
+      if (!this.user) {
+        this.setupFallbackMode();
+      } else {
+        this.isInitialized = true;
       }
-      
-      this.isInitialized = true;
-      console.log('Telegram WebApp initialized successfully');
       
     } catch (error) {
       console.error('WebApp setup error:', error);
@@ -266,59 +183,6 @@ export class TelegramService {
 
   public isReady(): boolean {
     return this.isInitialized;
-  }
-
-  public waitForInitialization(): Promise<boolean> {
-    return new Promise((resolve) => {
-      if (this.isInitialized) {
-        resolve(true);
-        return;
-      }
-
-      let attempts = 0;
-      const maxAttempts = 100; // 10 seconds
-      
-      const checkInitialization = () => {
-        if (this.isInitialized) {
-          resolve(true);
-        } else if (attempts < maxAttempts) {
-          attempts++;
-          setTimeout(checkInitialization, 100);
-        } else {
-          console.warn('TelegramService initialization timeout');
-          resolve(false);
-        }
-      };
-
-      checkInitialization();
-    });
-  }
-
-  public static isTelegramEnvironment(): boolean {
-    if (typeof window === 'undefined') return false;
-    
-    // Check user agent for Telegram
-    const userAgent = window.navigator.userAgent;
-    const isTelegramUserAgent = userAgent.includes('Telegram');
-    
-    // Check if Telegram WebApp is available
-    const hasTelegramWebApp = !!(window as any).Telegram?.WebApp;
-    
-    // Check if we have Telegram-specific URL parameters
-    const urlParams = new URLSearchParams(window.location.search);
-    const hasTelegramParams = urlParams.has('tgWebAppData') || 
-                             urlParams.has('tgWebAppVersion') ||
-                             urlParams.has('tgWebAppPlatform');
-    
-    console.log('Telegram environment check:', {
-      userAgent,
-      isTelegramUserAgent,
-      hasTelegramWebApp,
-      hasTelegramParams,
-      result: isTelegramUserAgent || hasTelegramWebApp || hasTelegramParams
-    });
-    
-    return isTelegramUserAgent || hasTelegramWebApp || hasTelegramParams;
   }
 
   public showAlert(message: string, callback?: () => void): void {
