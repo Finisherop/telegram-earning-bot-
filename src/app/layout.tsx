@@ -30,26 +30,61 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               // Telegram WebApp initialization
-              console.log('Telegram WebApp script loaded');
+              console.log('Telegram WebApp script loading...');
+              
+              // Global flag to track initialization
+              window.telegramWebAppInitialized = false;
               
               // Wait for Telegram WebApp to be available
               function initTelegramWebApp() {
-                if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
-                  console.log('Initializing Telegram WebApp...');
-                  window.Telegram.WebApp.ready();
-                  window.Telegram.WebApp.expand();
+                let retryCount = 0;
+                const maxRetries = 100; // 10 seconds total
+                
+                function checkAndInit() {
+                  console.log('Checking for Telegram WebApp... (attempt ' + (retryCount + 1) + '/' + maxRetries + ')');
                   
-                  // Log WebApp info
-                  console.log('WebApp initialized:', {
-                    version: window.Telegram.WebApp.version,
-                    platform: window.Telegram.WebApp.platform,
-                    colorScheme: window.Telegram.WebApp.colorScheme,
-                    user: window.Telegram.WebApp.initDataUnsafe?.user
-                  });
-                } else {
-                  console.log('Telegram WebApp not ready, retrying...');
-                  setTimeout(initTelegramWebApp, 100);
+                  if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+                    console.log('Telegram WebApp found! Initializing...');
+                    
+                    try {
+                      window.Telegram.WebApp.ready();
+                      window.Telegram.WebApp.expand();
+                      window.telegramWebAppInitialized = true;
+                      
+                      // Log WebApp info
+                      console.log('WebApp initialized successfully:', {
+                        version: window.Telegram.WebApp.version,
+                        platform: window.Telegram.WebApp.platform,
+                        colorScheme: window.Telegram.WebApp.colorScheme,
+                        user: window.Telegram.WebApp.initDataUnsafe?.user,
+                        initData: window.Telegram.WebApp.initData,
+                        isExpanded: window.Telegram.WebApp.isExpanded
+                      });
+                      
+                      // Dispatch custom event to notify React components
+                      window.dispatchEvent(new CustomEvent('telegramWebAppReady', {
+                        detail: { webApp: window.Telegram.WebApp }
+                      }));
+                      
+                    } catch (error) {
+                      console.error('Error initializing Telegram WebApp:', error);
+                    }
+                  } else if (retryCount < maxRetries) {
+                    retryCount++;
+                    setTimeout(checkAndInit, 100);
+                  } else {
+                    console.warn('Telegram WebApp not available after ' + maxRetries + ' attempts');
+                    console.log('Current environment:', {
+                      userAgent: navigator.userAgent,
+                      hostname: window.location.hostname,
+                      href: window.location.href,
+                      telegramAvailable: !!window.Telegram,
+                      webAppAvailable: !!(window.Telegram && window.Telegram.WebApp)
+                    });
+                  }
                 }
+                
+                checkAndInit();
               }
               
               // Start initialization when DOM is ready
