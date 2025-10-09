@@ -17,8 +17,66 @@ export const useAuth = () => {
         const telegramUser = telegram.getUser();
         const startParam = telegram.getStartParam();
 
-        if (!telegramUser) {
-          // For development, create a mock user
+        // Check if user mode is enabled via URL parameter
+        const isUserMode = typeof window !== 'undefined' && 
+          new URLSearchParams(window.location.search).get('user') === 'true';
+
+        if (!telegramUser && !isUserMode) {
+          console.log('No Telegram user data and not in user mode');
+          setLoading(false);
+          return;
+        }
+
+        let userId: string;
+        let userData: Partial<User>;
+
+        if (telegramUser) {
+          // Real Telegram user
+          userId = telegramUser.id.toString();
+          userData = {
+            telegramId: userId,
+            username: telegramUser.username,
+            firstName: telegramUser.first_name,
+            lastName: telegramUser.last_name,
+            profilePic: telegramUser.photo_url,
+            referrerId: startParam || undefined,
+          };
+        } else {
+          // Mock user for testing
+          userId = 'test_user_123';
+          userData = {
+            telegramId: userId,
+            username: 'testuser',
+            firstName: 'Test',
+            lastName: 'User',
+            referrerId: startParam || undefined,
+          };
+        }
+
+        console.log('Initializing user with ID:', userId);
+        
+        // Check if user exists in Firebase
+        let existingUser = await getUser(userId);
+        
+        if (!existingUser) {
+          console.log('Creating new user in Firebase');
+          // Create new user
+          await createUser(userData);
+          existingUser = await getUser(userId);
+        }
+
+        if (existingUser) {
+          setUser(existingUser);
+          console.log('User initialized successfully:', existingUser);
+        } else {
+          throw new Error('Failed to create or retrieve user');
+        }
+      } catch (err) {
+        console.error('Auth initialization error:', err);
+        setError(err instanceof Error ? err.message : 'Failed to initialize user');
+        
+        // Fallback: create a local mock user for development
+        if (process.env.NODE_ENV === 'development') {
           const mockUser: User = {
             id: 'dev_user_123',
             telegramId: 'dev_user_123',
@@ -41,33 +99,8 @@ export const useAuth = () => {
             updatedAt: new Date(),
           };
           setUser(mockUser);
-          setLoading(false);
-          return;
+          console.log('Using fallback mock user for development');
         }
-
-        const telegramId = telegramUser.id.toString();
-        
-        // Check if user exists in Firebase
-        let existingUser = await getUser(telegramId);
-        
-        if (!existingUser) {
-          // Create new user
-          await createUser({
-            telegramId,
-            username: telegramUser.username,
-            firstName: telegramUser.first_name,
-            lastName: telegramUser.last_name,
-            profilePic: telegramUser.photo_url,
-            referrerId: startParam || undefined, // This will be the referrer's ID
-          });
-          
-          existingUser = await getUser(telegramId);
-        }
-
-        setUser(existingUser);
-      } catch (err) {
-        console.error('Auth initialization error:', err);
-        setError('Failed to initialize user');
       } finally {
         setLoading(false);
       }
