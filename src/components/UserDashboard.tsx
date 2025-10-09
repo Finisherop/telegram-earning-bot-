@@ -10,7 +10,7 @@ import ShopWithdrawal from './user/ShopWithdrawal';
 import Profile from './user/Profile';
 
 interface UserDashboardProps {
-  user: User;
+  user: User | null;
 }
 
 const tabs = [
@@ -23,6 +23,18 @@ const tabs = [
 
 const UserDashboard = ({ user }: UserDashboardProps) => {
   const [activeTab, setActiveTab] = useState('dashboard');
+
+  // Show loading state if user is not loaded yet
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary to-secondary">
+        <div className="text-center text-white p-8">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <h1 className="text-xl font-bold">Loading...</h1>
+        </div>
+      </div>
+    );
+  }
 
   const renderTabContent = () => {
     switch (activeTab) {
