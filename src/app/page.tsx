@@ -66,8 +66,15 @@ export default function Home() {
     <div className="min-h-screen bg-light">
       {isAdmin ? (
         <AdminDashboard />
-      ) : (
+      ) : user ? (
         <UserDashboard user={user} />
+      ) : (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary to-secondary">
+          <div className="text-center text-white p-8">
+            <h1 className="text-2xl font-bold mb-4">Loading User Data...</h1>
+            <p className="text-lg opacity-90">Please wait while we initialize your account</p>
+          </div>
+        </div>
       )}
       <TelegramDebug />
     </div>
