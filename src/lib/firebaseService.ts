@@ -61,14 +61,33 @@ export const createUser = async (userData: Partial<User>): Promise<void> => {
 };
 
 export const getUser = async (telegramId: string): Promise<User | null> => {
-  const userRef = doc(db, 'users', telegramId);
-  const userDoc = await getDoc(userRef);
-  
-  if (userDoc.exists()) {
-    return { ...userDoc.data(), id: userDoc.id } as User;
+  try {
+    const userRef = doc(db, 'users', telegramId);
+    const userDoc = await getDoc(userRef);
+    
+    if (userDoc.exists()) {
+      const userData = userDoc.data();
+      
+      // Convert Firestore timestamps to Date objects
+      const convertedData = {
+        ...userData,
+        id: userDoc.id,
+        createdAt: userData.createdAt?.toDate ? userData.createdAt.toDate() : new Date(userData.createdAt),
+        updatedAt: userData.updatedAt?.toDate ? userData.updatedAt.toDate() : new Date(userData.updatedAt),
+        lastClaimDate: userData.lastClaimDate?.toDate ? userData.lastClaimDate.toDate() : userData.lastClaimDate ? new Date(userData.lastClaimDate) : undefined,
+        farmingStartTime: userData.farmingStartTime?.toDate ? userData.farmingStartTime.toDate() : userData.farmingStartTime ? new Date(userData.farmingStartTime) : undefined,
+        farmingEndTime: userData.farmingEndTime?.toDate ? userData.farmingEndTime.toDate() : userData.farmingEndTime ? new Date(userData.farmingEndTime) : undefined,
+        vipEndTime: userData.vipEndTime?.toDate ? userData.vipEndTime.toDate() : userData.vipEndTime ? new Date(userData.vipEndTime) : undefined,
+      } as User;
+      
+      return convertedData;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error getting user:', error);
+    return null;
   }
-  
-  return null;
 };
 
 export const updateUser = async (telegramId: string, updates: Partial<User>): Promise<void> => {
@@ -102,14 +121,24 @@ export const activateSubscription = async (
 
 // Task operations
 export const getTasks = async (): Promise<Task[]> => {
-  const tasksRef = collection(db, 'tasks');
-  const q = query(tasksRef, where('isActive', '==', true), orderBy('createdAt', 'desc'));
-  const querySnapshot = await getDocs(q);
-  
-  return querySnapshot.docs.map(doc => ({
-    ...doc.data(),
-    id: doc.id,
-  })) as Task[];
+  try {
+    const tasksRef = collection(db, 'tasks');
+    const q = query(tasksRef, where('isActive', '==', true), orderBy('createdAt', 'desc'));
+    const querySnapshot = await getDocs(q);
+    
+    return querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        ...data,
+        id: doc.id,
+        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
+        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt),
+      } as Task;
+    });
+  } catch (error) {
+    console.error('Error getting tasks:', error);
+    return [];
+  }
 };
 
 export const createTask = async (taskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> => {
@@ -122,14 +151,24 @@ export const createTask = async (taskData: Omit<Task, 'id' | 'createdAt' | 'upda
 };
 
 export const getUserTasks = async (userId: string): Promise<UserTask[]> => {
-  const userTasksRef = collection(db, 'userTasks');
-  const q = query(userTasksRef, where('userId', '==', userId));
-  const querySnapshot = await getDocs(q);
-  
-  return querySnapshot.docs.map(doc => ({
-    ...doc.data(),
-    id: doc.id,
-  })) as UserTask[];
+  try {
+    const userTasksRef = collection(db, 'userTasks');
+    const q = query(userTasksRef, where('userId', '==', userId));
+    const querySnapshot = await getDocs(q);
+    
+    return querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        ...data,
+        id: doc.id,
+        completedAt: data.completedAt?.toDate ? data.completedAt.toDate() : data.completedAt ? new Date(data.completedAt) : undefined,
+        claimedAt: data.claimedAt?.toDate ? data.claimedAt.toDate() : data.claimedAt ? new Date(data.claimedAt) : undefined,
+      } as UserTask;
+    });
+  } catch (error) {
+    console.error('Error getting user tasks:', error);
+    return [];
+  }
 };
 
 export const completeTask = async (userId: string, taskId: string): Promise<void> => {

@@ -22,7 +22,14 @@ const ShopWithdrawal = ({ user }: ShopWithdrawalProps) => {
     const telegram = TelegramService.getInstance();
     const vipTier = VIP_TIERS[tier];
     
-    console.log(`VIP Purchase clicked: ${tier}`);
+    // Validate tier and price
+    if (!vipTier || !vipTier.price || vipTier.price <= 0) {
+      console.error('Invalid VIP tier configuration:', tier, vipTier);
+      toast.error('VIP configuration error. Please try again.');
+      return;
+    }
+    
+    console.log(`VIP Purchase clicked: ${tier}`, vipTier);
     telegram.hapticFeedback('medium');
     
     // Show loading state
@@ -30,6 +37,11 @@ const ShopWithdrawal = ({ user }: ShopWithdrawalProps) => {
     
     try {
       console.log(`Requesting payment for ${tier}: ${vipTier.price} Stars`);
+      
+      // Validate user data
+      if (!user || !user.telegramId) {
+        throw new Error('User data not available');
+      }
       
       const success = await telegram.requestStarsPayment(
         vipTier.price,
@@ -40,21 +52,32 @@ const ShopWithdrawal = ({ user }: ShopWithdrawalProps) => {
       console.log('Payment result:', success);
       
       if (success) {
-        // Activate VIP subscription
-        await activateSubscription(user.telegramId, tier, 30);
-        toast.success(`🎉 ${tier.toUpperCase()} activated successfully!`);
-        telegram.hapticFeedback('heavy');
+        console.log('Payment successful, activating VIP subscription...');
         
-        // Refresh page to show new VIP status
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
+        try {
+          // Activate VIP subscription
+          await activateSubscription(user.telegramId, tier, 30);
+          toast.success(`🎉 ${tier.toUpperCase()} activated successfully!`);
+          telegram.hapticFeedback('heavy');
+          
+          // Refresh page to show new VIP status
+          setTimeout(() => {
+            if (typeof window !== 'undefined') {
+              window.location.reload();
+            }
+          }, 2000);
+        } catch (activationError) {
+          console.error('VIP activation error:', activationError);
+          toast.error('Payment successful but VIP activation failed. Please contact support.');
+        }
       } else {
+        console.log('Payment was not successful');
         toast.error('Payment was cancelled or failed.');
       }
     } catch (error) {
       console.error('VIP purchase error:', error);
-      toast.error('Payment failed. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Payment failed: ${errorMessage}`);
     } finally {
       setIsProcessing(false);
     }

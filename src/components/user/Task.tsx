@@ -71,6 +71,50 @@ const Task = ({ user }: TaskProps) => {
     setAdsWatchedToday(todayTasks.length);
   };
 
+  const initializeAd = async (taskId: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      try {
+        console.log('Initializing ad for task:', taskId);
+        
+        // Check if Monotag is available
+        if (typeof window !== 'undefined' && (window as any).MonotagJS) {
+          console.log('Monotag available, initializing ad');
+          
+          // Initialize Monotag ad
+          const monotag = (window as any).MonotagJS;
+          monotag.init({
+            containerId: 'monotag-ad',
+            onAdLoaded: () => {
+              console.log('Ad loaded successfully');
+              toast.success('📺 Ad loaded! Watching...');
+            },
+            onAdCompleted: () => {
+              console.log('Ad completed');
+              toast.success('✅ Ad watched successfully!');
+              resolve();
+            },
+            onAdError: (error: any) => {
+              console.error('Ad error:', error);
+              toast.error('Ad failed to load');
+              reject(error);
+            }
+          });
+        } else {
+          console.log('Monotag not available, using fallback timer');
+          // Fallback: just use timer
+          toast.success('📺 Ad simulation started...');
+          setTimeout(() => {
+            toast.success('✅ Ad simulation completed!');
+            resolve();
+          }, 30000); // 30 seconds
+        }
+      } catch (error) {
+        console.error('Ad initialization error:', error);
+        reject(error);
+      }
+    });
+  };
+
   const getTaskStatus = (taskId: string) => {
     const userTask = userTasks.find(ut => ut.taskId === taskId);
     if (!userTask) return 'available';
@@ -118,19 +162,24 @@ const Task = ({ user }: TaskProps) => {
       }
     } else if (task.type === 'ads') {
       console.log('Starting ad watch');
-      // Simulate ad watching
+      // Start ad watching process
       setCompletingTask(task.id);
-      setTimer(10);
+      setTimer(30); // 30 seconds for ad watching
       setTimerTaskId(task.id);
-      toast.success('📺 Watching ad... Please wait 10 seconds');
+      toast.success('📺 Loading ad... Please wait');
       
       try {
+        // Initialize Monotag ad if available
+        await initializeAd(task.id);
         await completeTask(user.telegramId, task.id);
         await loadUserTasks();
         console.log('Ad task completed');
       } catch (error) {
         console.error('Ad task error:', error);
         toast.error('Failed to complete task. Please try again.');
+        setCompletingTask(null);
+        setTimer(null);
+        setTimerTaskId(null);
       }
     }
   };
@@ -306,6 +355,29 @@ const Task = ({ user }: TaskProps) => {
           <p className="text-gray-600">Check back later for new tasks!</p>
         </div>
       )}
+
+      {/* Monotag Ad Container */}
+      <div 
+        id="monotag-ad" 
+        className={`fixed inset-0 z-50 bg-black bg-opacity-75 flex items-center justify-center ${
+          completingTask && timerTaskId ? 'block' : 'hidden'
+        }`}
+      >
+        <div className="bg-white rounded-2xl p-6 max-w-sm mx-4">
+          <div className="text-center">
+            <div className="text-4xl mb-4">📺</div>
+            <h3 className="text-lg font-bold text-gray-800 mb-2">Watching Ad</h3>
+            <p className="text-gray-600 mb-4">
+              Please wait while the ad loads and plays...
+            </p>
+            {timer !== null && (
+              <div className="bg-primary text-white px-4 py-2 rounded-lg font-bold">
+                ⏱️ {timer}s remaining
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Coin fly animation container */}
       <AnimatePresence>
