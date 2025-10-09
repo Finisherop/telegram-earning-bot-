@@ -182,12 +182,16 @@ export class TelegramService {
     return this.startParam;
   }
 
-  public showAlert(message: string): void {
-    if (this.webApp) {
-      this.webApp.showAlert(message);
+  public showAlert(message: string, callback?: () => void): void {
+    // Show Telegram alert
+    if (typeof window !== "undefined" && (window as any).Telegram?.WebApp) {
+      (window as any).Telegram.WebApp.showAlert(message);
     } else {
       alert(message);
     }
+
+    // Run callback (if provided)
+    if (callback) callback();
   }
 
   public showConfirm(message: string, callback: (confirmed: boolean) => void): void {
