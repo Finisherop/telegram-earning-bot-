@@ -42,9 +42,78 @@ const Task = ({ user }: TaskProps) => {
   const loadTasks = async () => {
     try {
       const tasksData = await getTasks();
+      console.log('Loaded tasks:', tasksData);
       setTasks(tasksData);
+      
+      // If no tasks found, seed some default tasks
+      if (tasksData.length === 0) {
+        console.log('No tasks found, seeding default tasks...');
+        // You can add default tasks here or call a seed function
+        const defaultTasks: TaskType[] = [
+          {
+            id: 'task_1',
+            title: 'Join Telegram Channel',
+            description: 'Join our official Telegram channel',
+            type: 'social',
+            reward: 100,
+            url: 'https://t.me/your_channel',
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          {
+            id: 'task_2',
+            title: 'Watch Advertisement',
+            description: 'Watch a short video ad to earn coins',
+            type: 'ads',
+            reward: 50,
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          {
+            id: 'task_3',
+            title: 'Follow on Twitter',
+            description: 'Follow us on Twitter for updates',
+            type: 'social',
+            reward: 75,
+            url: 'https://twitter.com/your_account',
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }
+        ];
+        setTasks(defaultTasks);
+      }
     } catch (error) {
+      console.error('Error loading tasks:', error);
       toast.error('Failed to load tasks');
+      
+      // Set default tasks as fallback
+      const defaultTasks: TaskType[] = [
+        {
+          id: 'task_1',
+          title: 'Join Telegram Channel',
+          description: 'Join our official Telegram channel',
+          type: 'social',
+          reward: 100,
+          url: 'https://t.me/your_channel',
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: 'task_2',
+          title: 'Watch Advertisement',
+          description: 'Watch a short video ad to earn coins',
+          type: 'ads',
+          reward: 50,
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }
+      ];
+      setTasks(defaultTasks);
     }
   };
 
@@ -101,12 +170,20 @@ const Task = ({ user }: TaskProps) => {
           });
         } else {
           console.log('Monotag not available, using fallback timer');
-          // Fallback: just use timer
-          toast.success('📺 Ad simulation started...');
+          // Fallback: simulate ad watching with timer
+          toast.success('📺 Ad starting... Please wait 15 seconds');
+          
+          // Simulate 15 second ad with countdown
+          setTimer(15);
+          setTimerTaskId(taskId);
+          
           setTimeout(() => {
-            toast.success('✅ Ad simulation completed!');
+            console.log('Ad completed');
+            toast.success('✅ Ad watched successfully!');
+            setTimer(null);
+            setTimerTaskId(null);
             resolve();
-          }, 30000); // 30 seconds
+          }, 15000); // 15 seconds
         }
       } catch (error) {
         console.error('Ad initialization error:', error);

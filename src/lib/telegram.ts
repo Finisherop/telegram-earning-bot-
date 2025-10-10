@@ -100,14 +100,17 @@ export class TelegramService {
 
   private initializeWebApp() {
     try {
-      // Simple check for Telegram WebApp
-      if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
-        this.webApp = window.Telegram.WebApp;
-        this.setupWebApp();
-      } else {
-        // Use fallback mode immediately
-        this.setupFallbackMode();
-      }
+      // Wait a bit for Telegram WebApp to load
+      setTimeout(() => {
+        if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+          console.log('Telegram WebApp found, setting up...');
+          this.webApp = window.Telegram.WebApp;
+          this.setupWebApp();
+        } else {
+          console.log('Telegram WebApp not found, using fallback mode');
+          this.setupFallbackMode();
+        }
+      }, 500);
     } catch (error) {
       console.error('Failed to initialize Telegram WebApp:', error);
       this.setupFallbackMode();
@@ -131,6 +134,8 @@ export class TelegramService {
     if (!this.webApp) return;
 
     try {
+      console.log('Setting up Telegram WebApp...');
+      
       // Initialize WebApp
       if (typeof this.webApp.ready === 'function') {
         this.webApp.ready();
@@ -139,9 +144,15 @@ export class TelegramService {
         this.webApp.expand();
       }
       
-      // Get user data
+      // Log all available data for debugging
+      console.log('WebApp initData:', this.webApp.initData);
+      console.log('WebApp initDataUnsafe:', this.webApp.initDataUnsafe);
+      
+      // Get user data from Telegram
       if (this.webApp.initDataUnsafe?.user) {
         const userData = this.webApp.initDataUnsafe.user;
+        console.log('Telegram user data:', userData);
+        
         if (userData.id && userData.first_name) {
           this.user = {
             id: userData.id,
@@ -152,19 +163,31 @@ export class TelegramService {
             language_code: userData.language_code || 'en',
             is_premium: userData.is_premium || false
           };
+          console.log('User data set:', this.user);
         }
       }
       
-      // Get start parameter (for referrals)
+      // Get start parameter (for referrals) - check multiple sources
       if (this.webApp.initDataUnsafe?.start_param) {
         this.startParam = this.webApp.initDataUnsafe.start_param;
+        console.log('Start param from initDataUnsafe:', this.startParam);
+      } else if (typeof window !== 'undefined') {
+        // Also check URL parameters as fallback
+        const urlParams = new URLSearchParams(window.location.search);
+        const startParam = urlParams.get('tgWebAppStartParam') || urlParams.get('start');
+        if (startParam) {
+          this.startParam = startParam;
+          console.log('Start param from URL:', this.startParam);
+        }
       }
       
-      // If no user data, use fallback
+      // If no user data, use fallback but keep any referral data
       if (!this.user) {
+        console.log('No user data found, using fallback');
         this.setupFallbackMode();
       } else {
         this.isInitialized = true;
+        console.log('Telegram WebApp setup completed successfully');
       }
       
     } catch (error) {

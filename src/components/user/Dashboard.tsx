@@ -18,21 +18,40 @@ const Dashboard = ({ user }: DashboardProps) => {
   const [dailyClaimAvailable, setDailyClaimAvailable] = useState(true);
 
   useEffect(() => {
+    console.log('Dashboard useEffect - user data:', user);
+    
     // Check farming status
     if (user.farmingStartTime && user.farmingEndTime) {
       const now = new Date();
       const startTime = new Date(user.farmingStartTime);
       const endTime = new Date(user.farmingEndTime);
       
+      console.log('Farming check:', { now, startTime, endTime });
+      
       if (now >= endTime) {
+        console.log('Farming completed, can claim');
         setCanClaim(true);
         setFarmingProgress(100);
+        setIsFarming(false);
       } else if (now >= startTime) {
+        console.log('Farming in progress');
         setIsFarming(true);
+        setCanClaim(false);
         const totalDuration = endTime.getTime() - startTime.getTime();
         const elapsed = now.getTime() - startTime.getTime();
-        setFarmingProgress((elapsed / totalDuration) * 100);
+        const progress = (elapsed / totalDuration) * 100;
+        setFarmingProgress(Math.min(progress, 100));
+      } else {
+        console.log('Farming not started');
+        setIsFarming(false);
+        setCanClaim(false);
+        setFarmingProgress(0);
       }
+    } else {
+      console.log('No farming data, ready to start');
+      setIsFarming(false);
+      setCanClaim(false);
+      setFarmingProgress(0);
     }
 
     // Check daily claim status
@@ -40,9 +59,36 @@ const Dashboard = ({ user }: DashboardProps) => {
       const lastClaim = new Date(user.lastClaimDate);
       const today = new Date();
       const isToday = lastClaim.toDateString() === today.toDateString();
+      console.log('Daily claim check:', { lastClaim: lastClaim.toDateString(), today: today.toDateString(), isToday });
       setDailyClaimAvailable(!isToday);
+    } else {
+      console.log('No last claim date, daily claim available');
+      setDailyClaimAvailable(true);
     }
-  }, [user]);
+    
+    // Set up farming progress timer if farming is active
+    if (user.farmingStartTime && user.farmingEndTime && !canClaim) {
+      const interval = setInterval(() => {
+        const now = new Date();
+        const startTime = new Date(user.farmingStartTime!);
+        const endTime = new Date(user.farmingEndTime!);
+        
+        if (now >= endTime) {
+          setCanClaim(true);
+          setFarmingProgress(100);
+          setIsFarming(false);
+          clearInterval(interval);
+        } else if (now >= startTime) {
+          const totalDuration = endTime.getTime() - startTime.getTime();
+          const elapsed = now.getTime() - startTime.getTime();
+          const progress = (elapsed / totalDuration) * 100;
+          setFarmingProgress(Math.min(progress, 100));
+        }
+      }, 1000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [user, canClaim]);
 
   const startFarming = async () => {
     console.log('Start farming clicked');

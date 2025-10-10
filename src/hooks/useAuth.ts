@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { User } from '@/types';
 import { TelegramService } from '@/lib/telegram';
-import { createUser, getUser } from '@/lib/firebaseService';
+import { createUser, getUser, updateUser } from '@/lib/firebaseService';
 
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -11,14 +11,19 @@ export const useAuth = () => {
   useEffect(() => {
     const initializeUser = async () => {
       try {
+        // Wait a bit for Telegram service to initialize
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
         const telegram = TelegramService.getInstance();
         const telegramUser = telegram.getUser();
         const startParam = telegram.getStartParam();
 
+        console.log('Initializing user with:', { telegramUser, startParam });
+
         let userId: string;
         let userData: Partial<User>;
 
-        if (telegramUser) {
+        if (telegramUser && telegramUser.id !== 123456789) {
           // Real Telegram user
           userId = telegramUser.id.toString();
           userData = {
@@ -29,6 +34,7 @@ export const useAuth = () => {
             profilePic: telegramUser.photo_url,
             referrerId: startParam || undefined,
           };
+          console.log('Using real Telegram user:', userData);
         } else {
           // Default user - always create one
           userId = 'default_user_123';
@@ -39,27 +45,56 @@ export const useAuth = () => {
             lastName: '',
             referrerId: startParam || undefined,
           };
+          console.log('Using default user:', userData);
         }
 
-        // Check if user exists in Firebase
-        let existingUser = await getUser(userId);
-        
-        if (!existingUser) {
-          // Create new user
-          await createUser(userData);
-          existingUser = await getUser(userId);
-        }
+        try {
+          // Check if user exists in Firebase
+          let existingUser = await getUser(userId);
+          
+          if (!existingUser) {
+            console.log('Creating new user in Firebase...');
+            // Create new user
+            await createUser(userData);
+            existingUser = await getUser(userId);
+            
+            // Handle referral if startParam exists
+            if (startParam && startParam !== userId) {
+              console.log('Processing referral for:', startParam);
+              try {
+                // Add referral count to referrer
+                const referrer = await getUser(startParam);
+                if (referrer) {
+                  await updateUser(startParam, {
+                    referralCount: (referrer.referralCount || 0) + 1,
+                    referralEarnings: (referrer.referralEarnings || 0) + 100, // 100 coins reward
+                    coins: (referrer.coins || 0) + 100,
+                  });
+                  console.log('Referral reward given to:', startParam);
+                }
+              } catch (referralError) {
+                console.error('Error processing referral:', referralError);
+              }
+            }
+          }
 
-        if (existingUser) {
-          setUser(existingUser);
-        } else {
-          // Create a default user if Firebase fails
-          const defaultUser: User = {
+          if (existingUser) {
+            setUser(existingUser);
+            console.log('User loaded successfully:', existingUser);
+          } else {
+            throw new Error('Failed to create or retrieve user from Firebase');
+          }
+        } catch (firebaseError) {
+          console.error('Firebase error, using local user:', firebaseError);
+          
+          // Create a local user if Firebase fails
+          const localUser: User = {
             id: userId,
             telegramId: userId,
             username: userData.username || 'user',
             firstName: userData.firstName || 'User',
             lastName: userData.lastName || '',
+            profilePic: userData.profilePic,
             coins: 1000,
             xp: 100,
             level: 1,
@@ -71,11 +106,12 @@ export const useAuth = () => {
             minWithdrawal: 200,
             referralCount: 0,
             referralEarnings: 0,
+            referrerId: userData.referrerId,
             dailyStreak: 0,
             createdAt: new Date(),
             updatedAt: new Date(),
           };
-          setUser(defaultUser);
+          setUser(localUser);
         }
       } catch (err) {
         console.error('Auth initialization error:', err);
