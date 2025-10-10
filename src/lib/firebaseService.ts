@@ -707,6 +707,8 @@ export const getDailyStats = async (): Promise<DailyStats> => {
       totalCoinsDistributed: 0,
       totalInrGenerated: 0,
       pendingWithdrawals: 0,
+      totalPayments: 0,
+      totalConversions: 0,
     };
   }
   
@@ -744,5 +746,7 @@ export const getDailyStats = async (): Promise<DailyStats> => {
     totalCoinsDistributed,
     totalInrGenerated,
     pendingWithdrawals,
+    totalPayments: 0,
+    totalConversions: 0,
   };
 };

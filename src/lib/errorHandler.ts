@@ -5,6 +5,7 @@ interface ErrorContext {
   action?: string;
   userId?: string;
   metadata?: any;
+  context?: any;
 }
 
 interface ErrorReport {
@@ -35,6 +36,9 @@ class ErrorHandler {
   }
 
   private setupGlobalHandlers() {
+    // Only setup handlers on client side
+    if (typeof window === 'undefined') return;
+
     // Handle unhandled promise rejections
     window.addEventListener('unhandledrejection', (event) => {
       console.error('[Error Handler] Unhandled promise rejection:', event.reason);
@@ -66,6 +70,9 @@ class ErrorHandler {
   }
 
   private setupNetworkListener() {
+    // Only setup listeners on client side
+    if (typeof window === 'undefined') return;
+
     window.addEventListener('online', () => {
       console.log('[Error Handler] Network back online, processing queued errors');
       this.isOnline = true;
@@ -87,8 +94,8 @@ class ErrorHandler {
       stack: error.stack,
       context,
       timestamp: new Date().toISOString(),
-      userAgent: navigator.userAgent,
-      url: window.location.href,
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'Server',
+      url: typeof window !== 'undefined' ? window.location.href : 'Server',
     };
 
     // Log to console with detailed information
@@ -105,19 +112,21 @@ class ErrorHandler {
       this.processErrorQueue();
     }
 
-    // Store in localStorage for persistence
-    try {
-      const storedErrors = JSON.parse(localStorage.getItem('telegram_app_errors') || '[]');
-      storedErrors.push(errorReport);
-      
-      // Keep only last 50 errors
-      if (storedErrors.length > 50) {
-        storedErrors.splice(0, storedErrors.length - 50);
+    // Store in localStorage for persistence (client-side only)
+    if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+      try {
+        const storedErrors = JSON.parse(localStorage.getItem('telegram_app_errors') || '[]');
+        storedErrors.push(errorReport);
+        
+        // Keep only last 50 errors
+        if (storedErrors.length > 50) {
+          storedErrors.splice(0, storedErrors.length - 50);
+        }
+        
+        localStorage.setItem('telegram_app_errors', JSON.stringify(storedErrors));
+      } catch (storageError) {
+        console.warn('[Error Handler] Failed to store error in localStorage:', storageError);
       }
-      
-      localStorage.setItem('telegram_app_errors', JSON.stringify(storedErrors));
-    } catch (storageError) {
-      console.warn('[Error Handler] Failed to store error in localStorage:', storageError);
     }
 
     return errorId;
@@ -190,6 +199,9 @@ class ErrorHandler {
 
   // Get stored errors for debugging
   getStoredErrors(): ErrorReport[] {
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+      return [];
+    }
     try {
       return JSON.parse(localStorage.getItem('telegram_app_errors') || '[]');
     } catch (error) {
@@ -200,6 +212,9 @@ class ErrorHandler {
 
   // Clear stored errors
   clearStoredErrors() {
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+      return;
+    }
     try {
       localStorage.removeItem('telegram_app_errors');
       console.log('[Error Handler] Stored errors cleared');
