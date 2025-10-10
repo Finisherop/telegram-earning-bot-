@@ -72,6 +72,21 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-light">
+      {/* Enhanced Features Banner */}
+      {user && !isAdmin && (
+        <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-3 text-center">
+          <p className="text-sm">
+            🚀 <strong>New Enhanced Features Available!</strong> 
+            <a 
+              href="/enhanced" 
+              className="ml-2 underline hover:text-blue-200 transition-colors"
+            >
+              Try Real-time Sync & Analytics →
+            </a>
+          </p>
+        </div>
+      )}
+      
       {isAdmin ? (
         <AdminDashboard />
       ) : (

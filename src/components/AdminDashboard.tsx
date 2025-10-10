@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AdminStats from './admin/AdminStats';
-import AdminSettings from './admin/AdminSettings';
+import EnhancedAdminSettings from './admin/EnhancedAdminSettings';
 import AdminApprovals from './admin/AdminApprovals';
 
 const tabs = [
@@ -20,7 +20,7 @@ const AdminDashboard = () => {
       case 'stats':
         return <AdminStats />;
       case 'settings':
-        return <AdminSettings />;
+        return <EnhancedAdminSettings />;
       case 'approvals':
         return <AdminApprovals />;
       default:

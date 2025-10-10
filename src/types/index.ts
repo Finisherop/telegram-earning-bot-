@@ -80,10 +80,58 @@ export interface AdminSettings {
   updatedAt?: Date;
 }
 
+export interface PaymentData {
+  id: string;
+  userId: string;
+  amount: number; // in Stars
+  tier: 'vip1' | 'vip2';
+  status: 'pending' | 'completed' | 'failed';
+  telegramPaymentId?: string;
+  createdAt: Date;
+  completedAt?: Date;
+  metadata?: {
+    botMessageId?: string;
+    invoiceId?: string;
+  };
+}
+
+export interface ConversionData {
+  id: string;
+  userId: string;
+  type: 'vip_upgrade' | 'task_completion' | 'referral_bonus' | 'farming_claim' | 'daily_claim';
+  fromTier?: 'free' | 'vip1' | 'vip2';
+  toTier?: 'free' | 'vip1' | 'vip2';
+  coinsEarned?: number;
+  paymentAmount?: number; // in Stars
+  createdAt: Date;
+  metadata?: {
+    taskId?: string;
+    referrerId?: string;
+    farmingDuration?: number;
+  };
+}
+
+export interface BotMessage {
+  id: string;
+  userId: string;
+  type: 'payment_confirmation' | 'vip_upgrade' | 'welcome' | 'task_reminder';
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdAt: Date;
+  metadata?: {
+    paymentId?: string;
+    tier?: string;
+    amount?: number;
+  };
+}
+
 export interface DailyStats {
   totalUsers: number;
   activeVipUsers: number;
   totalCoinsDistributed: number;
   totalInrGenerated: number;
   pendingWithdrawals: number;
+  totalPayments: number;
+  totalConversions: number;
 }

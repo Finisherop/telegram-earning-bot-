@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { Toaster } from 'react-hot-toast';
-import ErrorBoundary from '@/components/ErrorBoundary';
+import EnhancedErrorBoundary from '@/components/EnhancedErrorBoundary';
 import UserCaptureInitializer from '@/components/UserCaptureInitializer';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -186,10 +186,10 @@ export default function RootLayout({
         />
       </head>
       <body className={inter.className}>
-        <ErrorBoundary>
+        <EnhancedErrorBoundary>
           <UserCaptureInitializer />
           {children}
-        </ErrorBoundary>
+        </EnhancedErrorBoundary>
         <Toaster
           position="top-center"
           toastOptions={{

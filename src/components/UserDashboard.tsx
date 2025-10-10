@@ -3,11 +3,10 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User } from '@/types';
-import Dashboard from './user/Dashboard';
+import EnhancedDashboard from './user/EnhancedDashboard';
 import Task from './user/Task';
 import Referral from './user/Referral';
 import ShopWithdrawal from './user/ShopWithdrawal';
-import Profile from './user/Profile';
 import UserDataDisplay from './UserDataDisplay';
 
 interface UserDashboardProps {
@@ -19,7 +18,6 @@ const tabs = [
   { id: 'task', label: 'Tasks', icon: '📋' },
   { id: 'referral', label: 'Referral', icon: '👥' },
   { id: 'shop', label: 'Shop/W.D.', icon: '💎' },
-  { id: 'profile', label: 'Profile', icon: '👤' },
 ];
 
 const UserDashboard = ({ user }: UserDashboardProps) => {
@@ -43,7 +41,7 @@ const UserDashboard = ({ user }: UserDashboardProps) => {
         return (
           <div>
             <UserDataDisplay />
-            <Dashboard user={user} />
+            <EnhancedDashboard user={user} />
           </div>
         );
       case 'task':
@@ -52,10 +50,8 @@ const UserDashboard = ({ user }: UserDashboardProps) => {
         return <Referral user={user} />;
       case 'shop':
         return <ShopWithdrawal user={user} />;
-      case 'profile':
-        return <Profile user={user} />;
       default:
-        return <Dashboard user={user} />;
+        return <EnhancedDashboard user={user} />;
     }
   };
 
