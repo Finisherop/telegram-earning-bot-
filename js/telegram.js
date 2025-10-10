@@ -336,6 +336,217 @@ class TelegramApp {
             console.error('Main button hide error:', error);
         }
     }
+
+    // ✅ Telegram Star Payment Integration
+    
+    // Check if running in Telegram WebApp environment
+    checkTelegramEnvironment() {
+        if (!this.webApp) {
+            this.showAlert("⚠️ Open this inside Telegram WebApp for full functionality!");
+            return false;
+        }
+        return true;
+    }
+
+    // Safe Telegram Star Payment
+    async requestStarPayment(amount, title, description, payload) {
+        if (!this.checkTelegramEnvironment()) {
+            return { success: false, message: 'Not in Telegram environment' };
+        }
+
+        try {
+            console.log(`🌟 Requesting Star payment: ${amount} stars for ${title}`);
+            
+            // Get VIP settings for payment configuration
+            const vipSettings = await window.Firebase?.getVIPSettings() || {
+                vipAmount: amount,
+                vipCurrency: "XTR", // Telegram Stars
+                paymentProviderToken: ""
+            };
+
+            // Prepare payment data
+            const paymentData = {
+                type: "invoice",
+                title: title || "VIP Membership",
+                description: description || "Upgrade to VIP for exclusive benefits",
+                payload: JSON.stringify(payload || { 
+                    userId: this.user?.id, 
+                    plan: "VIP",
+                    timestamp: Date.now()
+                }),
+                provider_token: vipSettings.paymentProviderToken || "",
+                currency: "XTR", // Telegram Stars
+                prices: [{ 
+                    label: title || "VIP Membership", 
+                    amount: amount || vipSettings.vipAmount 
+                }]
+            };
+
+            // Use Telegram's payment API
+            if (this.webApp && typeof this.webApp.sendData === 'function') {
+                this.webApp.sendData(JSON.stringify(paymentData));
+                this.hapticFeedback('medium');
+                
+                return { 
+                    success: true, 
+                    message: 'Payment request sent',
+                    paymentData 
+                };
+            } else if (this.webApp && typeof this.webApp.openInvoice === 'function') {
+                // Alternative: Use openInvoice if available
+                const invoiceUrl = await this.createPaymentInvoice(paymentData);
+                if (invoiceUrl) {
+                    this.webApp.openInvoice(invoiceUrl, (status) => {
+                        this.handlePaymentStatus(status, payload);
+                    });
+                    return { success: true, message: 'Payment invoice opened' };
+                }
+            }
+
+            // Fallback for testing
+            return this.simulatePayment(amount, title, payload);
+
+        } catch (error) {
+            console.error('Star payment error:', error);
+            return { success: false, message: 'Payment request failed', error };
+        }
+    }
+
+    // Create payment invoice (would typically call your backend)
+    async createPaymentInvoice(paymentData) {
+        try {
+            // This would typically call your backend API
+            // For now, we'll return a mock invoice URL
+            console.log('Creating payment invoice:', paymentData);
+            return `https://t.me/invoice/${Date.now()}`;
+        } catch (error) {
+            console.error('Invoice creation failed:', error);
+            return null;
+        }
+    }
+
+    // Handle payment status callback
+    async handlePaymentStatus(status, payload) {
+        console.log(`Payment status: ${status}`, payload);
+        
+        try {
+            switch (status) {
+                case 'paid':
+                    await this.onPaymentSuccess(payload);
+                    this.notificationFeedback('success');
+                    break;
+                case 'cancelled':
+                    this.showAlert('Payment cancelled');
+                    break;
+                case 'failed':
+                    this.showAlert('Payment failed. Please try again.');
+                    this.notificationFeedback('error');
+                    break;
+                default:
+                    console.log('Unknown payment status:', status);
+            }
+        } catch (error) {
+            console.error('Error handling payment status:', error);
+        }
+    }
+
+    // Payment success handler
+    async onPaymentSuccess(payload) {
+        try {
+            const userId = this.user?.id;
+            if (!userId) {
+                console.error('No user ID for payment success');
+                return;
+            }
+
+            // Activate VIP for user
+            const vipActivated = await window.Firebase?.activateVIP(userId, 30);
+            
+            if (vipActivated) {
+                this.showAlert(
+                    `⭐ VIP Activated! Welcome to VIP membership, ${this.user?.firstName || 'User'}!`,
+                    () => {
+                        // Refresh the page or update UI
+                        window.location.reload();
+                    },
+                    'VIP Activated'
+                );
+            } else {
+                this.showAlert('VIP activation failed. Please contact support.');
+            }
+
+        } catch (error) {
+            console.error('Payment success handling error:', error);
+            this.showAlert('Payment processed but activation failed. Please contact support.');
+        }
+    }
+
+    // Simulate payment for testing (when not in Telegram)
+    simulatePayment(amount, title, payload) {
+        console.log('🧪 Simulating payment for testing...');
+        
+        this.showConfirm(
+            `💰 Simulate payment of ${amount} stars for ${title}?\n\n⭐ This is a test mode - no real payment required`,
+            async (confirmed) => {
+                if (confirmed) {
+                    this.hapticFeedback('heavy');
+                    await this.onPaymentSuccess(payload);
+                }
+            },
+            'Simulate Payment'
+        );
+
+        return { success: true, message: 'Payment simulation started' };
+    }
+
+    // Main VIP purchase method
+    async buyVIP() {
+        try {
+            const vipSettings = await window.Firebase?.getVIPSettings();
+            if (!vipSettings) {
+                this.showAlert('VIP settings not available');
+                return;
+            }
+
+            const amount = vipSettings.vipAmount;
+            const currency = vipSettings.vipCurrency;
+            
+            // Convert amount display based on currency
+            const displayAmount = currency === 'XTR' ? 
+                `${amount} Stars` : 
+                `${(amount / 100).toFixed(2)} ${currency}`;
+
+            const result = await this.requestStarPayment(
+                amount,
+                "VIP Membership",
+                `Upgrade to VIP for ${vipSettings.vipDuration} days`,
+                {
+                    userId: this.user?.id,
+                    plan: "VIP",
+                    duration: vipSettings.vipDuration,
+                    amount: amount,
+                    currency: currency
+                }
+            );
+
+            if (!result.success) {
+                this.showAlert(`Payment failed: ${result.message}`);
+            }
+
+        } catch (error) {
+            console.error('VIP purchase error:', error);
+            this.showAlert('VIP purchase failed. Please try again.');
+        }
+    }
+
+    // Setup main button for VIP purchase
+    setupVIPPurchaseButton() {
+        if (this.checkTelegramEnvironment() && this.webApp.MainButton) {
+            this.webApp.MainButton.setText("⭐ Buy VIP");
+            this.webApp.MainButton.show();
+            this.webApp.MainButton.onClick(() => this.buyVIP());
+        }
+    }
 }
 
 // Initialize Telegram app

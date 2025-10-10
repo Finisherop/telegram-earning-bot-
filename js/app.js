@@ -176,6 +176,18 @@ class MainApp {
             shareLink.addEventListener('click', () => this.shareReferralLink());
         }
 
+        // VIP purchase button
+        const buyVipBtn = document.getElementById('buyVipBtn');
+        if (buyVipBtn) {
+            buyVipBtn.addEventListener('click', () => this.handleVIPPurchase());
+        }
+
+        // Daily claim button
+        const dailyClaimBtn = document.getElementById('dailyClaimBtn');
+        if (dailyClaimBtn) {
+            dailyClaimBtn.addEventListener('click', () => this.handleDailyClaim());
+        }
+
         // Withdrawal form
         const withdrawalForm = document.getElementById('withdrawalForm');
         if (withdrawalForm) {
@@ -185,6 +197,7 @@ class MainApp {
         // Admin forms
         const taskForm = document.getElementById('taskForm');
         const settingsForm = document.getElementById('settingsForm');
+        const vipSettingsForm = document.getElementById('vipSettingsForm');
         
         if (taskForm) {
             taskForm.addEventListener('submit', (e) => this.handleCreateTask(e));
@@ -192,6 +205,10 @@ class MainApp {
         
         if (settingsForm) {
             settingsForm.addEventListener('submit', (e) => this.handleUpdateSettings(e));
+        }
+
+        if (vipSettingsForm) {
+            vipSettingsForm.addEventListener('submit', (e) => this.handleUpdateVIPSettings(e));
         }
 
         // Switch panel buttons
@@ -401,11 +418,178 @@ class MainApp {
             refEarnings.textContent = (this.currentUser.referralEarnings || 0).toLocaleString();
         }
 
-        // Update farming status
-        this.updateFarmingStatus();
+        // Update VIP status display
+        this.updateVIPStatus();
+        
+        // Update daily claim status
+        this.updateDailyClaimStatus();
         
         // Animate coin updates
         this.animateCoins();
+    }
+
+    // ✅ VIP Status Management
+    async updateVIPStatus() {
+        if (!this.currentUser) return;
+
+        try {
+            const isVIP = await window.Firebase.checkVIPStatus(this.currentUser.telegramId);
+            const freeVipStatus = document.getElementById('freeVipStatus');
+            const activeVipStatus = document.getElementById('activeVipStatus');
+            const vipExpiry = document.getElementById('vipExpiry');
+
+            if (isVIP && this.currentUser.vipEndTime) {
+                // Show VIP active status
+                if (freeVipStatus) freeVipStatus.classList.add('hidden');
+                if (activeVipStatus) activeVipStatus.classList.remove('hidden');
+                
+                // Calculate and display time remaining
+                const now = Date.now();
+                const timeLeft = this.currentUser.vipEndTime - now;
+                const daysLeft = Math.ceil(timeLeft / (24 * 60 * 60 * 1000));
+                
+                if (vipExpiry) {
+                    vipExpiry.textContent = daysLeft > 0 ? `Expires in ${daysLeft} days` : 'Expires soon';
+                }
+            } else {
+                // Show free tier status
+                if (freeVipStatus) freeVipStatus.classList.remove('hidden');
+                if (activeVipStatus) activeVipStatus.classList.add('hidden');
+            }
+        } catch (error) {
+            console.error('Error updating VIP status:', error);
+        }
+    }
+
+    // ✅ Daily Claim Management
+    async updateDailyClaimStatus() {
+        if (!this.currentUser) return;
+
+        try {
+            const now = Date.now();
+            const lastClaim = this.currentUser.lastDailyClaim || 0;
+            const oneDay = 24 * 60 * 60 * 1000;
+            const canClaim = (now - lastClaim) >= oneDay;
+
+            const dailyClaimSection = document.getElementById('dailyClaimSection');
+            const dailyClaimCooldown = document.getElementById('dailyClaimCooldown');
+            const dailyRewardAmount = document.getElementById('dailyRewardAmount');
+            const vipBonusText = document.getElementById('vipBonusText');
+
+            if (canClaim) {
+                // Show claim button
+                if (dailyClaimSection) dailyClaimSection.classList.remove('hidden');
+                if (dailyClaimCooldown) dailyClaimCooldown.classList.add('hidden');
+
+                // Update reward amount display
+                const isVIP = await window.Firebase.checkVIPStatus(this.currentUser.telegramId);
+                const baseReward = 100;
+                const vipBonus = isVIP ? 200 : 0;
+                const totalReward = baseReward + vipBonus;
+
+                if (dailyRewardAmount) {
+                    dailyRewardAmount.textContent = `${totalReward} Coins`;
+                }
+                if (vipBonusText && isVIP) {
+                    vipBonusText.classList.remove('hidden');
+                }
+            } else {
+                // Show cooldown timer
+                if (dailyClaimSection) dailyClaimSection.classList.add('hidden');
+                if (dailyClaimCooldown) dailyClaimCooldown.classList.remove('hidden');
+
+                // Start cooldown timer
+                this.startDailyClaimTimer(lastClaim + oneDay);
+            }
+        } catch (error) {
+            console.error('Error updating daily claim status:', error);
+        }
+    }
+
+    // ✅ Daily Claim Timer
+    startDailyClaimTimer(nextClaimTime) {
+        const timerDisplay = document.getElementById('claimCooldownTimer');
+        if (!timerDisplay) return;
+
+        // Clear existing timer
+        if (this.dailyClaimTimer) {
+            clearInterval(this.dailyClaimTimer);
+        }
+
+        this.dailyClaimTimer = setInterval(() => {
+            const now = Date.now();
+            const remaining = nextClaimTime - now;
+
+            if (remaining <= 0) {
+                clearInterval(this.dailyClaimTimer);
+                this.updateDailyClaimStatus();
+                return;
+            }
+
+            const hours = Math.floor(remaining / (1000 * 60 * 60));
+            const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
+
+            timerDisplay.textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }, 1000);
+    }
+
+    // ✅ VIP Purchase Handler
+    async handleVIPPurchase() {
+        if (!this.currentUser) {
+            this.showError('User not found');
+            return;
+        }
+
+        try {
+            // Use Telegram's VIP purchase method
+            await telegramApp.buyVIP();
+        } catch (error) {
+            console.error('VIP purchase error:', error);
+            this.showError('VIP purchase failed. Please try again.');
+        }
+    }
+
+    // ✅ Daily Claim Handler
+    async handleDailyClaim() {
+        if (!this.currentUser) {
+            this.showError('User not found');
+            return;
+        }
+
+        const dailyClaimBtn = document.getElementById('dailyClaimBtn');
+        const originalText = dailyClaimBtn?.textContent;
+
+        try {
+            if (dailyClaimBtn) {
+                dailyClaimBtn.textContent = 'Claiming...';
+                dailyClaimBtn.disabled = true;
+            }
+
+            const result = await window.Firebase.processDailyClaim(this.currentUser.telegramId);
+
+            if (result.success) {
+                this.showSuccess(result.message);
+                telegramApp.hapticFeedback('heavy');
+                
+                // Update UI
+                this.updateDailyClaimStatus();
+                
+                // Animate coins
+                setTimeout(() => this.animateCoins(), 500);
+            } else {
+                this.showError(result.message);
+            }
+
+        } catch (error) {
+            console.error('Daily claim error:', error);
+            this.showError('Daily claim failed. Please try again.');
+        } finally {
+            if (dailyClaimBtn) {
+                dailyClaimBtn.textContent = originalText;
+                dailyClaimBtn.disabled = false;
+            }
+        }
     }
 
     updateFarmingStatus() {
@@ -740,6 +924,38 @@ class MainApp {
         }
     }
 
+    // ✅ VIP Settings Management
+    async handleUpdateVIPSettings(event) {
+        event.preventDefault();
+
+        const vipSettings = {
+            vipAmount: parseInt(document.getElementById('vipAmount').value),
+            vipCurrency: document.getElementById('vipCurrency').value,
+            vipDuration: parseInt(document.getElementById('vipDuration').value),
+            paymentProviderToken: document.getElementById('paymentProviderToken').value.trim(),
+            vipBenefits: {
+                farmingMultiplier: parseFloat(document.getElementById('vipFarmingMultiplier').value),
+                referralMultiplier: parseFloat(document.getElementById('vipReferralMultiplier').value),
+                dailyClaimBonus: parseInt(document.getElementById('vipDailyBonus').value),
+                minWithdrawal: parseInt(document.getElementById('vipMinWithdrawal').value)
+            }
+        };
+
+        try {
+            const success = await window.Firebase.updateVIPSettings(vipSettings);
+            
+            if (success) {
+                this.showNotification('⭐ VIP settings updated successfully!', 'success');
+                telegramApp.hapticFeedback('light');
+            } else {
+                this.showNotification('Failed to update VIP settings', 'error');
+            }
+        } catch (error) {
+            console.error('VIP settings update error:', error);
+            this.showNotification('VIP settings update failed', 'error');
+        }
+    }
+
     async updateAdminStats() {
         try {
             const stats = await dbManager.getStats();
@@ -804,12 +1020,28 @@ class MainApp {
 
     async loadAdminSettings() {
         try {
+            // Load global settings
             const settings = await dbManager.getSettings();
             
             document.getElementById('referralReward').value = settings.referralReward || 500;
             document.getElementById('farmingReward').value = settings.farmingReward || 100;
             document.getElementById('minWithdrawal').value = settings.minWithdrawal || 1000;
             document.getElementById('exchangeRate').value = settings.exchangeRate || 100;
+
+            // Load VIP settings
+            const vipSettings = await window.Firebase.getVIPSettings();
+            
+            document.getElementById('vipAmount').value = vipSettings.vipAmount || 49900;
+            document.getElementById('vipCurrency').value = vipSettings.vipCurrency || 'XTR';
+            document.getElementById('vipDuration').value = vipSettings.vipDuration || 30;
+            document.getElementById('paymentProviderToken').value = vipSettings.paymentProviderToken || '';
+            
+            // Load VIP benefits
+            const benefits = vipSettings.vipBenefits || {};
+            document.getElementById('vipFarmingMultiplier').value = benefits.farmingMultiplier || 2;
+            document.getElementById('vipReferralMultiplier').value = benefits.referralMultiplier || 1.5;
+            document.getElementById('vipDailyBonus').value = benefits.dailyClaimBonus || 200;
+            document.getElementById('vipMinWithdrawal').value = benefits.minWithdrawal || 500;
 
         } catch (error) {
             console.error('Error loading admin settings:', error);
