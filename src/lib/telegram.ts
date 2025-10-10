@@ -481,7 +481,7 @@ export class TelegramService {
     });
   }
 
-  private async activateVIPAfterPayment(tier: 'vip1' | 'vip2'): Promise<void> => {
+  private async activateVIPAfterPayment(tier: 'vip1' | 'vip2'): Promise<void> {
     try {
       if (!this.user?.id) {
         throw new Error('User not authenticated');
