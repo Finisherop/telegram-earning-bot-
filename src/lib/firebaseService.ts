@@ -54,7 +54,17 @@ export const initializeUser = async (userId: string): Promise<User> => {
       await setDoc(userRef, defaultUserData);
       return defaultUserData;
     } else {
-      return { id: userDoc.id, ...userDoc.data() } as User;
+      const userData = userDoc.data();
+      return {
+        ...userData,
+        id: userDoc.id,
+        createdAt: userData.createdAt?.toDate ? userData.createdAt.toDate() : new Date(userData.createdAt),
+        updatedAt: userData.updatedAt?.toDate ? userData.updatedAt.toDate() : new Date(userData.updatedAt),
+        lastClaimDate: userData.lastClaimDate?.toDate ? userData.lastClaimDate.toDate() : userData.lastClaimDate ? new Date(userData.lastClaimDate) : undefined,
+        farmingStartTime: userData.farmingStartTime?.toDate ? userData.farmingStartTime.toDate() : userData.farmingStartTime ? new Date(userData.farmingStartTime) : undefined,
+        farmingEndTime: userData.farmingEndTime?.toDate ? userData.farmingEndTime.toDate() : userData.farmingEndTime ? new Date(userData.farmingEndTime) : undefined,
+        vipEndTime: userData.vipEndTime?.toDate ? userData.vipEndTime.toDate() : userData.vipEndTime ? new Date(userData.vipEndTime) : undefined,
+      } as User;
     }
   } catch (error) {
     console.error('Error initializing user:', error);

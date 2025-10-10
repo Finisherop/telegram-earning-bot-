@@ -9,7 +9,7 @@ export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    const initializeUser = async () => {
+    const initializeUserAuth = async () => {
       try {
         // Wait a bit for Telegram service to initialize
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -50,7 +50,11 @@ export const useAuth = () => {
 
         try {
           // Initialize user safely (creates if doesn't exist)
-          let existingUser = await initializeUser(userId);
+          let existingUser = await getUser(userId);
+          
+          if (!existingUser) {
+            existingUser = await initializeUser(userId);
+          }
           
           // Update user with Telegram data if we have it
           if (telegramUser && telegramUser.id !== 123456789) {
@@ -148,7 +152,7 @@ export const useAuth = () => {
       }
     };
 
-    initializeUser();
+    initializeUserAuth();
   }, []);
 
   const refreshUser = async () => {
