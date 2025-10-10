@@ -170,7 +170,11 @@ export class TelegramService {
   }
 
   private setupWebApp() {
-    if (!this.webApp) return;
+    if (!this.webApp) {
+      console.warn('WebApp not available, falling back to browser mode');
+      this.setupFallbackMode();
+      return;
+    }
 
     try {
       console.log('Setting up Telegram WebApp...');

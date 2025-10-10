@@ -28,11 +28,26 @@ import { db, realtimeDb } from './firebase';
 import { User, Task, UserTask, WithdrawalRequest, AdminSettings, DailyStats } from '@/types';
 import { VIP_TIERS, DEFAULT_SETTINGS } from './constants';
 
+// Firebase service error handling
+const checkFirebaseConnection = () => {
+  if (!db || !realtimeDb) {
+    console.warn('Firebase services not properly initialized. Some features may not work.');
+    return false;
+  }
+  return true;
+};
+
 // Real-time listeners
 const listeners = new Map<string, () => void>();
 
 // Use Realtime Database for instant sync
 export const subscribeToUser = (userId: string, callback: (user: User | null) => void): (() => void) => {
+  if (!checkFirebaseConnection() || !realtimeDb) {
+    console.warn('Cannot subscribe to user: Firebase not initialized');
+    callback(null);
+    return () => {};
+  }
+  
   const userRef = ref(realtimeDb, `users/${userId}`);
   
   const unsubscribe = onValue(userRef, (snapshot) => {
@@ -66,6 +81,12 @@ export const subscribeToUser = (userId: string, callback: (user: User | null) =>
 
 // Real-time tasks listener using Realtime Database
 export const subscribeToTasks = (callback: (tasks: Task[]) => void): (() => void) => {
+  if (!checkFirebaseConnection() || !realtimeDb) {
+    console.warn('Cannot subscribe to tasks: Firebase not initialized');
+    callback([]);
+    return () => {};
+  }
+  
   const tasksRef = ref(realtimeDb, 'tasks');
   
   const unsubscribe = onValue(tasksRef, (snapshot) => {
@@ -97,6 +118,12 @@ export const subscribeToTasks = (callback: (tasks: Task[]) => void): (() => void
 
 // Real-time admin settings listener
 export const subscribeToAdminSettings = (callback: (settings: AdminSettings) => void): (() => void) => {
+  if (!checkFirebaseConnection() || !realtimeDb) {
+    console.warn('Cannot subscribe to admin settings: Firebase not initialized');
+    callback(DEFAULT_SETTINGS);
+    return () => {};
+  }
+  
   const settingsRef = ref(realtimeDb, 'admin/settings');
   
   const unsubscribe = onValue(settingsRef, (snapshot) => {
@@ -130,6 +157,12 @@ export const subscribeToAdminSettings = (callback: (settings: AdminSettings) => 
 
 // Real-time user tasks listener
 export const subscribeToUserTasks = (userId: string, callback: (userTasks: UserTask[]) => void): (() => void) => {
+  if (!checkFirebaseConnection() || !realtimeDb) {
+    console.warn('Cannot subscribe to user tasks: Firebase not initialized');
+    callback([]);
+    return () => {};
+  }
+  
   const userTasksRef = ref(realtimeDb, `userTasks/${userId}`);
   
   const unsubscribe = onValue(userTasksRef, (snapshot) => {
@@ -167,6 +200,10 @@ export const cleanupListeners = () => {
 
 // Initialize user with Realtime Database
 export const initializeUser = async (userId: string): Promise<User> => {
+  if (!checkFirebaseConnection() || !realtimeDb) {
+    throw new Error('Firebase not initialized');
+  }
+  
   try {
     const userRef = ref(realtimeDb, `users/${userId}`);
     const userSnapshot = await get(userRef);
@@ -226,6 +263,10 @@ export const initializeUser = async (userId: string): Promise<User> => {
 
 // Safe update function using Realtime Database
 export const safeUpdateUser = async (userId: string, updateData: Partial<User>): Promise<User> => {
+  if (!checkFirebaseConnection() || !realtimeDb) {
+    throw new Error('Firebase not initialized');
+  }
+  
   try {
     const userRef = ref(realtimeDb, `users/${userId}`);
     const userSnapshot = await get(userRef);
@@ -305,6 +346,10 @@ export const safeUpdateUser = async (userId: string, updateData: Partial<User>):
 
 // User operations with Realtime Database
 export const createUser = async (userData: Partial<User>): Promise<void> => {
+  if (!checkFirebaseConnection() || !realtimeDb) {
+    throw new Error('Firebase not initialized');
+  }
+  
   const userRef = ref(realtimeDb, `users/${userData.telegramId}`);
   const userSnapshot = await get(userRef);
   
@@ -341,7 +386,7 @@ export const createUser = async (userData: Partial<User>): Promise<void> => {
     
     // If user has a referrer, update referrer's count
     if (userData.referrerId) {
-      const referrerRef = ref(realtimeDb, `users/${userData.referrerId}`);
+        const referrerRef = ref(realtimeDb!, `users/${userData.referrerId}`);
       const referrerSnapshot = await get(referrerRef);
       if (referrerSnapshot.exists()) {
         const referrerData = referrerSnapshot.val();
@@ -357,6 +402,11 @@ export const createUser = async (userData: Partial<User>): Promise<void> => {
 };
 
 export const getUser = async (telegramId: string): Promise<User | null> => {
+  if (!checkFirebaseConnection() || !realtimeDb) {
+    console.warn('Cannot get user: Firebase not initialized');
+    return null;
+  }
+  
   try {
     const userRef = ref(realtimeDb, `users/${telegramId}`);
     const userSnapshot = await get(userRef);
@@ -383,6 +433,10 @@ export const getUser = async (telegramId: string): Promise<User | null> => {
 };
 
 export const updateUser = async (telegramId: string, updates: Partial<User>): Promise<void> => {
+  if (!checkFirebaseConnection() || !realtimeDb) {
+    throw new Error('Firebase not initialized');
+  }
+  
   const userRef = ref(realtimeDb, `users/${telegramId}`);
   const updateData: any = {
     ...updates,
@@ -421,6 +475,11 @@ export const activateSubscription = async (
 
 // Task operations with Realtime Database
 export const getTasks = async (): Promise<Task[]> => {
+  if (!checkFirebaseConnection() || !realtimeDb) {
+    console.warn('Cannot get tasks: Firebase not initialized');
+    return [];
+  }
+  
   try {
     const tasksRef = ref(realtimeDb, 'tasks');
     const tasksSnapshot = await get(tasksRef);
@@ -449,6 +508,10 @@ export const getTasks = async (): Promise<Task[]> => {
 };
 
 export const createTask = async (taskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> => {
+  if (!checkFirebaseConnection() || !realtimeDb) {
+    throw new Error('Firebase not initialized');
+  }
+  
   const tasksRef = ref(realtimeDb, 'tasks');
   const newTaskRef = push(tasksRef);
   
@@ -462,6 +525,11 @@ export const createTask = async (taskData: Omit<Task, 'id' | 'createdAt' | 'upda
 };
 
 export const getUserTasks = async (userId: string): Promise<UserTask[]> => {
+  if (!checkFirebaseConnection() || !realtimeDb) {
+    console.warn('Cannot get user tasks: Firebase not initialized');
+    return [];
+  }
+  
   try {
     const userTasksRef = ref(realtimeDb, `userTasks/${userId}`);
     const userTasksSnapshot = await get(userTasksRef);
@@ -488,6 +556,10 @@ export const getUserTasks = async (userId: string): Promise<UserTask[]> => {
 };
 
 export const completeTask = async (userId: string, taskId: string): Promise<void> => {
+  if (!checkFirebaseConnection() || !realtimeDb) {
+    throw new Error('Firebase not initialized');
+  }
+  
   const userTaskRef = ref(realtimeDb, `userTasks/${userId}/${taskId}`);
   await set(userTaskRef, {
     userId,
@@ -498,6 +570,10 @@ export const completeTask = async (userId: string, taskId: string): Promise<void
 };
 
 export const claimTask = async (userId: string, taskId: string, reward: number): Promise<void> => {
+  if (!checkFirebaseConnection() || !realtimeDb) {
+    throw new Error('Firebase not initialized');
+  }
+  
   try {
     // Update user task status
     const userTaskRef = ref(realtimeDb, `userTasks/${userId}/${taskId}`);
@@ -507,7 +583,7 @@ export const claimTask = async (userId: string, taskId: string, reward: number):
     });
     
     // Add coins to user atomically
-    const userRef = ref(realtimeDb, `users/${userId}`);
+    const userRef = ref(realtimeDb!, `users/${userId}`);
     const userSnapshot = await get(userRef);
     
     if (userSnapshot.exists()) {
@@ -531,6 +607,10 @@ export const createWithdrawalRequest = async (
   amount: number,
   upiId: string
 ): Promise<void> => {
+  if (!checkFirebaseConnection() || !db) {
+    throw new Error('Firebase not initialized');
+  }
+  
   const withdrawalsRef = collection(db, 'withdrawals');
   await addDoc(withdrawalsRef, {
     userId,
@@ -542,6 +622,11 @@ export const createWithdrawalRequest = async (
 };
 
 export const getWithdrawalRequests = async (): Promise<WithdrawalRequest[]> => {
+  if (!checkFirebaseConnection() || !db) {
+    console.warn('Cannot get withdrawal requests: Firebase not initialized');
+    return [];
+  }
+  
   const withdrawalsRef = collection(db, 'withdrawals');
   const q = query(withdrawalsRef, orderBy('requestedAt', 'desc'));
   const querySnapshot = await getDocs(q);
@@ -557,6 +642,10 @@ export const updateWithdrawalStatus = async (
   status: 'approved' | 'rejected' | 'paid',
   adminNotes?: string
 ): Promise<void> => {
+  if (!checkFirebaseConnection() || !db) {
+    throw new Error('Firebase not initialized');
+  }
+  
   const withdrawalRef = doc(db, 'withdrawals', withdrawalId);
   await updateDoc(withdrawalRef, {
     status,
@@ -567,6 +656,11 @@ export const updateWithdrawalStatus = async (
 
 // Admin operations with Realtime Database
 export const getAdminSettings = async (): Promise<AdminSettings> => {
+  if (!checkFirebaseConnection() || !realtimeDb) {
+    console.warn('Cannot get admin settings: Firebase not initialized');
+    return DEFAULT_SETTINGS;
+  }
+  
   const settingsRef = ref(realtimeDb, 'admin/settings');
   const settingsSnapshot = await get(settingsRef);
   
@@ -591,6 +685,10 @@ export const getAdminSettings = async (): Promise<AdminSettings> => {
 };
 
 export const updateAdminSettings = async (settings: Partial<AdminSettings>): Promise<void> => {
+  if (!checkFirebaseConnection() || !realtimeDb) {
+    throw new Error('Firebase not initialized');
+  }
+  
   const settingsRef = ref(realtimeDb, 'admin/settings');
   const updateData = {
     ...settings,
@@ -601,6 +699,17 @@ export const updateAdminSettings = async (settings: Partial<AdminSettings>): Pro
 };
 
 export const getDailyStats = async (): Promise<DailyStats> => {
+  if (!checkFirebaseConnection() || !realtimeDb || !db) {
+    console.warn('Cannot get daily stats: Firebase not initialized');
+    return {
+      totalUsers: 0,
+      activeVipUsers: 0,
+      totalCoinsDistributed: 0,
+      totalInrGenerated: 0,
+      pendingWithdrawals: 0,
+    };
+  }
+  
   const usersRef = ref(realtimeDb, 'users');
   const usersSnapshot = await get(usersRef);
   

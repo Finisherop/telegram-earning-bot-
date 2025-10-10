@@ -1,7 +1,7 @@
-import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
-import { getDatabase } from 'firebase/database';
-import { getAuth } from 'firebase/auth';
+import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
+import { getFirestore, Firestore } from 'firebase/firestore';
+import { getDatabase, Database } from 'firebase/database';
+import { getAuth, Auth } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyA_cKKrwrqNyb0xl28IbHAnaJa3ChOdsZU',
@@ -13,12 +13,46 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '1:947875567907:web:ea7b37b36643872e199496',
 };
 
-// Initialize Firebase only if it hasn't been initialized already
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+// Validate Firebase configuration
+const validateFirebaseConfig = () => {
+  const requiredFields = ['apiKey', 'authDomain', 'projectId', 'appId'];
+  const missingFields = requiredFields.filter(field => !firebaseConfig[field as keyof typeof firebaseConfig]);
+  
+  if (missingFields.length > 0) {
+    console.error('Missing Firebase configuration fields:', missingFields);
+    throw new Error(`Firebase configuration incomplete. Missing: ${missingFields.join(', ')}`);
+  }
+  
+  console.log('Firebase configuration validated successfully');
+};
 
-// Initialize services
-export const db = getFirestore(app);
-export const realtimeDb = getDatabase(app);
-export const auth = getAuth(app);
+// Initialize Firebase with error handling
+let app: FirebaseApp | null;
+let db: Firestore | null;
+let realtimeDb: Database | null;
+let auth: Auth | null;
 
+try {
+  validateFirebaseConfig();
+  
+  // Initialize Firebase only if it hasn't been initialized already
+  app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+  
+  // Initialize services
+  db = getFirestore(app);
+  realtimeDb = getDatabase(app);
+  auth = getAuth(app);
+  
+  console.log('Firebase services initialized successfully');
+} catch (error) {
+  console.error('Failed to initialize Firebase:', error);
+  
+  // Create mock services for development/fallback
+  app = null;
+  db = null;
+  realtimeDb = null;
+  auth = null;
+}
+
+export { db, realtimeDb, auth };
 export default app;

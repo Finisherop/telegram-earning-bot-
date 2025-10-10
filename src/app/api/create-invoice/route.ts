@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     console.log('Creating invoice for:', { amount, description, tier, userId });
 
     // Telegram Bot Token (add to your environment variables)
-    const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+    const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
     
     if (!BOT_TOKEN) {
       console.error('TELEGRAM_BOT_TOKEN not found in environment variables');

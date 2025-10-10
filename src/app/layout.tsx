@@ -29,11 +29,21 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `
-              // Simple Telegram WebApp initialization
-              if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
-                window.Telegram.WebApp.ready();
-                window.Telegram.WebApp.expand();
-              }
+              // Enhanced Telegram WebApp initialization with error handling
+              (function() {
+                try {
+                  if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+                    console.log('Initializing Telegram WebApp...');
+                    window.Telegram.WebApp.ready();
+                    window.Telegram.WebApp.expand();
+                    console.log('Telegram WebApp initialized successfully');
+                  } else {
+                    console.log('Telegram WebApp not available - running in browser mode');
+                  }
+                } catch (error) {
+                  console.error('Error initializing Telegram WebApp:', error);
+                }
+              })();
             `,
           }}
         />
