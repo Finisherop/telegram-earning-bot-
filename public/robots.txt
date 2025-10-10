@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://telegram-earning-bot.vercel.app/sitemap.xml
