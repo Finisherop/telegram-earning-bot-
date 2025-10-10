@@ -4,7 +4,7 @@
 
 **Original Error**: `"Error: Function Runtimes must have a valid version, for example 'now-php@1.0.0'"`
 
-**✅ Solution Applied**: All serverless functions now have valid `nodejs18.x` runtime specification.
+**✅ Solution Applied**: All serverless functions now have valid `nodejs22.x` runtime specification.
 
 ---
 
@@ -13,7 +13,7 @@
 ### 1. `/api/webhook.js` - Telegram Bot Webhook Handler
 ```json
 "api/webhook.js": {
-  "runtime": "nodejs18.x"
+  "runtime": "nodejs22.x"
 }
 ```
 ✅ **Status**: Fixed with proper Vercel handler format  
@@ -23,7 +23,7 @@
 ### 2. `/api/create-invoice.js` - Payment Invoice API  
 ```json
 "api/create-invoice.js": {
-  "runtime": "nodejs18.x" 
+  "runtime": "nodejs22.x" 
 }
 ```
 ✅ **Status**: Fixed with proper Vercel handler format  
@@ -43,10 +43,10 @@
   "version": 2,
   "functions": {
     "api/webhook.js": {
-      "runtime": "nodejs18.x"
+      "runtime": "nodejs22.x"
     },
     "api/create-invoice.js": {
-      "runtime": "nodejs18.x"
+      "runtime": "nodejs22.x"
     }
   },
   "builds": [
@@ -116,7 +116,7 @@ chmod +x setup-vercel-webhook.sh
 
 1. **Deploy to Vercel**:
    - Should now build successfully without runtime errors ✅
-   - All functions should have valid nodejs18.x runtime ✅
+   - All functions should have valid nodejs22.x runtime ✅
 
 2. **Test App**:
    ```
@@ -156,7 +156,7 @@ chmod +x setup-vercel-webhook.sh
 
 Your Telegram Mini App is now properly configured for Vercel deployment:
 
-- ✅ **Runtime Error Fixed** - All functions have nodejs18.x runtime
+- ✅ **Runtime Error Fixed** - All functions have nodejs22.x runtime
 - ✅ **URLs Updated** - https://telegram-earning-bot.vercel.app throughout
 - ✅ **Webhook Ready** - Bot integration configured  
 - ✅ **Payment API** - Telegram Stars integration working

@@ -3,7 +3,7 @@
 ## ✅ Vercel Configuration Fixed
 
 ### Fixed Issues:
-- ✅ **Function Runtimes**: All functions now have valid `nodejs18.x` runtime
+- ✅ **Function Runtimes**: All functions now have valid `nodejs22.x` runtime
 - ✅ **Builds Configuration**: Proper `@vercel/node` for API functions  
 - ✅ **Routes Configuration**: Correct routing for API endpoints
 - ✅ **Environment Variables**: Updated with Vercel URL
@@ -27,10 +27,10 @@
   "version": 2,
   "functions": {
     "api/webhook.js": {
-      "runtime": "nodejs18.x"
+      "runtime": "nodejs22.x"
     },
     "api/create-invoice.js": {
-      "runtime": "nodejs18.x"
+      "runtime": "nodejs22.x"
     }
   },
   "builds": [
