@@ -112,30 +112,98 @@ class TelegramApp {
         return this.isInitialized && this.user !== null;
     }
 
-    // Show alert
-    showAlert(message, callback) {
-        if (this.webApp && this.webApp.showAlert) {
-            this.webApp.showAlert(message, callback);
-        } else {
-            alert(message);
+    // ✅ Safe Telegram WebApp methods with version checking and fallbacks
+    
+    // Safe showAlert with version compatibility
+    showAlert(message, callback, title = "Notice") {
+        try {
+            if (this.webApp && this.webApp.version >= "6.1" && typeof this.webApp.showPopup === "function") {
+                // Use modern showPopup for newer versions
+                this.webApp.showPopup({ 
+                    title: title, 
+                    message: message,
+                    buttons: [{ type: 'ok' }]
+                }, () => {
+                    if (callback) callback();
+                });
+            } else if (this.webApp && typeof this.webApp.showAlert === "function") {
+                // Fallback to showAlert
+                this.webApp.showAlert(message, callback);
+            } else {
+                // Browser fallback
+                alert(message);
+                if (callback) callback();
+            }
+        } catch (error) {
+            console.error('Telegram showAlert error:', error);
+            alert(message); // Final fallback
             if (callback) callback();
         }
     }
 
-    // Show confirm
-    showConfirm(message, callback) {
-        if (this.webApp && this.webApp.showConfirm) {
-            this.webApp.showConfirm(message, callback);
-        } else {
+    // Safe showConfirm with error handling
+    showConfirm(message, callback, title = "Confirm") {
+        try {
+            if (this.webApp && this.webApp.version >= "6.1" && typeof this.webApp.showPopup === "function") {
+                this.webApp.showPopup({
+                    title: title,
+                    message: message,
+                    buttons: [
+                        { type: 'ok', text: 'Yes' },
+                        { type: 'cancel', text: 'No' }
+                    ]
+                }, (buttonId) => {
+                    callback(buttonId === 'ok');
+                });
+            } else if (this.webApp && typeof this.webApp.showConfirm === "function") {
+                this.webApp.showConfirm(message, callback);
+            } else {
+                const result = confirm(message);
+                callback(result);
+            }
+        } catch (error) {
+            console.error('Telegram showConfirm error:', error);
             const result = confirm(message);
             callback(result);
         }
     }
 
-    // Haptic feedback
+    // Safe haptic feedback
     hapticFeedback(type = 'medium') {
-        if (this.webApp && this.webApp.HapticFeedback) {
-            this.webApp.HapticFeedback.impactOccurred(type);
+        try {
+            if (this.webApp && 
+                this.webApp.HapticFeedback && 
+                typeof this.webApp.HapticFeedback.impactOccurred === "function") {
+                
+                // Validate haptic type
+                const validTypes = ['light', 'medium', 'heavy', 'rigid', 'soft'];
+                const safeType = validTypes.includes(type) ? type : 'medium';
+                
+                this.webApp.HapticFeedback.impactOccurred(safeType);
+                console.log(`✅ Haptic feedback: ${safeType}`);
+            } else {
+                console.warn('Haptic feedback not available');
+            }
+        } catch (error) {
+            console.error('Haptic feedback error:', error);
+        }
+    }
+
+    // Safe notification feedback
+    notificationFeedback(type = 'success') {
+        try {
+            if (this.webApp && 
+                this.webApp.HapticFeedback && 
+                typeof this.webApp.HapticFeedback.notificationOccurred === "function") {
+                
+                const validTypes = ['error', 'success', 'warning'];
+                const safeType = validTypes.includes(type) ? type : 'success';
+                
+                this.webApp.HapticFeedback.notificationOccurred(safeType);
+                console.log(`✅ Notification feedback: ${safeType}`);
+            }
+        } catch (error) {
+            console.error('Notification feedback error:', error);
         }
     }
 
@@ -187,44 +255,85 @@ class TelegramApp {
         }
     }
 
-    // Copy to clipboard
+    // ✅ Safe clipboard operations with multiple fallbacks
     copyToClipboard(text) {
-        if (navigator.clipboard) {
-            navigator.clipboard.writeText(text).then(() => {
-                this.showAlert('Copied to clipboard!');
-                this.hapticFeedback('light');
-            }).catch(() => {
-                this.showAlert('Failed to copy to clipboard');
-            });
-        } else {
-            // Fallback for older browsers
-            const textArea = document.createElement('textarea');
-            textArea.value = text;
-            document.body.appendChild(textArea);
-            textArea.select();
-            try {
-                document.execCommand('copy');
-                this.showAlert('Copied to clipboard!');
-                this.hapticFeedback('light');
-            } catch (err) {
-                this.showAlert('Failed to copy to clipboard');
+        if (!text) {
+            this.showAlert('Nothing to copy');
+            return;
+        }
+
+        try {
+            // Use standard clipboard API with secure context check
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(() => {
+                    this.showAlert('Copied to clipboard!');
+                    this.hapticFeedback('light');
+                }).catch((error) => {
+                    console.error('Clipboard write failed:', error);
+                    this.fallbackCopy(text);
+                });
+            } else {
+                this.fallbackCopy(text);
             }
-            document.body.removeChild(textArea);
+        } catch (error) {
+            console.error('Clipboard operation error:', error);
+            this.fallbackCopy(text);
         }
     }
 
-    // Show/hide main button
+    // Secure fallback copy method
+    fallbackCopy(text) {
+        try {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            textArea.style.top = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            const successful = document.execCommand('copy');
+            document.body.removeChild(textArea);
+            
+            if (successful) {
+                this.showAlert('Copied to clipboard!');
+                this.hapticFeedback('light');
+            } else {
+                this.showAlert(`Please copy: ${text}`);
+            }
+        } catch (error) {
+            console.error('Fallback copy failed:', error);
+            this.showAlert(`Copy this text: ${text}`);
+        }
+    }
+
+    // ✅ Safe main button operations with validation
     showMainButton(text, onClick) {
-        if (this.webApp && this.webApp.MainButton) {
-            this.webApp.MainButton.setText(text);
-            this.webApp.MainButton.show();
-            this.webApp.MainButton.onClick(onClick);
+        try {
+            if (this.webApp && this.webApp.MainButton) {
+                this.webApp.MainButton.setText(text || 'Continue');
+                this.webApp.MainButton.show();
+                if (typeof onClick === 'function') {
+                    this.webApp.MainButton.onClick(onClick);
+                }
+                console.log(`✅ Main button shown: ${text}`);
+            } else {
+                console.warn('Main button not available');
+            }
+        } catch (error) {
+            console.error('Main button show error:', error);
         }
     }
 
     hideMainButton() {
-        if (this.webApp && this.webApp.MainButton) {
-            this.webApp.MainButton.hide();
+        try {
+            if (this.webApp && this.webApp.MainButton) {
+                this.webApp.MainButton.hide();
+                console.log('✅ Main button hidden');
+            }
+        } catch (error) {
+            console.error('Main button hide error:', error);
         }
     }
 }

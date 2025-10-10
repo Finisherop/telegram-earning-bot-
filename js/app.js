@@ -8,8 +8,64 @@ class MainApp {
         this.currentTab = 'dashboard';
         this.isAdmin = false;
         this.farmingInterval = null;
+        this.initializationAttempts = 0;
+        this.maxInitAttempts = 3;
+        this.cleanupCallbacks = [];
         
-        this.init();
+        // ✅ Safe initialization with error recovery
+        this.safeInit();
+    }
+
+    async safeInit() {
+        console.log('🚀 Starting Telegram Mini App with safety features...');
+        
+        try {
+            await this.init();
+        } catch (error) {
+            console.error('❌ App initialization failed:', error);
+            
+            this.initializationAttempts++;
+            if (this.initializationAttempts < this.maxInitAttempts) {
+                console.log(`🔄 Retrying initialization (${this.initializationAttempts}/${this.maxInitAttempts})...`);
+                setTimeout(() => this.safeInit(), 2000 * this.initializationAttempts);
+            } else {
+                this.handleInitializationFailure(error);
+            }
+        }
+    }
+
+    // ✅ Graceful degradation when initialization fails
+    handleInitializationFailure(error) {
+        console.error('💥 Final initialization failure:', error);
+        
+        // Show error to user but keep app somewhat functional
+        this.hideLoading();
+        this.showError('Failed to initialize app completely. Some features may be limited.');
+        
+        // Set up minimal functionality
+        this.setupMinimalUI();
+    }
+
+    setupMinimalUI() {
+        try {
+            const app = document.getElementById('app');
+            if (app) {
+                app.classList.remove('hidden');
+                app.innerHTML = `
+                    <div class="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+                        <div class="bg-white rounded-lg p-6 max-w-md w-full text-center">
+                            <h2 class="text-xl font-bold text-gray-800 mb-4">⚠️ Limited Mode</h2>
+                            <p class="text-gray-600 mb-4">The app is running in limited mode due to initialization issues.</p>
+                            <button onclick="location.reload()" class="bg-primary text-white px-4 py-2 rounded">
+                                🔄 Retry
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('Failed to set up minimal UI:', error);
+        }
     }
 
     async init() {
@@ -760,33 +816,146 @@ class MainApp {
         }
     }
 
-    // Utility functions
-    showNotification(message, type = 'info') {
-        const notifications = document.getElementById('notifications');
-        if (!notifications) return;
-
-        const notification = document.createElement('div');
-        notification.className = `notification p-4 rounded-lg shadow-lg text-white max-w-sm ${
-            type === 'success' ? 'bg-green-500' : 
-            type === 'error' ? 'bg-red-500' : 
-            type === 'warning' ? 'bg-yellow-500' : 
-            'bg-blue-500'
-        }`;
-        
-        notification.textContent = message;
-        
-        notifications.appendChild(notification);
-        
-        // Auto remove after 3 seconds
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.parentNode.removeChild(notification);
+    // ✅ Safe notification system with fallbacks
+    showNotification(message, type = 'info', duration = 3000) {
+        try {
+            // Use Telegram's notification feedback if available
+            if (type === 'success') {
+                telegramApp.notificationFeedback('success');
+            } else if (type === 'error') {
+                telegramApp.notificationFeedback('error');
+            } else if (type === 'warning') {
+                telegramApp.notificationFeedback('warning');
             }
-        }, 3000);
+
+            const notifications = document.getElementById('notifications');
+            if (!notifications) {
+                // Fallback to alert if notification container doesn't exist
+                console.warn('Notification container not found, using alert fallback');
+                telegramApp.showAlert(message);
+                return;
+            }
+
+            const notification = document.createElement('div');
+            notification.className = `notification p-4 rounded-lg shadow-lg text-white max-w-sm ${
+                type === 'success' ? 'bg-green-500' : 
+                type === 'error' ? 'bg-red-500' : 
+                type === 'warning' ? 'bg-yellow-500' : 
+                'bg-blue-500'
+            }`;
+            
+            notification.textContent = message;
+            
+            notifications.appendChild(notification);
+            
+            // Auto remove with safe cleanup
+            const timeoutId = setTimeout(() => {
+                try {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                } catch (error) {
+                    console.warn('Error removing notification:', error);
+                }
+            }, duration);
+
+            // Store timeout for cleanup
+            this.cleanupCallbacks.push(() => clearTimeout(timeoutId));
+            
+        } catch (error) {
+            console.error('Notification system error:', error);
+            // Ultimate fallback
+            telegramApp.showAlert(message);
+        }
     }
 
     showError(message) {
-        this.showNotification(message, 'error');
+        this.showNotification(message, 'error', 5000); // Longer duration for errors
+    }
+
+    showSuccess(message) {
+        this.showNotification(message, 'success');
+    }
+
+    // ✅ Comprehensive cleanup with error handling
+    cleanup() {
+        try {
+            console.log('🧹 Starting app cleanup...');
+
+            // Clear farming timer
+            if (this.farmingInterval) {
+                clearInterval(this.farmingInterval);
+                this.farmingInterval = null;
+            }
+
+            // Run all stored cleanup callbacks
+            this.cleanupCallbacks.forEach((callback, index) => {
+                try {
+                    callback();
+                } catch (error) {
+                    console.warn(`Cleanup callback ${index} failed:`, error);
+                }
+            });
+            this.cleanupCallbacks = [];
+
+            // Cleanup database connections
+            if (dbManager && typeof dbManager.cleanup === 'function') {
+                dbManager.cleanup();
+            }
+
+            // Remove event listeners
+            this.removeEventListeners();
+
+            console.log('✅ App cleanup completed');
+
+        } catch (error) {
+            console.error('Error during app cleanup:', error);
+        }
+    }
+
+    // ✅ Safe event listener removal
+    removeEventListeners() {
+        try {
+            // Remove window event listeners
+            window.removeEventListener('beforeunload', this.handleBeforeUnload);
+            window.removeEventListener('userUpdated', this.handleUserUpdate);
+            window.removeEventListener('tasksUpdated', this.handleTasksUpdate);
+            window.removeEventListener('newReferral', this.handleNewReferral);
+            
+            console.log('✅ Event listeners removed');
+        } catch (error) {
+            console.warn('Error removing event listeners:', error);
+        }
+    }
+
+    // ✅ Handle page unload with cleanup
+    handleBeforeUnload = () => {
+        this.cleanup();
+    }
+
+    // Bind cleanup to page unload
+    setupGlobalEventListeners() {
+        try {
+            window.addEventListener('beforeunload', this.handleBeforeUnload);
+            
+            // Also cleanup on visibility change (when user switches apps)
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    console.log('App hidden, performing partial cleanup...');
+                    // Don't full cleanup, just pause timers
+                    if (this.farmingInterval) {
+                        clearInterval(this.farmingInterval);
+                    }
+                } else {
+                    console.log('App visible again, resuming...');
+                    // Resume farming timer if needed
+                    this.updateFarmingStatus();
+                }
+            });
+            
+        } catch (error) {
+            console.warn('Error setting up global event listeners:', error);
+        }
     }
 }
 
