@@ -26,56 +26,146 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <script src="https://telegram.org/js/telegram-web-app.js"></script>
+        <script 
+          src="https://telegram.org/js/telegram-web-app.js"
+          async
+        ></script>
         <script
           dangerouslySetInnerHTML={{
             __html: `
-              // Enhanced Telegram WebApp initialization with comprehensive error handling
+              // Professional Telegram WebApp initialization with comprehensive error handling
               (function() {
-                try {
-                  // Wait for DOM to be ready
-                  if (document.readyState === 'loading') {
-                    document.addEventListener('DOMContentLoaded', initTelegram);
-                  } else {
-                    initTelegram();
+                'use strict';
+                
+                // Global error handlers to catch all errors
+                window.addEventListener('error', function(e) {
+                  console.warn('[TG-WebApp] Global error caught:', e.error);
+                });
+                
+                window.addEventListener('unhandledrejection', function(e) {
+                  console.warn('[TG-WebApp] Unhandled promise rejection:', e.reason);
+                });
+                
+                // Network error suppression for MTPROTO and Telegram-specific errors
+                const originalConsoleError = console.error;
+                console.error = function(...args) {
+                  const message = args.join(' ');
+                  
+                  // Suppress known Telegram/MTPROTO errors that don't affect functionality
+                  if (
+                    message.includes('[NET-4-C-0]') ||
+                    message.includes('[MP-MTPROTO]') ||
+                    message.includes('worker task error') ||
+                    message.includes('messages.getAvailableEffects') ||
+                    message.includes('updates.getChannelDifference') ||
+                    message.includes('allow-storage-access-by-user-activation') ||
+                    message.includes('pushResend') ||
+                    message.includes('acked message')
+                  ) {
+                    // Log as debug instead of error
+                    console.debug('[TG-Internal]', ...args);
+                    return;
                   }
                   
-                  function initTelegram() {
-                    try {
-                      console.log('Checking for Telegram WebApp...');
+                  // Call original console.error for other errors
+                  originalConsoleError.apply(console, args);
+                };
+                
+                // Enhanced Telegram WebApp initialization
+                function initTelegramWebApp() {
+                  try {
+                    console.log('[TG-WebApp] Starting initialization...');
+                    
+                    // Wait for Telegram WebApp to be available
+                    let attempts = 0;
+                    const maxAttempts = 50; // 5 seconds max wait
+                    
+                    function checkTelegramWebApp() {
+                      attempts++;
                       
                       if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
-                        console.log('Telegram WebApp found, initializing...');
+                        console.log('[TG-WebApp] Telegram WebApp found, setting up...');
                         
-                        // Safely call WebApp methods
-                        if (typeof window.Telegram.WebApp.ready === 'function') {
-                          window.Telegram.WebApp.ready();
-                          console.log('Telegram WebApp ready() called');
+                        const tg = window.Telegram.WebApp;
+                        
+                        try {
+                          // Initialize WebApp with proper error handling
+                          if (typeof tg.ready === 'function') {
+                            tg.ready();
+                            console.log('[TG-WebApp] ready() called successfully');
+                          }
+                          
+                          if (typeof tg.expand === 'function') {
+                            tg.expand();
+                            console.log('[TG-WebApp] expand() called successfully');
+                          }
+                          
+                          // Set theme and appearance
+                          if (typeof tg.setHeaderColor === 'function') {
+                            tg.setHeaderColor('#0088cc');
+                          }
+                          
+                          if (typeof tg.setBackgroundColor === 'function') {
+                            tg.setBackgroundColor('#ffffff');
+                          }
+                          
+                          // Enable closing confirmation for better UX
+                          if (typeof tg.enableClosingConfirmation === 'function') {
+                            tg.enableClosingConfirmation();
+                          }
+                          
+                          // Store WebApp reference and data globally
+                          window.__TELEGRAM_WEBAPP__ = tg;
+                          window.__TELEGRAM_WEBAPP_AVAILABLE__ = true;
+                          window.__TELEGRAM_USER_DATA__ = tg.initDataUnsafe?.user || null;
+                          window.__TELEGRAM_START_PARAM__ = tg.initDataUnsafe?.start_param || null;
+                          
+                          console.log('[TG-WebApp] Initialization completed successfully');
+                          console.log('[TG-WebApp] Version:', tg.version);
+                          console.log('[TG-WebApp] Platform:', tg.platform);
+                          console.log('[TG-WebApp] User data available:', !!tg.initDataUnsafe?.user);
+                          
+                          // Dispatch custom event for components
+                          window.dispatchEvent(new CustomEvent('telegramWebAppReady', {
+                            detail: { webApp: tg, userData: tg.initDataUnsafe?.user }
+                          }));
+                          
+                        } catch (setupError) {
+                          console.error('[TG-WebApp] Setup error:', setupError);
+                          window.__TELEGRAM_WEBAPP_AVAILABLE__ = false;
                         }
                         
-                        if (typeof window.Telegram.WebApp.expand === 'function') {
-                          window.Telegram.WebApp.expand();
-                          console.log('Telegram WebApp expand() called');
-                        }
-                        
-                        // Store WebApp availability for components
-                        window.__TELEGRAM_WEBAPP_AVAILABLE__ = true;
-                        console.log('Telegram WebApp initialized successfully');
+                      } else if (attempts < maxAttempts) {
+                        // Continue waiting for Telegram WebApp
+                        setTimeout(checkTelegramWebApp, 100);
                       } else {
-                        console.log('Telegram WebApp not available - running in browser mode');
+                        // Timeout reached, switch to browser mode
+                        console.log('[TG-WebApp] Timeout reached, switching to browser mode');
                         window.__TELEGRAM_WEBAPP_AVAILABLE__ = false;
+                        window.__TELEGRAM_WEBAPP__ = null;
+                        
+                        // Dispatch browser mode event
+                        window.dispatchEvent(new CustomEvent('telegramWebAppBrowserMode'));
                       }
-                    } catch (innerError) {
-                      console.error('Error in initTelegram:', innerError);
-                      window.__TELEGRAM_WEBAPP_AVAILABLE__ = false;
                     }
-                  }
-                } catch (error) {
-                  console.error('Error initializing Telegram WebApp:', error);
-                  if (typeof window !== 'undefined') {
+                    
+                    // Start checking for Telegram WebApp
+                    checkTelegramWebApp();
+                    
+                  } catch (error) {
+                    console.error('[TG-WebApp] Initialization error:', error);
                     window.__TELEGRAM_WEBAPP_AVAILABLE__ = false;
+                    window.__TELEGRAM_WEBAPP__ = null;
                   }
                 }
+                
+                // Initialize when DOM is ready
+                if (document.readyState === 'loading') {
+                  document.addEventListener('DOMContentLoaded', initTelegramWebApp);
+                } else {
+                  initTelegramWebApp();
+                }
+                
               })();
             `,
           }}

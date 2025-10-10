@@ -13,36 +13,67 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '1:947875567907:web:ea7b37b36643872e199496',
 };
 
-// Debug environment variables
-console.log('Environment variables debug:', {
+// Enhanced environment variables debugging
+const envDebug = {
   NODE_ENV: process.env.NODE_ENV,
   NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ? 'SET' : 'NOT SET',
   NEXT_PUBLIC_FIREBASE_PROJECT_ID: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ? 'SET' : 'NOT SET',
   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ? 'SET' : 'NOT SET',
-});
+  NEXT_PUBLIC_FIREBASE_DATABASE_URL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL ? 'SET' : 'NOT SET',
+  NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ? 'SET' : 'NOT SET',
+  NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ? 'SET' : 'NOT SET',
+  NEXT_PUBLIC_FIREBASE_APP_ID: process.env.NEXT_PUBLIC_FIREBASE_APP_ID ? 'SET' : 'NOT SET',
+};
 
-// Validate Firebase configuration
+console.log('[Firebase] Environment variables debug:', envDebug);
+
+// Enhanced Firebase configuration validation
 const validateFirebaseConfig = () => {
-  console.log('Validating Firebase config:', firebaseConfig);
+  console.log('[Firebase] Validating configuration...');
+  console.log('[Firebase] Config object:', {
+    apiKey: firebaseConfig.apiKey ? `${firebaseConfig.apiKey.substring(0, 10)}...` : 'NOT SET',
+    authDomain: firebaseConfig.authDomain || 'NOT SET',
+    projectId: firebaseConfig.projectId || 'NOT SET',
+    appId: firebaseConfig.appId ? `${firebaseConfig.appId.substring(0, 15)}...` : 'NOT SET',
+    databaseURL: firebaseConfig.databaseURL || 'NOT SET',
+    storageBucket: firebaseConfig.storageBucket || 'NOT SET',
+  });
   
   const requiredFields = ['apiKey', 'authDomain', 'projectId', 'appId'];
   const missingFields = requiredFields.filter(field => {
     const value = firebaseConfig[field as keyof typeof firebaseConfig];
-    return !value || value === 'undefined' || value === '';
+    return !value || value === 'undefined' || value === '' || value === 'null';
   });
   
   if (missingFields.length > 0) {
-    console.error('Missing Firebase configuration fields:', missingFields);
-    console.error('Current config values:', {
-      apiKey: firebaseConfig.apiKey ? 'SET' : 'NOT SET',
-      authDomain: firebaseConfig.authDomain ? 'SET' : 'NOT SET', 
-      projectId: firebaseConfig.projectId ? 'SET' : 'NOT SET',
-      appId: firebaseConfig.appId ? 'SET' : 'NOT SET',
-    });
-    throw new Error(`Firebase configuration incomplete. Missing: ${missingFields.join(', ')}`);
+    const errorMsg = `Firebase configuration incomplete. Missing: ${missingFields.join(', ')}`;
+    console.error('[Firebase] Configuration error:', errorMsg);
+    console.error('[Firebase] Environment check:', envDebug);
+    
+    // Store error for components to handle
+    if (typeof window !== 'undefined') {
+      (window as any).__FIREBASE_CONFIG_ERROR__ = {
+        error: errorMsg,
+        missingFields,
+        envDebug,
+        timestamp: new Date().toISOString()
+      };
+    }
+    
+    throw new Error(errorMsg);
   }
   
-  console.log('Firebase configuration validated successfully');
+  // Validate API key format
+  if (firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith('AIza')) {
+    console.warn('[Firebase] API key format may be invalid');
+  }
+  
+  // Validate project ID format
+  if (firebaseConfig.projectId && firebaseConfig.projectId.includes('your_project')) {
+    console.warn('[Firebase] Project ID appears to be a placeholder');
+  }
+  
+  console.log('[Firebase] Configuration validated successfully');
 };
 
 // Initialize Firebase with error handling
@@ -54,31 +85,70 @@ let auth: Auth | null;
 try {
   validateFirebaseConfig();
   
+  console.log('[Firebase] Initializing Firebase app...');
+  
   // Initialize Firebase only if it hasn't been initialized already
   app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
   
-  // Initialize services
-  db = getFirestore(app);
-  realtimeDb = getDatabase(app);
-  auth = getAuth(app);
+  console.log('[Firebase] Firebase app initialized, setting up services...');
   
-  console.log('Firebase services initialized successfully');
-} catch (error) {
-  console.error('Failed to initialize Firebase:', error);
+  // Initialize services with individual error handling
+  try {
+    db = getFirestore(app);
+    console.log('[Firebase] Firestore initialized successfully');
+  } catch (firestoreError) {
+    console.error('[Firebase] Firestore initialization failed:', firestoreError);
+    db = null;
+  }
   
-  // Show user-friendly error message
+  try {
+    realtimeDb = getDatabase(app);
+    console.log('[Firebase] Realtime Database initialized successfully');
+  } catch (realtimeError) {
+    console.error('[Firebase] Realtime Database initialization failed:', realtimeError);
+    realtimeDb = null;
+  }
+  
+  try {
+    auth = getAuth(app);
+    console.log('[Firebase] Auth initialized successfully');
+  } catch (authError) {
+    console.error('[Firebase] Auth initialization failed:', authError);
+    auth = null;
+  }
+  
+  console.log('[Firebase] Firebase services initialization completed');
+  
+  // Store successful initialization state
   if (typeof window !== 'undefined') {
-    const errorMessage = `Firebase initialization failed. This may be due to configuration issues. The app will continue in offline mode with limited functionality.`;
-    console.warn(errorMessage);
-    
-    // Store error state for components to handle
-    (window as any).__FIREBASE_ERROR__ = {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      timestamp: new Date().toISOString()
+    (window as any).__FIREBASE_INITIALIZED__ = true;
+    (window as any).__FIREBASE_SERVICES__ = {
+      app: !!app,
+      firestore: !!db,
+      realtimeDb: !!realtimeDb,
+      auth: !!auth
     };
   }
   
-  // Create mock services for development/fallback
+} catch (error) {
+  console.error('[Firebase] Failed to initialize Firebase:', error);
+  
+  // Enhanced error handling and user feedback
+  if (typeof window !== 'undefined') {
+    const errorDetails = {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString(),
+      configError: (window as any).__FIREBASE_CONFIG_ERROR__ || null,
+      envDebug: envDebug
+    };
+    
+    (window as any).__FIREBASE_ERROR__ = errorDetails;
+    (window as any).__FIREBASE_INITIALIZED__ = false;
+    
+    console.warn('[Firebase] App will continue in offline mode with limited functionality');
+  }
+  
+  // Create null services for fallback
   app = null;
   db = null;
   realtimeDb = null;

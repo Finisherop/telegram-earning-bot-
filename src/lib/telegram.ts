@@ -100,19 +100,33 @@ export class TelegramService {
 
   private initializeWebApp() {
     try {
-      // Wait a bit for Telegram WebApp to load
+      // Listen for the custom event from the enhanced initialization
+      window.addEventListener('telegramWebAppReady', (event: any) => {
+        console.log('[TelegramService] WebApp ready event received');
+        this.webApp = event.detail.webApp;
+        this.setupWebApp();
+      });
+      
+      window.addEventListener('telegramWebAppBrowserMode', () => {
+        console.log('[TelegramService] Browser mode event received');
+        this.setupFallbackMode();
+      });
+      
+      // Fallback timeout in case events don't fire
       setTimeout(() => {
-        if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
-          console.log('Telegram WebApp found, setting up...');
-          this.webApp = window.Telegram.WebApp;
-          this.setupWebApp();
-        } else {
-          console.log('Telegram WebApp not found, using fallback mode');
-          this.setupFallbackMode();
+        if (!this.isInitialized) {
+          if (typeof window !== 'undefined' && (window as any).__TELEGRAM_WEBAPP__) {
+            console.log('[TelegramService] Using global WebApp reference');
+            this.webApp = (window as any).__TELEGRAM_WEBAPP__;
+            this.setupWebApp();
+          } else {
+            console.log('[TelegramService] Timeout reached, using fallback mode');
+            this.setupFallbackMode();
+          }
         }
-      }, 500);
+      }, 2000);
     } catch (error) {
-      console.error('Failed to initialize Telegram WebApp:', error);
+      console.error('[TelegramService] Failed to initialize Telegram WebApp:', error);
       this.setupFallbackMode();
     }
   }
@@ -127,19 +141,28 @@ export class TelegramService {
     
     // Get user data from localStorage or create new
     const storedUserData = localStorage.getItem('browserUserData');
-    if (storedUserData) {
+    if (storedUserData && storedUserData.trim()) {
       try {
-        const userData = JSON.parse(storedUserData);
-        this.user = {
-          id: parseInt(browserId.replace('browser_', '')) || Date.now(),
-          first_name: userData.first_name || 'Browser User',
-          last_name: userData.last_name || '',
-          username: userData.username || 'browseruser',
-          language_code: userData.language_code || 'en',
-          is_premium: false
-        };
+        // Validate JSON before parsing
+        if (storedUserData.startsWith('{') && storedUserData.endsWith('}')) {
+          const userData = JSON.parse(storedUserData);
+          if (userData && typeof userData === 'object') {
+            this.user = {
+              id: parseInt(browserId.replace('browser_', '')) || Date.now(),
+              first_name: userData.first_name || 'Browser User',
+              last_name: userData.last_name || '',
+              username: userData.username || 'browseruser',
+              language_code: userData.language_code || 'en',
+              is_premium: false
+            };
+          }
+        } else {
+          console.warn('[TelegramService] Invalid JSON format in stored user data');
+          localStorage.removeItem('browserUserData'); // Clean up invalid data
+        }
       } catch (error) {
-        console.error('Error parsing stored user data:', error);
+        console.error('[TelegramService] Error parsing stored user data:', error);
+        localStorage.removeItem('browserUserData'); // Clean up corrupted data
       }
     }
     
@@ -366,8 +389,26 @@ export class TelegramService {
         })
       });
       
-      const data = await response.json();
-      console.log('Invoice API response:', data);
+      // Enhanced JSON parsing with error handling
+      let data;
+      try {
+        const responseText = await response.text();
+        if (responseText && responseText.trim()) {
+          // Validate JSON format before parsing
+          if (responseText.trim().startsWith('{') || responseText.trim().startsWith('[')) {
+            data = JSON.parse(responseText);
+          } else {
+            throw new Error('Invalid JSON response format');
+          }
+        } else {
+          throw new Error('Empty response from server');
+        }
+      } catch (jsonError) {
+        console.error('[TelegramService] JSON parsing error:', jsonError);
+        throw new Error('Invalid response from payment service');
+      }
+      
+      console.log('[TelegramService] Invoice API response:', data);
       
       if (response.ok && data.success) {
         console.log('Invoice created successfully:', data.invoiceUrl);
