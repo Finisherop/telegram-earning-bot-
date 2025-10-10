@@ -1,6 +1,7 @@
 import { db, realtimeDb } from './firebase';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, set, get } from 'firebase/database';
+import { safeTelegramUserStorage, safeUpdateLastSeen } from './firebaseSafeStorage';
 
 // Telegram User Interface (no authentication required)
 export interface TelegramUserData {
@@ -138,11 +139,18 @@ class TelegramUserCapture {
 
   /**
    * Store user data in Firebase (both Firestore and Realtime DB for redundancy)
+   * Enhanced with safe data handling and error resilience
    */
   private async storeUserData(userData: TelegramUserData | BrowserUserData): Promise<void> {
     // Only run on client side
     if (typeof window === 'undefined') {
       console.log('[UserCapture] Server-side detected, skipping Firebase storage');
+      return;
+    }
+
+    // Validate user data
+    if (!userData || !userData.id) {
+      console.error('[UserCapture] Invalid user data: missing user or user.id');
       return;
     }
 
@@ -153,83 +161,36 @@ class TelegramUserCapture {
       // Import Firebase services dynamically to ensure they're available
       const { db, realtimeDb } = await import('./firebase');
 
-      // Store in Firestore if available
-      if (db) {
-        try {
-          const userDocRef = doc(db, 'telegram_users', userId);
-          
-          // Check if user already exists
-          const existingDoc = await getDoc(userDocRef);
-          
-          if (existingDoc.exists()) {
-            // Update last seen
-            await setDoc(userDocRef, {
-              ...userData,
-              lastSeen: new Date().toISOString(),
-              updatedAt: serverTimestamp()
-            }, { merge: true });
-            console.log('[UserCapture] Updated existing user in Firestore');
-          } else {
-            // Create new user
-            await setDoc(userDocRef, {
-              ...userData,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp()
-            });
-            console.log('[UserCapture] Created new user in Firestore');
-          }
-        } catch (firestoreError) {
-          console.error('[UserCapture] Firestore storage failed:', firestoreError);
-        }
+      // Use the safe storage utility
+      const storageResult = await safeTelegramUserStorage(userData, {
+        db,
+        realtimeDb,
+        collection: 'telegram_users',
+        path: 'telegram_users',
+        enableLocalBackup: true
+      });
+
+      if (storageResult.success) {
+        console.log('[UserCapture] User data storage completed successfully');
       } else {
-        console.warn('[UserCapture] Firestore not available, skipping Firestore storage');
-      }
-
-      // Store in Realtime Database if available
-      if (realtimeDb) {
-        try {
-          const userRef = ref(realtimeDb, `telegram_users/${userId}`);
-          
-          // Check if user exists
-          const existingData = await get(userRef);
-          
-          if (existingData.exists()) {
-            // Update last seen
-            await set(userRef, {
-              ...existingData.val(),
-              ...userData,
-              lastSeen: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            });
-            console.log('[UserCapture] Updated existing user in Realtime DB');
-          } else {
-            // Create new user
-            await set(userRef, {
-              ...userData,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            });
-            console.log('[UserCapture] Created new user in Realtime DB');
-          }
-        } catch (realtimeError) {
-          console.error('[UserCapture] Realtime DB storage failed:', realtimeError);
+        console.error('[UserCapture] Storage failed with errors:', storageResult.errors);
+        if (storageResult.warnings.length > 0) {
+          console.warn('[UserCapture] Storage warnings:', storageResult.warnings);
         }
-      } else {
-        console.warn('[UserCapture] Realtime DB not available, skipping Realtime DB storage');
       }
 
-      // Always store locally for offline access
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('telegram_user_data', JSON.stringify(userData));
-        console.log('[UserCapture] User data stored locally');
+      // Log detailed results
+      if (storageResult.errors.length > 0) {
+        console.error('[UserCapture] Storage errors:', storageResult.errors);
       }
-
-      console.log('[UserCapture] User data storage completed');
+      if (storageResult.warnings.length > 0) {
+        console.warn('[UserCapture] Storage warnings:', storageResult.warnings);
+      }
 
     } catch (error) {
       console.error('[UserCapture] Failed to store user data:', error);
       // Don't throw error to prevent app from breaking if Firebase fails
-      console.warn('[UserCapture] Continuing without Firebase storage');
+      console.warn('[UserCapture] Continuing without Firebase storage - app remains functional');
     }
   }
 
@@ -241,10 +202,13 @@ class TelegramUserCapture {
   }
 
   /**
-   * Update user last seen timestamp
+   * Update user last seen timestamp with safe Firebase handling
    */
   public async updateLastSeen(): Promise<void> {
-    if (!this.userData) return;
+    if (!this.userData) {
+      console.warn('[UserCapture] No user data available for last seen update');
+      return;
+    }
 
     try {
       const userId = this.userData.id.toString();
@@ -253,29 +217,32 @@ class TelegramUserCapture {
       // Update in memory
       this.userData.lastSeen = now;
 
-      // Update in Firebase
-      if (db) {
-        const userDocRef = doc(db, 'telegram_users', userId);
-        await setDoc(userDocRef, {
-          lastSeen: now,
-          updatedAt: serverTimestamp()
-        }, { merge: true });
+      // Import Firebase services dynamically
+      const { db, realtimeDb } = await import('./firebase');
+
+      // Use the safe update utility
+      const updateResult = await safeUpdateLastSeen(db, realtimeDb, userId);
+      
+      if (updateResult.firestore || updateResult.realtime) {
+        console.log('[UserCapture] Last seen updated successfully', updateResult);
+      } else {
+        console.warn('[UserCapture] Failed to update last seen in both Firebase services');
       }
 
-      if (realtimeDb) {
-        const userRef = ref(realtimeDb, `telegram_users/${userId}`);
-        await set(userRef, {
-          ...(await get(userRef)).val(),
-          lastSeen: now,
-          updatedAt: now
-        });
+      // Always update locally as backup
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('telegram_user_data', JSON.stringify(this.userData));
+          localStorage.setItem(`telegram_user_${userId}`, JSON.stringify(this.userData));
+          console.log('[UserCapture] Last seen updated in localStorage');
+        }
+      } catch (localError) {
+        console.error('[UserCapture] Failed to update last seen locally:', localError);
       }
-
-      // Update locally
-      localStorage.setItem('telegram_user_data', JSON.stringify(this.userData));
 
     } catch (error) {
       console.error('[UserCapture] Failed to update last seen:', error);
+      // Don't throw error to prevent app from breaking
     }
   }
 
