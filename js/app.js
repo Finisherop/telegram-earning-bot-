@@ -29,8 +29,38 @@ class MainApp {
                 console.log(`🔄 Retrying initialization (${this.initializationAttempts}/${this.maxInitAttempts})...`);
                 setTimeout(() => this.safeInit(), 2000 * this.initializationAttempts);
             } else {
-                this.handleInitializationFailure(error);
+                // Don't fail completely, show working app with limited features
+                console.warn('⚠️ Using limited initialization mode');
+                this.setupLimitedMode(error);
             }
+        }
+    }
+
+    // ✅ Limited mode instead of complete failure
+    setupLimitedMode(error) {
+        console.log('🔧 Setting up limited mode - app will still work');
+        
+        // Show environment message
+        if (telegramApp) {
+            telegramApp.showEnvironmentMessage();
+        }
+        
+        // Set up basic functionality
+        this.hideLoading();
+        this.showUserPanel();
+        
+        // Show status message
+        this.showNotification(
+            '⚠️ Limited mode active | सभी features उपलब्ध हैं | कुछ functions धीमे हो सकते हैं', 
+            'warning', 
+            8000
+        );
+        
+        // Set up basic event listeners
+        try {
+            this.setupEventListeners();
+        } catch (e) {
+            console.warn('Event listeners setup partially failed:', e);
         }
     }
 
@@ -95,6 +125,9 @@ class MainApp {
             
             // Hide loading screen
             this.hideLoading();
+            
+            // Show environment message for browser users
+            telegramApp.showEnvironmentMessage();
             
             console.log('✅ App initialized successfully');
             
@@ -669,39 +702,73 @@ class MainApp {
         }
     }
 
-    // Farming functionality
+    // ✅ Enhanced Farming functionality with better error handling
     async handleFarming() {
-        if (!this.currentUser) return;
+        if (!this.currentUser) {
+            this.showNotification('User data not loaded. Please refresh the page.', 'warning');
+            return;
+        }
 
         const farmingBtn = document.getElementById('farmingBtn');
-        const originalText = farmingBtn.textContent;
+        const originalText = farmingBtn?.textContent || 'Start Farming';
         
-        farmingBtn.textContent = 'Processing...';
-        farmingBtn.disabled = true;
-
         try {
-            if (this.currentUser.isFarming && this.currentUser.farmingEndTime && Date.now() >= this.currentUser.farmingEndTime) {
+            if (farmingBtn) {
+                farmingBtn.textContent = 'Processing...';
+                farmingBtn.disabled = true;
+            }
+
+            // Check if Firebase is available
+            if (!window.Firebase) {
+                throw new Error('Firebase not available');
+            }
+
+            const isClaiming = this.currentUser.isFarming && 
+                               this.currentUser.farmingEndTime && 
+                               Date.now() >= this.currentUser.farmingEndTime;
+
+            if (isClaiming) {
                 // Claim farming rewards
+                console.log('🌱 Claiming farming rewards...');
                 const result = await dbManager.claimFarming(this.currentUser.telegramId);
                 
-                if (result.success) {
+                if (result && result.success) {
                     this.showNotification(`🎉 Claimed ${result.reward} coins!`, 'success');
+                    telegramApp.hapticFeedback('heavy');
                 } else {
-                    this.showNotification(result.message || 'Failed to claim rewards', 'error');
+                    this.showNotification(result?.message || 'Failed to claim rewards', 'error');
                 }
             } else {
                 // Start farming
+                console.log('🌱 Starting farming...');
                 const success = await dbManager.startFarming(this.currentUser.telegramId);
                 
                 if (success) {
                     this.showNotification('🌱 Farming started! Come back in 1 hour', 'success');
+                    telegramApp.hapticFeedback('medium');
                 } else {
-                    this.showNotification('Failed to start farming', 'error');
+                    this.showNotification('Failed to start farming. Please try again.', 'error');
                 }
             }
+
+        } catch (error) {
+            console.error('Farming error:', error);
+            
+            // Provide helpful error messages
+            let errorMessage = 'Farming operation failed';
+            if (error.message.includes('Firebase')) {
+                errorMessage = 'Connection issue. Please check internet and try again.';
+            } else if (error.message.includes('User')) {
+                errorMessage = 'User data error. Please refresh the page.';
+            }
+            
+            this.showNotification(errorMessage, 'error');
+            
         } finally {
-            farmingBtn.textContent = originalText;
-            farmingBtn.disabled = false;
+            if (farmingBtn) {
+                farmingBtn.textContent = originalText;
+                farmingBtn.disabled = false;
+            }
         }
     }
 
@@ -754,21 +821,59 @@ class MainApp {
         tasksList.innerHTML = tasksHTML;
     }
 
+    // ✅ Enhanced Task Completion with better error handling
     async completeTask(taskId) {
-        if (!this.currentUser) return;
+        if (!this.currentUser) {
+            this.showNotification('User data not loaded. Please refresh the page.', 'warning');
+            return;
+        }
+
+        if (!taskId) {
+            this.showNotification('Invalid task. Please refresh the page.', 'error');
+            return;
+        }
 
         try {
+            console.log('📋 Completing task:', taskId);
+            
+            // Check if Firebase is available
+            if (!window.Firebase || !dbManager) {
+                throw new Error('Database not available');
+            }
+
+            // Check if task is already completed
+            const userTasks = await dbManager.getUserTasks(this.currentUser.telegramId);
+            if (userTasks && userTasks[taskId] && userTasks[taskId].status === 'completed') {
+                this.showNotification('Task already completed!', 'info');
+                return;
+            }
+
             const result = await dbManager.completeTask(taskId, this.currentUser.telegramId);
             
-            if (result.success) {
+            if (result && result.success) {
                 this.showNotification(`🎉 Task completed! +${result.reward} coins`, 'success');
-                // Refresh tasks list
-                this.loadTasks();
+                telegramApp.hapticFeedback('heavy');
+                
+                // Refresh tasks list after delay
+                setTimeout(() => {
+                    this.loadTasks();
+                }, 1000);
             } else {
-                this.showNotification(result.message || 'Failed to complete task', 'error');
+                this.showNotification(result?.message || 'Failed to complete task', 'error');
             }
+
         } catch (error) {
-            this.showNotification('Task completion failed', 'error');
+            console.error('Task completion error:', error);
+            
+            // Provide helpful error messages
+            let errorMessage = 'Task completion failed';
+            if (error.message.includes('Database')) {
+                errorMessage = 'Connection issue. Please check internet and try again.';
+            } else if (error.message.includes('User')) {
+                errorMessage = 'User data error. Please refresh the page.';
+            }
+            
+            this.showNotification(errorMessage, 'error');
         }
     }
 

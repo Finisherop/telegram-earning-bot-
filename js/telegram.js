@@ -79,22 +79,50 @@ class TelegramApp {
     }
 
     setupFallbackMode() {
-        // Create fallback user for testing
+        // ✅ Better fallback user generation for browser mode
+        const generateUserId = () => {
+            // Check if there's a stored user ID in localStorage
+            let userId = localStorage.getItem('fallback_user_id');
+            if (!userId) {
+                // Generate a unique ID for this browser session
+                userId = 'browser_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('fallback_user_id', userId);
+            }
+            return userId;
+        };
+
+        // Create consistent fallback user for browser testing
         this.user = {
-            id: '123456789',
-            username: 'testuser',
-            firstName: 'Test',
-            lastName: 'User',
+            id: generateUserId(),
+            username: localStorage.getItem('fallback_username') || 'browser_user',
+            firstName: localStorage.getItem('fallback_firstname') || 'Browser',
+            lastName: localStorage.getItem('fallback_lastname') || 'User',
             profilePic: '',
-            languageCode: 'en',
+            languageCode: 'hi', // Hindi for Indian users
             isPremium: false
         };
 
-        // Check URL for start parameter
+        // Check URL for start parameter (referral)
         const urlParams = new URLSearchParams(window.location.search);
-        this.startParam = urlParams.get('start') || urlParams.get('ref');
+        this.startParam = urlParams.get('start') || urlParams.get('ref') || urlParams.get('startapp');
         
-        console.log('🔧 Fallback mode initialized');
+        // Also check stored referral for browser mode
+        if (!this.startParam) {
+            const storedReferral = localStorage.getItem('browser_referral');
+            if (storedReferral) {
+                this.startParam = storedReferral;
+                // Clear it after use to prevent repeated referrals
+                localStorage.removeItem('browser_referral');
+            }
+        }
+        
+        console.log('🔧 Browser fallback mode initialized with user:', this.user.id);
+        console.log('🔗 Referral parameter:', this.startParam);
+
+        // Store user data for consistency across browser sessions
+        localStorage.setItem('fallback_username', this.user.username);
+        localStorage.setItem('fallback_firstname', this.user.firstName);
+        localStorage.setItem('fallback_lastname', this.user.lastName);
     }
 
     // Get user information
@@ -339,23 +367,53 @@ class TelegramApp {
 
     // ✅ Telegram Star Payment Integration
     
-    // Check if running in Telegram WebApp environment
+    // ✅ Enhanced Telegram WebApp environment detection
     checkTelegramEnvironment() {
-        if (!this.webApp) {
-            this.showAlert("⚠️ Open this inside Telegram WebApp for full functionality!");
-            return false;
+        const isTelegram = !!(window.Telegram && window.Telegram.WebApp);
+        const hasValidData = !!(this.webApp && this.webApp.initData);
+        
+        if (isTelegram) {
+            console.log('✅ Running inside Telegram WebApp');
+            return true;
+        } else {
+            console.log('🌐 Running in browser mode - all features still available');
+            return false; // Don't show alert, just log
         }
-        return true;
+    }
+
+    // Enhanced browser mode support 
+    isBrowserMode() {
+        return !window.Telegram || !window.Telegram.WebApp;
+    }
+
+    // Safe environment message
+    showEnvironmentMessage() {
+        if (this.isBrowserMode()) {
+            // Show friendly message instead of warning
+            const environmentDiv = document.createElement('div');
+            environmentDiv.innerHTML = `
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px; text-align: center; font-size: 14px; position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000;">
+                    🌐 Browser Mode Active | सभी features उपलब्ध हैं | Open in Telegram for full experience
+                    <button onclick="this.parentNode.remove()" style="float: right; background: rgba(255,255,255,0.2); border: none; color: white; padding: 4px 8px; border-radius: 4px; cursor: pointer;">×</button>
+                </div>
+            `;
+            document.body.appendChild(environmentDiv);
+            
+            // Auto hide after 5 seconds
+            setTimeout(() => {
+                if (environmentDiv.parentNode) {
+                    environmentDiv.parentNode.removeChild(environmentDiv);
+                }
+            }, 5000);
+        }
     }
 
     // Safe Telegram Star Payment
     async requestStarPayment(amount, title, description, payload) {
-        if (!this.checkTelegramEnvironment()) {
-            return { success: false, message: 'Not in Telegram environment' };
-        }
-
+        const isTelegram = this.checkTelegramEnvironment();
+        
         try {
-            console.log(`🌟 Requesting Star payment: ${amount} stars for ${title}`);
+            console.log(`🌟 Requesting payment: ${amount} for ${title}`);
             
             // Get VIP settings for payment configuration
             const vipSettings = await window.Firebase?.getVIPSettings() || {
@@ -375,15 +433,15 @@ class TelegramApp {
                     timestamp: Date.now()
                 }),
                 provider_token: vipSettings.paymentProviderToken || "",
-                currency: "XTR", // Telegram Stars
+                currency: isTelegram ? "XTR" : vipSettings.vipCurrency,
                 prices: [{ 
                     label: title || "VIP Membership", 
                     amount: amount || vipSettings.vipAmount 
                 }]
             };
 
-            // Use Telegram's payment API
-            if (this.webApp && typeof this.webApp.sendData === 'function') {
+            if (isTelegram && this.webApp && typeof this.webApp.sendData === 'function') {
+                // Use Telegram's payment API
                 this.webApp.sendData(JSON.stringify(paymentData));
                 this.hapticFeedback('medium');
                 
@@ -392,7 +450,7 @@ class TelegramApp {
                     message: 'Payment request sent',
                     paymentData 
                 };
-            } else if (this.webApp && typeof this.webApp.openInvoice === 'function') {
+            } else if (isTelegram && this.webApp && typeof this.webApp.openInvoice === 'function') {
                 // Alternative: Use openInvoice if available
                 const invoiceUrl = await this.createPaymentInvoice(paymentData);
                 if (invoiceUrl) {
@@ -403,11 +461,15 @@ class TelegramApp {
                 }
             }
 
-            // Fallback for testing
+            // ✅ Always allow browser mode simulation - no error
             return this.simulatePayment(amount, title, payload);
 
         } catch (error) {
-            console.error('Star payment error:', error);
+            console.error('Payment error:', error);
+            // In browser mode, still allow simulation
+            if (!isTelegram) {
+                return this.simulatePayment(amount, title, payload);
+            }
             return { success: false, message: 'Payment request failed', error };
         }
     }

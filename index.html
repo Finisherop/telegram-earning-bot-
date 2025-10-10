@@ -53,9 +53,37 @@
         <div class="text-center text-white">
             <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-white mx-auto mb-4"></div>
             <h2 class="text-xl font-semibold">Loading...</h2>
-            <p class="text-sm opacity-75">Connecting to Telegram...</p>
+            <p class="text-sm opacity-75" id="loadingStatus">Connecting to Telegram...</p>
         </div>
     </div>
+
+    <!-- Browser Mode Setup Check -->
+    <script>
+        // Check if user needs browser setup (only if not from Telegram)
+        if (!window.Telegram || !window.Telegram.WebApp) {
+            const hasUserData = localStorage.getItem('fallback_firstname');
+            const isAdminMode = new URLSearchParams(window.location.search).get('admin') === 'true';
+            
+            // Redirect to browser setup if no user data and not admin
+            if (!hasUserData && !isAdminMode) {
+                const currentUrl = new URLSearchParams(window.location.search);
+                const referral = currentUrl.get('ref') || currentUrl.get('start') || currentUrl.get('startapp');
+                
+                let setupUrl = 'browser-setup.html';
+                if (referral) {
+                    setupUrl += `?ref=${encodeURIComponent(referral)}`;
+                }
+                
+                window.location.href = setupUrl;
+            } else {
+                // Update loading status for browser users
+                const loadingStatus = document.getElementById('loadingStatus');
+                if (loadingStatus) {
+                    loadingStatus.textContent = 'Loading in browser mode...';
+                }
+            }
+        }
+    </script>
 
     <!-- Main App Container -->
     <div id="app" class="hidden">
