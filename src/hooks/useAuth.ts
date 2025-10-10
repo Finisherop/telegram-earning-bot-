@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { User } from '@/types';
 import { TelegramService } from '@/lib/telegram';
-import { createUser, getUser, updateUser } from '@/lib/firebaseService';
+import { createUser, getUser, updateUser, initializeUser, safeUpdateUser } from '@/lib/firebaseService';
 
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -49,23 +49,33 @@ export const useAuth = () => {
         }
 
         try {
-          // Check if user exists in Firebase
-          let existingUser = await getUser(userId);
+          // Initialize user safely (creates if doesn't exist)
+          let existingUser = await initializeUser(userId);
           
-          if (!existingUser) {
-            console.log('Creating new user in Firebase...');
-            // Create new user
-            await createUser(userData);
-            existingUser = await getUser(userId);
+          // Update user with Telegram data if we have it
+          if (telegramUser && telegramUser.id !== 123456789) {
+            existingUser = await safeUpdateUser(userId, {
+              username: telegramUser.username,
+              firstName: telegramUser.first_name,
+              lastName: telegramUser.last_name,
+              profilePic: telegramUser.photo_url,
+              referrerId: startParam || undefined,
+            });
+          }
+          
+          // Handle referral if startParam exists and user is new
+          if (startParam && startParam !== userId && existingUser.createdAt) {
+            const createdTime = new Date(existingUser.createdAt).getTime();
+            const now = new Date().getTime();
+            const isNewUser = (now - createdTime) < 60000; // Created within last minute
             
-            // Handle referral if startParam exists
-            if (startParam && startParam !== userId) {
-              console.log('Processing referral for:', startParam);
+            if (isNewUser) {
+              console.log('Processing referral for new user:', startParam);
               try {
-                // Add referral count to referrer
+                // Add referral count to referrer using safe update
                 const referrer = await getUser(startParam);
                 if (referrer) {
-                  await updateUser(startParam, {
+                  await safeUpdateUser(startParam, {
                     referralCount: (referrer.referralCount || 0) + 1,
                     referralEarnings: (referrer.referralEarnings || 0) + 100, // 100 coins reward
                     coins: (referrer.coins || 0) + 100,
@@ -78,12 +88,8 @@ export const useAuth = () => {
             }
           }
 
-          if (existingUser) {
-            setUser(existingUser);
-            console.log('User loaded successfully:', existingUser);
-          } else {
-            throw new Error('Failed to create or retrieve user from Firebase');
-          }
+          setUser(existingUser);
+          console.log('User loaded successfully:', existingUser);
         } catch (firebaseError) {
           console.error('Firebase error, using local user:', firebaseError);
           

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { User } from '@/types';
-import { updateUser } from '@/lib/firebaseService';
+import { updateUser, safeUpdateUser } from '@/lib/firebaseService';
 import { TelegramService } from '@/lib/telegram';
 import toast from 'react-hot-toast';
 
@@ -100,7 +100,7 @@ const Dashboard = ({ user }: DashboardProps) => {
     
     try {
       console.log('Starting farming for user:', user.telegramId);
-      await updateUser(user.telegramId, {
+      await safeUpdateUser(user.telegramId, {
         farmingStartTime: startTime,
         farmingEndTime: endTime,
       });
@@ -124,7 +124,7 @@ const Dashboard = ({ user }: DashboardProps) => {
     
     try {
       console.log(`Claiming farming reward: ${reward} coins for user:`, user.telegramId);
-      await updateUser(user.telegramId, {
+      await safeUpdateUser(user.telegramId, {
         coins: user.coins + reward,
         xp: user.xp + Math.floor(reward / 10),
         farmingStartTime: undefined,
@@ -153,7 +153,7 @@ const Dashboard = ({ user }: DashboardProps) => {
     
     try {
       console.log(`Claiming daily reward: ${totalReward} coins for user:`, user.telegramId);
-      await updateUser(user.telegramId, {
+      await safeUpdateUser(user.telegramId, {
         coins: user.coins + totalReward,
         xp: user.xp + Math.floor(totalReward / 10),
         dailyStreak: user.dailyStreak + 1,

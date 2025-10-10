@@ -17,6 +17,105 @@ import { db } from './firebase';
 import { User, Task, UserTask, WithdrawalRequest, AdminSettings, DailyStats } from '@/types';
 import { VIP_TIERS, DEFAULT_SETTINGS } from './constants';
 
+// Initialize user document with default values if it doesn't exist
+export const initializeUser = async (userId: string): Promise<User> => {
+  try {
+    const userRef = doc(db, 'users', userId);
+    const userDoc = await getDoc(userRef);
+    
+    if (!userDoc.exists()) {
+      console.log('Creating new user document for:', userId);
+      const defaultUserData: User = {
+        id: userId,
+        telegramId: userId,
+        username: undefined,
+        firstName: 'User',
+        lastName: '',
+        profilePic: undefined,
+        coins: 0,
+        xp: 0,
+        level: 1,
+        vipTier: 'free',
+        farmingMultiplier: VIP_TIERS.free.farmingMultiplier,
+        referralMultiplier: VIP_TIERS.free.referralMultiplier,
+        adsLimitPerDay: VIP_TIERS.free.adsLimitPerDay,
+        withdrawalLimit: VIP_TIERS.free.withdrawalLimit,
+        minWithdrawal: VIP_TIERS.free.minWithdrawal,
+        referralCount: 0,
+        referralEarnings: 0,
+        dailyStreak: 0,
+        farmingStartTime: undefined,
+        farmingEndTime: undefined,
+        lastClaimDate: undefined,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      
+      await setDoc(userRef, defaultUserData);
+      return defaultUserData;
+    } else {
+      return { id: userDoc.id, ...userDoc.data() } as User;
+    }
+  } catch (error) {
+    console.error('Error initializing user:', error);
+    throw error;
+  }
+};
+
+// Safe update function that creates document if it doesn't exist
+export const safeUpdateUser = async (userId: string, updateData: Partial<User>): Promise<User> => {
+  try {
+    const userRef = doc(db, 'users', userId);
+    const userDoc = await getDoc(userRef);
+    
+    if (!userDoc.exists()) {
+      // Create document with default values + update data
+      const defaultData: User = {
+        id: userId,
+        telegramId: userId,
+        username: undefined,
+        firstName: 'User',
+        lastName: '',
+        profilePic: undefined,
+        coins: 0,
+        xp: 0,
+        level: 1,
+        vipTier: 'free',
+        farmingMultiplier: VIP_TIERS.free.farmingMultiplier,
+        referralMultiplier: VIP_TIERS.free.referralMultiplier,
+        adsLimitPerDay: VIP_TIERS.free.adsLimitPerDay,
+        withdrawalLimit: VIP_TIERS.free.withdrawalLimit,
+        minWithdrawal: VIP_TIERS.free.minWithdrawal,
+        referralCount: 0,
+        referralEarnings: 0,
+        dailyStreak: 0,
+        farmingStartTime: undefined,
+        farmingEndTime: undefined,
+        lastClaimDate: undefined,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...updateData
+      };
+      
+      await setDoc(userRef, defaultData);
+      return defaultData;
+    } else {
+      // Update existing document
+      const updatedData = {
+        ...updateData,
+        updatedAt: new Date()
+      };
+      
+      await updateDoc(userRef, updatedData);
+      const updatedDoc = await getDoc(userRef);
+      return { id: updatedDoc.id, ...updatedDoc.data() } as User;
+    }
+  } catch (error) {
+    console.error('Error updating user:', error);
+    throw error;
+  }
+};
+
 // User operations
 export const createUser = async (userData: Partial<User>): Promise<void> => {
   const userRef = doc(db, 'users', userData.telegramId!);

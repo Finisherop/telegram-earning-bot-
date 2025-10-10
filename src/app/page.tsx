@@ -11,15 +11,15 @@ export default function Home() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    // Check URL parameters for admin access
+    // Check URL parameters for admin access - no key required
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       const adminParam = urlParams.get('admin');
-      const keyParam = urlParams.get('key');
       
-      // Admin mode check
-      if (adminParam === 'true' && keyParam === ADMIN_SECRET_KEY) {
+      // Admin mode check - only need admin=true parameter
+      if (adminParam === 'true') {
         setIsAdmin(true);
+        console.log('Admin mode activated');
       }
     }
   }, []);

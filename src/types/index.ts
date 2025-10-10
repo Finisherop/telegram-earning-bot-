@@ -42,7 +42,7 @@ export interface Task {
   title: string;
   description: string;
   reward: number;
-  type: 'link' | 'ads' | 'social' | 'referral';
+  type: 'link' | 'ads' | 'social' | 'referral' | 'farming' | 'daily';
   url?: string;
   isActive: boolean;
   createdAt: Date;

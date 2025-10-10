@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User, Task as TaskType, UserTask } from '@/types';
-import { getTasks, getUserTasks, completeTask, claimTask } from '@/lib/firebaseService';
+import { getTasks, getUserTasks, completeTask, claimTask, safeUpdateUser } from '@/lib/firebaseService';
 import { TelegramService } from '@/lib/telegram';
 import toast from 'react-hot-toast';
 
@@ -220,45 +220,145 @@ const Task = ({ user }: TaskProps) => {
 
     telegram.hapticFeedback('medium');
 
-    if (task.type === 'link' && task.url) {
-      console.log('Opening link:', task.url);
-      // Open link and start completion process
-      telegram.openLink(task.url);
-      setCompletingTask(task.id);
-      setTimer(10);
-      setTimerTaskId(task.id);
-      toast.success('🔗 Link opened! Please wait 10 seconds to claim reward.');
-      
-      try {
-        await completeTask(user.telegramId, task.id);
-        await loadUserTasks();
-        console.log('Link task completed');
-      } catch (error) {
-        console.error('Link task error:', error);
-        toast.error('Failed to complete task. Please try again.');
+    try {
+      switch (task.type) {
+        case 'farming':
+          await handleFarmingTask(task);
+          break;
+        
+        case 'daily':
+          await handleDailyTask(task);
+          break;
+        
+        case 'link':
+        case 'social':
+          await handleLinkTask(task);
+          break;
+        
+        case 'ads':
+          await handleAdsTask(task);
+          break;
+        
+        default:
+          await handleGenericTask(task);
       }
-    } else if (task.type === 'ads') {
-      console.log('Starting ad watch');
-      // Start ad watching process
-      setCompletingTask(task.id);
-      setTimer(30); // 30 seconds for ad watching
-      setTimerTaskId(task.id);
-      toast.success('📺 Loading ad... Please wait');
+    } catch (error) {
+      console.error('Task action error:', error);
+      toast.error('Failed to complete task. Please try again.');
+      setCompletingTask(null);
+      setTimer(null);
+      setTimerTaskId(null);
+    }
+  };
+
+  const handleFarmingTask = async (task: TaskType) => {
+    console.log('Starting farming task');
+    
+    // Check if already farming
+    if (user.farmingStartTime && user.farmingEndTime) {
+      const now = new Date();
+      const endTime = new Date(user.farmingEndTime);
       
-      try {
-        // Initialize Monotag ad if available
-        await initializeAd(task.id);
-        await completeTask(user.telegramId, task.id);
-        await loadUserTasks();
-        console.log('Ad task completed');
-      } catch (error) {
-        console.error('Ad task error:', error);
-        toast.error('Failed to complete task. Please try again.');
-        setCompletingTask(null);
-        setTimer(null);
-        setTimerTaskId(null);
+      if (now < endTime) {
+        toast.error('🚜 Farming already in progress!');
+        return;
       }
     }
+    
+    // Start farming
+    const startTime = new Date();
+    const endTime = new Date(startTime.getTime() + 8 * 60 * 60 * 1000); // 8 hours
+    
+    await safeUpdateUser(user.telegramId, {
+      farmingStartTime: startTime,
+      farmingEndTime: endTime,
+    });
+    
+    // Mark task as completed
+    await completeTask(user.telegramId, task.id);
+    await loadUserTasks();
+    
+    toast.success('🚜 Farming started! Come back in 8 hours to claim your reward.');
+  };
+
+  const handleDailyTask = async (task: TaskType) => {
+    console.log('Processing daily task');
+    
+    // Check if already claimed today
+    const today = new Date().toDateString();
+    const lastClaim = user.lastClaimDate ? new Date(user.lastClaimDate).toDateString() : null;
+    
+    if (lastClaim === today) {
+      toast.error('⏰ You have already claimed your daily reward today!');
+      return;
+    }
+    
+    // Claim daily reward
+    const baseReward = task.reward || 50;
+    const streakBonus = Math.min(user.dailyStreak * 10, 100);
+    const totalReward = baseReward + streakBonus;
+    
+    await safeUpdateUser(user.telegramId, {
+      coins: user.coins + totalReward,
+      xp: user.xp + Math.floor(totalReward / 10),
+      dailyStreak: user.dailyStreak + 1,
+      lastClaimDate: new Date(),
+    });
+    
+    // Mark task as completed
+    await completeTask(user.telegramId, task.id);
+    await loadUserTasks();
+    
+    toast.success(`🎁 Daily reward claimed! +${totalReward} coins (Streak: ${user.dailyStreak + 1})`);
+  };
+
+  const handleLinkTask = async (task: TaskType) => {
+    console.log('Opening link:', task.url);
+    const telegram = TelegramService.getInstance();
+    
+    if (task.url) {
+      telegram.openLink(task.url);
+    }
+    
+    setCompletingTask(task.id);
+    setTimer(10);
+    setTimerTaskId(task.id);
+    toast.success('🔗 Link opened! Please wait 10 seconds to claim reward.');
+    
+    await completeTask(user.telegramId, task.id);
+    await loadUserTasks();
+    console.log('Link task completed');
+  };
+
+  const handleAdsTask = async (task: TaskType) => {
+    console.log('Starting ad watch');
+    
+    setCompletingTask(task.id);
+    setTimer(15); // 15 seconds for ad watching
+    setTimerTaskId(task.id);
+    toast.success('📺 Loading ad... Please wait');
+    
+    // Initialize ad
+    await initializeAd(task.id);
+    await completeTask(user.telegramId, task.id);
+    await loadUserTasks();
+    console.log('Ad task completed');
+  };
+
+  const handleGenericTask = async (task: TaskType) => {
+    console.log('Processing generic task');
+    
+    // Award coins immediately for generic tasks
+    await safeUpdateUser(user.telegramId, {
+      coins: user.coins + task.reward,
+      xp: user.xp + Math.floor(task.reward / 10),
+    });
+    
+    // Mark task as completed
+    await completeTask(user.telegramId, task.id);
+    await loadUserTasks();
+    
+    toast.success(`✅ Task completed! +${task.reward} coins earned.`);
   };
 
   const handleClaim = async (task: TaskType) => {
@@ -286,11 +386,25 @@ const Task = ({ user }: TaskProps) => {
 
   const getTaskIcon = (type: string) => {
     switch (type) {
+      case 'farming': return '🚜';
+      case 'daily': return '🎁';
       case 'ads': return '📺';
       case 'link': return '🔗';
       case 'social': return '📱';
       case 'referral': return '👥';
       default: return '📋';
+    }
+  };
+
+  const getTaskButtonText = (type: string) => {
+    switch (type) {
+      case 'farming': return '🚜 Start Farm';
+      case 'daily': return '🎁 Claim Daily';
+      case 'ads': return '📺 Watch Ad';
+      case 'link': return '🔗 Visit Link';
+      case 'social': return '📱 Follow';
+      case 'referral': return '👥 Refer';
+      default: return '▶️ Go';
     }
   };
 
@@ -376,7 +490,7 @@ const Task = ({ user }: TaskProps) => {
                       whileTap={{ scale: 0.95 }}
                       whileHover={{ scale: task.type === 'ads' && !canWatchAds() ? 1 : 1.05 }}
                     >
-                      {task.type === 'link' ? '🔗 Visit' : '📺 Watch'}
+                      {getTaskButtonText(task.type)}
                     </motion.button>
                   )}
 
