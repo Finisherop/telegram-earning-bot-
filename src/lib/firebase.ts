@@ -3,7 +3,7 @@ import { getFirestore, Firestore } from 'firebase/firestore';
 import { getDatabase, Database } from 'firebase/database';
 import { getAuth, Auth } from 'firebase/auth';
 
-// Robust Firebase configuration for deployment
+// Robust Firebase configuration for deployment with fallbacks
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyA_cKKrwrqNyb0xl28IbHAnaJa3ChOdsZU',
   // authDomain is optional for Firestore/Realtime DB only usage
