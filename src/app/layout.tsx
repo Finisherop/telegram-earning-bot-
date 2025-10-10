@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { Toaster } from 'react-hot-toast';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -29,19 +30,51 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `
-              // Enhanced Telegram WebApp initialization with error handling
+              // Enhanced Telegram WebApp initialization with comprehensive error handling
               (function() {
                 try {
-                  if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
-                    console.log('Initializing Telegram WebApp...');
-                    window.Telegram.WebApp.ready();
-                    window.Telegram.WebApp.expand();
-                    console.log('Telegram WebApp initialized successfully');
+                  // Wait for DOM to be ready
+                  if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', initTelegram);
                   } else {
-                    console.log('Telegram WebApp not available - running in browser mode');
+                    initTelegram();
+                  }
+                  
+                  function initTelegram() {
+                    try {
+                      console.log('Checking for Telegram WebApp...');
+                      
+                      if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+                        console.log('Telegram WebApp found, initializing...');
+                        
+                        // Safely call WebApp methods
+                        if (typeof window.Telegram.WebApp.ready === 'function') {
+                          window.Telegram.WebApp.ready();
+                          console.log('Telegram WebApp ready() called');
+                        }
+                        
+                        if (typeof window.Telegram.WebApp.expand === 'function') {
+                          window.Telegram.WebApp.expand();
+                          console.log('Telegram WebApp expand() called');
+                        }
+                        
+                        // Store WebApp availability for components
+                        window.__TELEGRAM_WEBAPP_AVAILABLE__ = true;
+                        console.log('Telegram WebApp initialized successfully');
+                      } else {
+                        console.log('Telegram WebApp not available - running in browser mode');
+                        window.__TELEGRAM_WEBAPP_AVAILABLE__ = false;
+                      }
+                    } catch (innerError) {
+                      console.error('Error in initTelegram:', innerError);
+                      window.__TELEGRAM_WEBAPP_AVAILABLE__ = false;
+                    }
                   }
                 } catch (error) {
                   console.error('Error initializing Telegram WebApp:', error);
+                  if (typeof window !== 'undefined') {
+                    window.__TELEGRAM_WEBAPP_AVAILABLE__ = false;
+                  }
                 }
               })();
             `,
@@ -49,7 +82,9 @@ export default function RootLayout({
         />
       </head>
       <body className={inter.className}>
-        {children}
+        <ErrorBoundary>
+          {children}
+        </ErrorBoundary>
         <Toaster
           position="top-center"
           toastOptions={{
