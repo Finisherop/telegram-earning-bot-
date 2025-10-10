@@ -102,7 +102,7 @@ const Referral = ({ user }: ReferralProps) => {
         >
           <div className="text-3xl mb-2">💰</div>
           <div className="text-2xl font-bold text-gray-800">
-            {user.referralEarnings.toLocaleString()}
+            {(user.referralEarnings || 0).toLocaleString()}
           </div>
           <p className="text-gray-600 text-sm">Coins Earned</p>
         </motion.div>

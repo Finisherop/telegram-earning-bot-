@@ -344,18 +344,18 @@ const EnhancedDashboard = ({ user: initialUser }: EnhancedDashboardProps) => {
               transition={{ duration: 2, repeat: Infinity }}
               key={user.coins} // Re-animate when coins change
             >
-              💰 {user.coins.toLocaleString()}
+              💰 {(user.coins || 0).toLocaleString()}
             </motion.div>
             <p className="text-white/80 text-sm">Coins</p>
           </div>
           
           <div className="text-center">
-            <div className="text-2xl font-bold">⭐ {getLevel(user.xp)}</div>
+            <div className="text-2xl font-bold">⭐ {getLevel(user.xp || 0)}</div>
             <p className="text-white/80 text-sm">Level</p>
           </div>
           
           <div className="text-center">
-            <div className="text-2xl font-bold">🔥 {user.dailyStreak}</div>
+            <div className="text-2xl font-bold">🔥 {user.dailyStreak || 0}</div>
             <p className="text-white/80 text-sm">Streak</p>
           </div>
         </div>
@@ -364,13 +364,13 @@ const EnhancedDashboard = ({ user: initialUser }: EnhancedDashboardProps) => {
         <div className="mt-4">
           <div className="flex justify-between text-sm mb-2">
             <span>XP Progress</span>
-            <span>{user.xp}/{getXpForNextLevel(user.xp)}</span>
+            <span>{user.xp || 0}/{getXpForNextLevel(user.xp || 0)}</span>
           </div>
           <div className="w-full bg-white/20 rounded-full h-2">
             <motion.div
               className="bg-accent h-2 rounded-full"
               initial={{ width: 0 }}
-              animate={{ width: `${(user.xp % 100)}%` }}
+              animate={{ width: `${((user.xp || 0) % 100)}%` }}
               transition={{ duration: 1 }}
             />
           </div>
@@ -484,7 +484,7 @@ const EnhancedDashboard = ({ user: initialUser }: EnhancedDashboardProps) => {
           <div>
             <h3 className="text-lg font-bold text-gray-800">Daily Reward</h3>
             <p className="text-gray-600 text-sm">
-              Claim your daily coins • Streak: {user.dailyStreak} days
+              Claim your daily coins • Streak: {user.dailyStreak || 0} days
             </p>
           </div>
           <motion.button
@@ -508,9 +508,9 @@ const EnhancedDashboard = ({ user: initialUser }: EnhancedDashboardProps) => {
             <div
               key={i}
               className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${
-                i < user.dailyStreak
+                i < (user.dailyStreak || 0)
                   ? 'bg-accent text-dark'
-                  : i === user.dailyStreak && dailyClaimAvailable
+                  : i === (user.dailyStreak || 0) && dailyClaimAvailable
                   ? 'bg-primary text-white animate-pulse'
                   : 'bg-gray-200 text-gray-500'
               }`}
@@ -533,7 +533,7 @@ const EnhancedDashboard = ({ user: initialUser }: EnhancedDashboardProps) => {
             <p className="text-gray-600 text-sm">
               {user.vipTier !== 'free' && (
                 <span className="text-accent font-bold">
-                  {user.farmingMultiplier}x Speed Active! 
+                  {user.farmingMultiplier || 1}x Speed Active! 
                 </span>
               )}
               {user.vipTier === 'free' && 'Earn coins every 8 hours'}
@@ -614,7 +614,7 @@ const EnhancedDashboard = ({ user: initialUser }: EnhancedDashboardProps) => {
             </div>
             <div className="text-right">
               <div className="text-2xl font-bold text-accent">
-                {user.farmingMultiplier}x
+                {user.farmingMultiplier || 1}x
               </div>
               <p className="text-sm text-gray-600">Multiplier</p>
             </div>

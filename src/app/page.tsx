@@ -7,6 +7,7 @@ import { useTelegramUser } from '@/hooks/useTelegramUser';
 import { ADMIN_SECRET_KEY } from '@/lib/constants';
 import UserDashboard from '@/components/UserDashboard';
 import AdminDashboard from '@/components/AdminDashboard';
+import BackgroundDataLoader from '@/components/BackgroundDataLoader';
 
 export default function Home() {
   const { user } = useAuth();
@@ -51,27 +52,13 @@ export default function Home() {
     setIsLoading(false);
   }, [router]);
 
-  if (isLoading || telegramLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-        <div className="text-center text-white">
-          <div className="animate-spin text-6xl mb-4">🔄</div>
-          <h2 className="text-2xl font-bold">Loading Telegram Mini App...</h2>
-          <p className="text-white/80 mt-2">
-            {telegramLoading ? 'Capturing user data...' : 'Initializing your earning dashboard'}
-          </p>
-          {telegramUser && (
-            <p className="text-white/60 mt-1 text-sm">
-              Welcome, {displayName}! {isTelegramUser ? '(Telegram User)' : '(Browser User)'}
-            </p>
-          )}
-        </div>
-      </div>
-    );
-  }
+  // Remove complex loading screen - let the app load directly
 
   return (
     <div className="min-h-screen bg-light">
+      {/* Background Data Loader - handles all complex loading silently */}
+      <BackgroundDataLoader />
+      
       {/* Enhanced Features Banner */}
       {user && !isAdmin && (
         <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-3 text-center">
