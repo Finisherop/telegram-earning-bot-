@@ -3,10 +3,6 @@ const nextConfig = {
   images: {
     domains: ['t.me', 'cdn.telegram.org'],
   },
-  // Enable experimental features for App Router
-  experimental: {
-    appDir: true,
-  },
   // Environment variables for client-side access
   env: {
     CUSTOM_KEY: process.env.CUSTOM_KEY,

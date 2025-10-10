@@ -115,7 +115,7 @@ export const subscribeToAdminSettings = (callback: (settings: AdminSettings) => 
       };
       set(settingsRef, {
         ...defaultSettings,
-        updatedAt: defaultSettings.updatedAt.toISOString(),
+        updatedAt: (defaultSettings.updatedAt || new Date()).toISOString(),
       });
       callback(defaultSettings);
     }
