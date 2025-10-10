@@ -77,6 +77,7 @@ export interface AdminSettings {
     vip2: VIPTier;
   };
   secretKey: string;
+  updatedAt?: Date;
 }
 
 export interface DailyStats {

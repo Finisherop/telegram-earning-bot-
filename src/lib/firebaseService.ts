@@ -12,10 +12,147 @@ import {
   increment,
   serverTimestamp,
   addDoc,
+  onSnapshot,
 } from 'firebase/firestore';
-import { db } from './firebase';
+import {
+  ref,
+  set,
+  get,
+  update,
+  onValue,
+  off,
+  push,
+  remove,
+} from 'firebase/database';
+import { db, realtimeDb } from './firebase';
 import { User, Task, UserTask, WithdrawalRequest, AdminSettings, DailyStats } from '@/types';
 import { VIP_TIERS, DEFAULT_SETTINGS } from './constants';
+
+// Real-time listeners
+const listeners = new Map<string, () => void>();
+
+// Real-time user data listener
+export const subscribeToUser = (userId: string, callback: (user: User | null) => void): (() => void) => {
+  const userRef = doc(db, 'users', userId);
+  
+  const unsubscribe = onSnapshot(userRef, (doc) => {
+    if (doc.exists()) {
+      const userData = doc.data();
+      const user: User = {
+        ...userData,
+        id: doc.id,
+        createdAt: userData.createdAt?.toDate ? userData.createdAt.toDate() : new Date(userData.createdAt),
+        updatedAt: userData.updatedAt?.toDate ? userData.updatedAt.toDate() : new Date(userData.updatedAt),
+        lastClaimDate: userData.lastClaimDate?.toDate ? userData.lastClaimDate.toDate() : userData.lastClaimDate ? new Date(userData.lastClaimDate) : undefined,
+        farmingStartTime: userData.farmingStartTime?.toDate ? userData.farmingStartTime.toDate() : userData.farmingStartTime ? new Date(userData.farmingStartTime) : undefined,
+        farmingEndTime: userData.farmingEndTime?.toDate ? userData.farmingEndTime.toDate() : userData.farmingEndTime ? new Date(userData.farmingEndTime) : undefined,
+        vipEndTime: userData.vipEndTime?.toDate ? userData.vipEndTime.toDate() : userData.vipEndTime ? new Date(userData.vipEndTime) : undefined,
+      } as User;
+      callback(user);
+    } else {
+      callback(null);
+    }
+  }, (error) => {
+    console.error('Error listening to user:', error);
+    callback(null);
+  });
+
+  const listenerId = `user_${userId}`;
+  listeners.set(listenerId, unsubscribe);
+  
+  return unsubscribe;
+};
+
+// Real-time tasks listener
+export const subscribeToTasks = (callback: (tasks: Task[]) => void): (() => void) => {
+  const tasksRef = collection(db, 'tasks');
+  const q = query(tasksRef, where('isActive', '==', true), orderBy('createdAt', 'desc'));
+  
+  const unsubscribe = onSnapshot(q, (snapshot) => {
+    const tasks: Task[] = [];
+    snapshot.forEach((doc) => {
+      const taskData = doc.data();
+      tasks.push({
+        ...taskData,
+        id: doc.id,
+        createdAt: taskData.createdAt?.toDate ? taskData.createdAt.toDate() : new Date(taskData.createdAt),
+        updatedAt: taskData.updatedAt?.toDate ? taskData.updatedAt.toDate() : new Date(taskData.updatedAt),
+      } as Task);
+    });
+    callback(tasks);
+  }, (error) => {
+    console.error('Error listening to tasks:', error);
+    callback([]);
+  });
+
+  listeners.set('tasks', unsubscribe);
+  return unsubscribe;
+};
+
+// Real-time admin settings listener
+export const subscribeToAdminSettings = (callback: (settings: AdminSettings) => void): (() => void) => {
+  const settingsRef = doc(db, 'admin', 'settings');
+  
+  const unsubscribe = onSnapshot(settingsRef, (doc) => {
+    if (doc.exists()) {
+      const settingsData = doc.data();
+      const adminSettings = {
+        ...(settingsData as any),
+        updatedAt: settingsData.updatedAt?.toDate ? settingsData.updatedAt.toDate() : new Date(settingsData.updatedAt),
+      } as AdminSettings;
+      callback(adminSettings);
+    } else {
+      // Create default settings if they don't exist
+      const defaultSettings: AdminSettings = {
+        ...DEFAULT_SETTINGS,
+        updatedAt: new Date(),
+      };
+      setDoc(settingsRef, defaultSettings);
+      callback(defaultSettings);
+    }
+  }, (error) => {
+    console.error('Error listening to admin settings:', error);
+    callback(DEFAULT_SETTINGS);
+  });
+
+  listeners.set('admin_settings', unsubscribe);
+  return unsubscribe;
+};
+
+// Real-time user tasks listener
+export const subscribeToUserTasks = (userId: string, callback: (userTasks: UserTask[]) => void): (() => void) => {
+  const userTasksRef = collection(db, 'userTasks');
+  const q = query(userTasksRef, where('userId', '==', userId));
+  
+  const unsubscribe = onSnapshot(q, (snapshot) => {
+    const userTasks: UserTask[] = [];
+    snapshot.forEach((doc) => {
+      const taskData = doc.data();
+      userTasks.push({
+        ...taskData,
+        id: doc.id,
+        completedAt: taskData.completedAt?.toDate ? taskData.completedAt.toDate() : taskData.completedAt ? new Date(taskData.completedAt) : undefined,
+        claimedAt: taskData.claimedAt?.toDate ? taskData.claimedAt.toDate() : taskData.claimedAt ? new Date(taskData.claimedAt) : undefined,
+      } as UserTask);
+    });
+    callback(userTasks);
+  }, (error) => {
+    console.error('Error listening to user tasks:', error);
+    callback([]);
+  });
+
+  const listenerId = `user_tasks_${userId}`;
+  listeners.set(listenerId, unsubscribe);
+  return unsubscribe;
+};
+
+// Cleanup function to remove all listeners
+export const cleanupListeners = () => {
+  listeners.forEach((unsubscribe) => {
+    unsubscribe();
+  });
+  listeners.clear();
+};
 
 // Initialize user document with default values if it doesn't exist
 export const initializeUser = async (userId: string): Promise<User> => {

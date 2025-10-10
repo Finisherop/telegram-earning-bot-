@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User, Task as TaskType, UserTask } from '@/types';
-import { getTasks, getUserTasks, completeTask, claimTask, safeUpdateUser } from '@/lib/firebaseService';
+import { getTasks, getUserTasks, completeTask, claimTask, safeUpdateUser, subscribeToTasks, subscribeToUserTasks } from '@/lib/firebaseService';
 import { TelegramService } from '@/lib/telegram';
 import toast from 'react-hot-toast';
 
@@ -21,34 +21,16 @@ const Task = ({ user }: TaskProps) => {
   const [adsWatchedToday, setAdsWatchedToday] = useState(0);
 
   useEffect(() => {
-    loadTasks();
-    loadUserTasks();
-    checkAdsLimit();
-  }, [user.telegramId]);
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (timer !== null && timer > 0) {
-      interval = setInterval(() => {
-        setTimer(prev => prev! - 1);
-      }, 1000);
-    } else if (timer === 0) {
-      setTimer(null);
-      setTimerTaskId(null);
-    }
-    return () => clearInterval(interval);
-  }, [timer]);
-
-  const loadTasks = async () => {
-    try {
-      const tasksData = await getTasks();
-      console.log('Loaded tasks:', tasksData);
+    // Set up real-time listeners
+    console.log('Setting up real-time listeners for tasks and user tasks');
+    
+    const unsubscribeTasks = subscribeToTasks((tasksData) => {
+      console.log('Real-time tasks update:', tasksData);
       setTasks(tasksData);
       
-      // If no tasks found, seed some default tasks
+      // If no tasks found, add default tasks
       if (tasksData.length === 0) {
-        console.log('No tasks found, seeding default tasks...');
-        // You can add default tasks here or call a seed function
+        console.log('No tasks found, using default tasks');
         const defaultTasks: TaskType[] = [
           {
             id: 'task_1',
@@ -73,11 +55,20 @@ const Task = ({ user }: TaskProps) => {
           },
           {
             id: 'task_3',
-            title: 'Follow on Twitter',
-            description: 'Follow us on Twitter for updates',
-            type: 'social',
-            reward: 75,
-            url: 'https://twitter.com/your_account',
+            title: 'Daily Reward',
+            description: 'Claim your daily reward',
+            type: 'daily',
+            reward: 50,
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          {
+            id: 'task_4',
+            title: 'Start Farming',
+            description: 'Start your 8-hour farming cycle',
+            type: 'farming',
+            reward: 100,
             isActive: true,
             createdAt: new Date(),
             updatedAt: new Date(),
@@ -85,60 +76,47 @@ const Task = ({ user }: TaskProps) => {
         ];
         setTasks(defaultTasks);
       }
-    } catch (error) {
-      console.error('Error loading tasks:', error);
-      toast.error('Failed to load tasks');
-      
-      // Set default tasks as fallback
-      const defaultTasks: TaskType[] = [
-        {
-          id: 'task_1',
-          title: 'Join Telegram Channel',
-          description: 'Join our official Telegram channel',
-          type: 'social',
-          reward: 100,
-          url: 'https://t.me/your_channel',
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
-          id: 'task_2',
-          title: 'Watch Advertisement',
-          description: 'Watch a short video ad to earn coins',
-          type: 'ads',
-          reward: 50,
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        }
-      ];
-      setTasks(defaultTasks);
-    }
-  };
-
-  const loadUserTasks = async () => {
-    try {
-      const userTasksData = await getUserTasks(user.telegramId);
-      setUserTasks(userTasksData);
-    } catch (error) {
-      toast.error('Failed to load user tasks');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const checkAdsLimit = () => {
-    // Check how many ads watched today
-    const today = new Date().toDateString();
-    const todayTasks = userTasks.filter(ut => {
-      const task = tasks.find(t => t.id === ut.taskId);
-      return task?.type === 'ads' && 
-             ut.claimedAt && 
-             new Date(ut.claimedAt).toDateString() === today;
     });
-    setAdsWatchedToday(todayTasks.length);
-  };
+
+    const unsubscribeUserTasks = subscribeToUserTasks(user.telegramId, (userTasksData) => {
+      console.log('Real-time user tasks update:', userTasksData);
+      setUserTasks(userTasksData);
+      
+      // Update ads count
+      const today = new Date().toDateString();
+      const todayTasks = userTasksData.filter(ut => {
+        const task = tasks.find(t => t.id === ut.taskId);
+        return task?.type === 'ads' && 
+               ut.claimedAt && 
+               new Date(ut.claimedAt).toDateString() === today;
+      });
+      setAdsWatchedToday(todayTasks.length);
+    });
+
+    setLoading(false);
+
+    // Cleanup function
+    return () => {
+      unsubscribeTasks();
+      unsubscribeUserTasks();
+    };
+  }, [user.telegramId, tasks]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (timer !== null && timer > 0) {
+      interval = setInterval(() => {
+        setTimer(prev => prev! - 1);
+      }, 1000);
+    } else if (timer === 0) {
+      setTimer(null);
+      setTimerTaskId(null);
+    }
+    return () => clearInterval(interval);
+  }, [timer]);
+
+  // Removed loadTasks, loadUserTasks, and checkAdsLimit functions
+  // Now using real-time listeners instead
 
   const initializeAd = async (taskId: string): Promise<void> => {
     return new Promise((resolve, reject) => {
@@ -276,7 +254,7 @@ const Task = ({ user }: TaskProps) => {
     
     // Mark task as completed
     await completeTask(user.telegramId, task.id);
-    await loadUserTasks();
+    // Real-time listener will automatically update userTasks
     
     toast.success('🚜 Farming started! Come back in 8 hours to claim your reward.');
   };
@@ -307,7 +285,7 @@ const Task = ({ user }: TaskProps) => {
     
     // Mark task as completed
     await completeTask(user.telegramId, task.id);
-    await loadUserTasks();
+    // Real-time listener will automatically update userTasks
     
     toast.success(`🎁 Daily reward claimed! +${totalReward} coins (Streak: ${user.dailyStreak + 1})`);
   };
@@ -326,7 +304,7 @@ const Task = ({ user }: TaskProps) => {
     toast.success('🔗 Link opened! Please wait 10 seconds to claim reward.');
     
     await completeTask(user.telegramId, task.id);
-    await loadUserTasks();
+    // Real-time listener will automatically update userTasks
     console.log('Link task completed');
   };
 
@@ -341,7 +319,7 @@ const Task = ({ user }: TaskProps) => {
     // Initialize ad
     await initializeAd(task.id);
     await completeTask(user.telegramId, task.id);
-    await loadUserTasks();
+    // Real-time listener will automatically update userTasks
     console.log('Ad task completed');
   };
 
@@ -356,7 +334,7 @@ const Task = ({ user }: TaskProps) => {
     
     // Mark task as completed
     await completeTask(user.telegramId, task.id);
-    await loadUserTasks();
+    // Real-time listener will automatically update userTasks
     
     toast.success(`✅ Task completed! +${task.reward} coins earned.`);
   };
@@ -369,7 +347,7 @@ const Task = ({ user }: TaskProps) => {
     try {
       console.log(`Claiming task reward: ${task.reward} coins for task:`, task.id);
       await claimTask(user.telegramId, task.id, task.reward);
-      await loadUserTasks();
+      // Real-time listener will automatically update userTasks
       
       // Coin fly animation
       toast.success(`💰 +${task.reward} coins claimed! 🎉`);

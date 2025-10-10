@@ -3,12 +3,14 @@
 import { useState, useEffect } from 'react';
 import { User } from '@/types';
 import { TelegramService } from '@/lib/telegram';
-import { createUser, getUser, updateUser, initializeUser, safeUpdateUser } from '@/lib/firebaseService';
+import { createUser, getUser, updateUser, initializeUser, safeUpdateUser, subscribeToUser, cleanupListeners } from '@/lib/firebaseService';
 
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
+    let unsubscribeUser: (() => void) | null = null;
+
     const initializeUserAuth = async () => {
       try {
         // Wait a bit for Telegram service to initialize
@@ -92,8 +94,15 @@ export const useAuth = () => {
             }
           }
 
-          setUser(existingUser);
-          console.log('User loaded successfully:', existingUser);
+          // Set up real-time listener for user data
+          console.log('Setting up real-time listener for user:', userId);
+          unsubscribeUser = subscribeToUser(userId, (updatedUser) => {
+            if (updatedUser) {
+              console.log('Real-time user update received:', updatedUser);
+              setUser(updatedUser);
+            }
+          });
+
         } catch (firebaseError) {
           console.error('Firebase error, using local user:', firebaseError);
           
@@ -153,6 +162,13 @@ export const useAuth = () => {
     };
 
     initializeUserAuth();
+
+    // Cleanup function
+    return () => {
+      if (unsubscribeUser) {
+        unsubscribeUser();
+      }
+    };
   }, []);
 
   const refreshUser = async () => {

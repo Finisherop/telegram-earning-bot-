@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { AdminSettings as AdminSettingsType } from '@/types';
-import { getAdminSettings, updateAdminSettings } from '@/lib/firebaseService';
+import { getAdminSettings, updateAdminSettings, subscribeToAdminSettings } from '@/lib/firebaseService';
 import toast from 'react-hot-toast';
 
 const AdminSettings = () => {
@@ -12,19 +12,20 @@ const AdminSettings = () => {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    loadSettings();
-  }, []);
-
-  const loadSettings = async () => {
-    try {
-      const settingsData = await getAdminSettings();
+    // Set up real-time listener for admin settings
+    console.log('Setting up real-time listener for admin settings');
+    
+    const unsubscribe = subscribeToAdminSettings((settingsData) => {
+      console.log('Real-time admin settings update:', settingsData);
       setSettings(settingsData);
-    } catch (error) {
-      toast.error('Failed to load settings');
-    } finally {
       setLoading(false);
-    }
-  };
+    });
+
+    // Cleanup function
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   const handleSave = async () => {
     if (!settings) return;
