@@ -96,12 +96,23 @@ window.Firebase = {
     // ✅ Safe connection management
     safeDisconnect(listeners = []) {
         try {
-            listeners.forEach(listener => {
-                if (listener && typeof off === 'function') {
-                    off(listener);
-                    console.log('✅ Listener disconnected safely');
-                } else {
-                    console.warn('Listener is null or cannot disconnect');
+            if (!Array.isArray(listeners)) {
+                listeners = [listeners];
+            }
+            
+            listeners.forEach((listener, index) => {
+                try {
+                    if (listener && listener.callback && typeof off === 'function') {
+                        off(listener.ref, listener.callback);
+                        console.log(`✅ Listener ${index} disconnected safely`);
+                    } else if (listener && typeof off === 'function') {
+                        off(listener);
+                        console.log(`✅ Listener ${index} disconnected safely`);
+                    } else {
+                        console.warn(`Listener ${index} is null, undefined, or cannot disconnect:`, listener);
+                    }
+                } catch (error) {
+                    console.warn(`Error disconnecting listener ${index}:`, error);
                 }
             });
         } catch (error) {

@@ -1219,28 +1219,32 @@ class MainApp {
         try {
             console.log('🧹 Starting app cleanup...');
 
-            // Clear farming timer
+            // Clear farming timer safely
             if (this.farmingInterval) {
                 clearInterval(this.farmingInterval);
                 this.farmingInterval = null;
             }
 
-            // Run all stored cleanup callbacks
+            // Run all stored cleanup callbacks safely
             this.cleanupCallbacks.forEach((callback, index) => {
                 try {
-                    callback();
+                    if (typeof callback === 'function') {
+                        callback();
+                    }
                 } catch (error) {
                     console.warn(`Cleanup callback ${index} failed:`, error);
                 }
             });
             this.cleanupCallbacks = [];
 
-            // Cleanup database connections
-            if (dbManager && typeof dbManager.cleanup === 'function') {
+            // Cleanup database connections safely
+            if (typeof dbManager === 'object' && dbManager && typeof dbManager.cleanup === 'function') {
                 dbManager.cleanup();
+            } else {
+                console.warn('Database manager not available for cleanup');
             }
 
-            // Remove event listeners
+            // Remove event listeners safely
             this.removeEventListeners();
 
             console.log('✅ App cleanup completed');

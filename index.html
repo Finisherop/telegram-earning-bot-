@@ -510,11 +510,45 @@
     <div id="notifications" class="fixed top-4 right-4 z-50 space-y-2"></div>
 
     <!-- Firebase SDK -->
-    <script type="module" src="js/firebase-config.js"></script>
+    <script type="module" src="js/firebase-config.js" onerror="console.error('Failed to load Firebase config')"></script>
     
     <!-- App Scripts -->
-    <script type="module" src="js/telegram.js"></script>
-    <script type="module" src="js/database.js"></script>
-    <script type="module" src="js/app.js"></script>
+    <script type="module" src="js/telegram.js" onerror="console.error('Failed to load Telegram module')"></script>
+    <script type="module" src="js/database.js" onerror="console.error('Failed to load Database module')"></script>
+    <script type="module" src="js/app.js" onerror="console.error('Failed to load App module')"></script>
+
+    <!-- Global error handler for uncaught errors -->
+    <script>
+        window.addEventListener('error', function(event) {
+            console.error('Global error caught:', event.error);
+            console.error('Error details:', {
+                message: event.message,
+                filename: event.filename,
+                lineno: event.lineno,
+                colno: event.colno
+            });
+        });
+
+        window.addEventListener('unhandledrejection', function(event) {
+            console.error('Unhandled promise rejection:', event.reason);
+        });
+
+        // Check if modules loaded successfully
+        setTimeout(() => {
+            const checks = [
+                { name: 'Firebase', obj: window.Firebase },
+                { name: 'Telegram', obj: window.Telegram },
+                { name: 'DatabaseManager', obj: window.DatabaseManager }
+            ];
+
+            checks.forEach(check => {
+                if (!check.obj) {
+                    console.error(`${check.name} failed to load properly`);
+                } else {
+                    console.log(`✅ ${check.name} loaded successfully`);
+                }
+            });
+        }, 2000);
+    </script>
 </body>
 </html>

@@ -311,12 +311,21 @@ class DatabaseManager {
             
             for (const [key, listener] of this.listeners) {
                 try {
-                    if (window.Firebase && typeof window.Firebase.safeDisconnect === 'function') {
+                    // Check if Firebase is available and has the safeDisconnect method
+                    if (window.Firebase && 
+                        typeof window.Firebase.safeDisconnect === 'function' && 
+                        listener) {
                         window.Firebase.safeDisconnect([listener]);
-                    } else if (window.Firebase && typeof window.Firebase.offValueChange === 'function') {
-                        window.Firebase.offValueChange(listener);
+                        cleanupCount++;
+                    } else if (window.firebaseUtils && 
+                               typeof window.firebaseUtils.off === 'function' && 
+                               listener) {
+                        // Fallback to direct Firebase off method
+                        window.firebaseUtils.off(listener);
+                        cleanupCount++;
+                    } else {
+                        console.warn(`Listener ${key} cannot be cleaned up - Firebase not available or listener is null`);
                     }
-                    cleanupCount++;
                 } catch (error) {
                     console.warn(`Failed to cleanup listener ${key}:`, error);
                 }
