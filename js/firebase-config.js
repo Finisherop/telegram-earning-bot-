@@ -307,11 +307,11 @@ window.Firebase = {
         return settings || defaultSettings;
     },
 
-    // ✅ VIP Settings Management
+    // ✅ VIP Settings Management with proper bot integration
     async getVIPSettings() {
         const defaultVIPSettings = {
-            vipAmount: 49900, // Amount in smallest currency unit (e.g., paise for INR)
-            vipCurrency: "INR",
+            vipAmount: 99, // 99 Telegram Stars
+            vipCurrency: "XTR", // Telegram Stars
             vipDuration: 30, // days
             vipBenefits: {
                 farmingMultiplier: 2,
@@ -319,7 +319,9 @@ window.Firebase = {
                 dailyClaimBonus: 200,
                 minWithdrawal: 500
             },
-            paymentProviderToken: "YOUR_BOT_PAYMENT_PROVIDER_TOKEN",
+            paymentProviderToken: "", // Empty for Telegram Stars
+            botToken: "8484469509:AAHNw8rM2fzw35Lp1d_UTLjdFhobasHoOnM",
+            botUsername: "finisher_task_bot",
             updatedAt: serverTimestamp()
         };
 
