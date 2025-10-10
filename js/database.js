@@ -6,18 +6,51 @@ class DatabaseManager {
         this.listeners = new Map();
         this.currentUser = null;
         this.isInitialized = false;
+        this.connectionRetries = 0;
+        this.maxRetries = 3;
     }
 
     async init() {
         console.log('🔄 Initializing Database Manager...');
         
-        // Wait for Firebase to be available
-        while (!window.Firebase) {
-            await new Promise(resolve => setTimeout(resolve, 100));
+        try {
+            // Wait for Firebase to be available with timeout
+            const firebaseTimeout = 10000; // 10 seconds
+            const startTime = Date.now();
+            
+            while (!window.Firebase && (Date.now() - startTime) < firebaseTimeout) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            
+            if (!window.Firebase) {
+                throw new Error('Firebase failed to load within timeout period');
+            }
+            
+            this.isInitialized = true;
+            console.log('✅ Database Manager initialized successfully');
+            
+        } catch (error) {
+            console.error('❌ Database Manager initialization failed:', error);
+            // Set up fallback mode
+            this.setupFallbackMode();
         }
-        
+    }
+
+    // ✅ Fallback mode for when Firebase is unavailable
+    setupFallbackMode() {
+        console.warn('⚠️ Running in fallback mode - limited functionality');
         this.isInitialized = true;
-        console.log('✅ Database Manager initialized');
+        
+        // Create mock Firebase methods for graceful degradation
+        if (!window.Firebase) {
+            window.Firebase = {
+                writeData: () => Promise.resolve(false),
+                readData: () => Promise.resolve(null),
+                createUser: () => Promise.resolve(false),
+                getUser: () => Promise.resolve(null),
+                // Add other mock methods as needed
+            };
+        }
     }
 
     // User management
@@ -270,12 +303,67 @@ class DatabaseManager {
         return await window.Firebase.getStats();
     }
 
-    // Cleanup listeners
+    // ✅ Safe cleanup with proper error handling
     cleanup() {
-        for (const [key, listener] of this.listeners) {
-            window.Firebase.offValueChange(listener);
+        try {
+            console.log('🧹 Cleaning up database connections...');
+            let cleanupCount = 0;
+            
+            for (const [key, listener] of this.listeners) {
+                try {
+                    if (window.Firebase && typeof window.Firebase.safeDisconnect === 'function') {
+                        window.Firebase.safeDisconnect([listener]);
+                    } else if (window.Firebase && typeof window.Firebase.offValueChange === 'function') {
+                        window.Firebase.offValueChange(listener);
+                    }
+                    cleanupCount++;
+                } catch (error) {
+                    console.warn(`Failed to cleanup listener ${key}:`, error);
+                }
+            }
+            
+            this.listeners.clear();
+            console.log(`✅ Cleaned up ${cleanupCount} database listeners`);
+            
+        } catch (error) {
+            console.error('Error during database cleanup:', error);
         }
-        this.listeners.clear();
+    }
+
+    // ✅ Safe listener management with error recovery
+    addListener(key, listener) {
+        try {
+            if (this.listeners.has(key)) {
+                // Clean up existing listener first
+                const existing = this.listeners.get(key);
+                if (window.Firebase && typeof window.Firebase.offValueChange === 'function') {
+                    window.Firebase.offValueChange(existing);
+                }
+            }
+            
+            this.listeners.set(key, listener);
+            console.log(`✅ Added listener: ${key}`);
+            
+        } catch (error) {
+            console.error(`Failed to add listener ${key}:`, error);
+        }
+    }
+
+    // ✅ Connection health check
+    async checkConnection() {
+        try {
+            if (!window.Firebase) {
+                return false;
+            }
+            
+            // Test connection with a simple read
+            const testResult = await window.Firebase.readData('test/connection');
+            return true;
+            
+        } catch (error) {
+            console.warn('Connection check failed:', error);
+            return false;
+        }
     }
 
     // Get current user

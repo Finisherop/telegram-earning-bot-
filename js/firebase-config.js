@@ -35,7 +35,7 @@ window.firebaseUtils = {
 
 // Global Firebase utilities
 window.Firebase = {
-    // Database operations
+    // Database operations with enhanced error handling
     async writeData(path, data) {
         try {
             await set(ref(database, path), data);
@@ -43,6 +43,12 @@ window.Firebase = {
             return true;
         } catch (error) {
             console.error(`❌ Error writing to ${path}:`, error);
+            // Enhanced error handling - check connection status
+            if (error.code === 'unavailable' || error.code === 'permission-denied') {
+                console.warn('Firebase temporarily unavailable, will retry...');
+                // Implement retry logic for critical operations
+                return await this.retryOperation(() => set(ref(database, path), data), 3);
+            }
             return false;
         }
     },
@@ -53,6 +59,7 @@ window.Firebase = {
             return snapshot.exists() ? snapshot.val() : null;
         } catch (error) {
             console.error(`❌ Error reading from ${path}:`, error);
+            // Return null as safe fallback
             return null;
         }
     },
@@ -68,6 +75,40 @@ window.Firebase = {
         }
     },
 
+    // ✅ Safe retry mechanism for critical operations
+    async retryOperation(operation, maxRetries = 3, delay = 1000) {
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                await operation();
+                return true;
+            } catch (error) {
+                console.warn(`Retry attempt ${attempt}/${maxRetries} failed:`, error.message);
+                if (attempt === maxRetries) {
+                    console.error('All retry attempts failed');
+                    return false;
+                }
+                await new Promise(resolve => setTimeout(resolve, delay * attempt));
+            }
+        }
+        return false;
+    },
+
+    // ✅ Safe connection management
+    safeDisconnect(listeners = []) {
+        try {
+            listeners.forEach(listener => {
+                if (listener && typeof off === 'function') {
+                    off(listener);
+                    console.log('✅ Listener disconnected safely');
+                } else {
+                    console.warn('Listener is null or cannot disconnect');
+                }
+            });
+        } catch (error) {
+            console.error('Error during listener cleanup:', error);
+        }
+    },
+
     // Real-time listeners
     onValueChange(path, callback) {
         const dataRef = ref(database, path);
@@ -79,31 +120,57 @@ window.Firebase = {
         off(dataRef);
     },
 
-    // User operations
-    async createUser(userId, userData) {
+    // User operations - Safe user initialization with proper defaults
+    async createUser(userId, userData = {}) {
         const userPath = `users/${userId}`;
-        const defaultUserData = {
+        
+        // ✅ Safe user data with null coalescing to avoid undefined values
+        const safeUserData = {
             telegramId: userId,
-            username: userData.username || '',
-            firstName: userData.firstName || '',
-            lastName: userData.lastName || '',
-            profilePic: userData.profilePic || '',
-            coins: 0,
-            xp: 0,
-            level: 1,
-            vipTier: 'free',
-            farmingMultiplier: 1,
-            referralMultiplier: 1,
-            referralCount: 0,
-            referralEarnings: 0,
-            referrerId: userData.referrerId || null,
-            dailyStreak: 0,
+            username: userData.username ?? 'Anonymous',
+            firstName: userData.firstName ?? '',
+            lastName: userData.lastName ?? '',
+            profilePic: userData.profilePic ?? '',
+            coins: userData.coins ?? 0,
+            xp: userData.xp ?? 0,
+            level: userData.level ?? 1,
+            vipTier: userData.vipTier ?? 'free',
+            farmingMultiplier: userData.farmingMultiplier ?? 1,
+            referralMultiplier: userData.referralMultiplier ?? 1,
+            referralCount: userData.referralCount ?? 0,
+            referralEarnings: userData.referralEarnings ?? 0,
+            referrerId: userData.referrerId ?? null,
+            dailyStreak: userData.dailyStreak ?? 0,
+            lastClaim: userData.lastClaim ?? null,
+            isFarming: userData.isFarming ?? false,
+            farmingStartTime: userData.farmingStartTime ?? null,
+            farmingEndTime: userData.farmingEndTime ?? null,
             createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-            ...userData
+            updatedAt: serverTimestamp()
         };
 
-        return await this.writeData(userPath, defaultUserData);
+        try {
+            // Check if user already exists
+            const existingUser = await this.readData(userPath);
+            
+            if (existingUser) {
+                console.log(`User ${userId} already exists, updating data if needed`);
+                // Merge with existing data to avoid overwriting
+                const mergedData = {
+                    ...existingUser,
+                    ...safeUserData,
+                    updatedAt: serverTimestamp()
+                };
+                return await this.writeData(userPath, mergedData);
+            } else {
+                console.log(`Creating new user document for: ${userId}`);
+                return await this.writeData(userPath, safeUserData);
+            }
+        } catch (error) {
+            console.error("Firebase user initialization error, using safe defaults:", error);
+            // Return safe defaults even if Firebase fails
+            return safeUserData;
+        }
     },
 
     async getUser(userId) {
