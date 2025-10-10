@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browser Setup | ब्राउज़र सेटअप</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="min-h-screen flex items-center justify-center p-6">
+        <div class="bg-white rounded-lg shadow-lg p-8 max-w-md w-full">
+            <div class="text-center mb-6">
+                <div class="text-4xl mb-4">🎮</div>
+                <h1 class="text-2xl font-bold text-gray-800">Browser Mode Setup</h1>
+                <p class="text-gray-600 mt-2">ब्राउज़र में अपना profile setup करें</p>
+            </div>
+
+            <form id="browserSetupForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        Your Name | आपका नाम
+                    </label>
+                    <input 
+                        type="text" 
+                        id="userName" 
+                        required
+                        placeholder="Enter your name | नाम डालें"
+                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        Username (Optional) | यूज़रनेम (वैकल्पिक)  
+                    </label>
+                    <input 
+                        type="text" 
+                        id="userUsername"
+                        placeholder="Enter username | यूज़रनेम डालें"
+                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        Referral Code (Optional) | रेफरल कोड (वैकल्पिक)
+                    </label>
+                    <input 
+                        type="text" 
+                        id="referralCode"
+                        placeholder="Enter referral code | रेफरल कोड डालें"
+                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                </div>
+
+                <button 
+                    type="submit" 
+                    class="w-full gradient-bg text-white py-3 px-6 rounded-lg font-semibold hover:opacity-90 transition-opacity"
+                >
+                    🚀 Start Earning | कमाई शुरू करें
+                </button>
+            </form>
+
+            <div class="mt-6 text-center">
+                <p class="text-sm text-gray-600">
+                    या Telegram में बेहतर अनुभव के लिए: 
+                    <a href="https://t.me/Finisher_task_bot" class="text-blue-600 font-semibold">
+                        Open in Telegram
+                    </a>
+                </p>
+            </div>
+
+            <!-- Features Preview -->
+            <div class="mt-8 space-y-3">
+                <h3 class="font-semibold text-gray-800 text-center">Available Features | उपलब्ध फीचर्स</h3>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <div class="flex items-center space-x-2">
+                        <span class="text-green-500">✅</span>
+                        <span>Coin Farming</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-green-500">✅</span>
+                        <span>Task Completion</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-green-500">✅</span>
+                        <span>Daily Claims</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-green-500">✅</span>
+                        <span>Referral System</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-green-500">✅</span>
+                        <span>VIP Membership</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-green-500">✅</span>
+                        <span>Withdrawals</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Auto-fill from URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const referralFromUrl = urlParams.get('ref') || urlParams.get('start') || urlParams.get('startapp');
+        if (referralFromUrl) {
+            document.getElementById('referralCode').value = referralFromUrl;
+        }
+
+        // Handle form submission
+        document.getElementById('browserSetupForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('userName').value.trim();
+            const username = document.getElementById('userUsername').value.trim();
+            const referral = document.getElementById('referralCode').value.trim();
+
+            if (!name) {
+                alert('Please enter your name | कृपया अपना नाम डालें');
+                return;
+            }
+
+            // Store user data in localStorage for browser mode
+            localStorage.setItem('fallback_firstname', name);
+            localStorage.setItem('fallback_username', username || name.toLowerCase().replace(/\s+/g, ''));
+            
+            if (referral) {
+                localStorage.setItem('browser_referral', referral);
+            }
+
+            // Redirect to main app
+            let redirectUrl = './index.html';
+            if (referral) {
+                redirectUrl += `?ref=${encodeURIComponent(referral)}`;
+            }
+            
+            window.location.href = redirectUrl;
+        });
+
+        // Check if already setup
+        const existingUser = localStorage.getItem('fallback_firstname');
+        if (existingUser) {
+            document.getElementById('userName').value = existingUser;
+            document.getElementById('userUsername').value = localStorage.getItem('fallback_username') || '';
+        }
+    </script>
+</body>
+</html>
