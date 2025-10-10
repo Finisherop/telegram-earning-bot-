@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram Mini App</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#0088cc',
+                        secondary: '#17a2b8',
+                        success: '#28a745',
+                        danger: '#dc3545',
+                        warning: '#ffc107',
+                        light: '#f8f9fa',
+                        dark: '#343a40'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .card-shadow {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .coin-animation {
+            animation: coinBounce 0.6s ease-in-out;
+        }
+        @keyframes coinBounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-20px); }
+            60% { transform: translateY(-10px); }
+        }
+        .notification {
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body class="bg-light min-h-screen">
+    <!-- Loading Screen -->
+    <div id="loading" class="fixed inset-0 gradient-bg flex items-center justify-center z-50">
+        <div class="text-center text-white">
+            <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-white mx-auto mb-4"></div>
+            <h2 class="text-xl font-semibold">Loading...</h2>
+            <p class="text-sm opacity-75">Connecting to Telegram...</p>
+        </div>
+    </div>
+
+    <!-- Main App Container -->
+    <div id="app" class="hidden">
+        <!-- User Panel -->
+        <div id="userPanel" class="min-h-screen bg-gray-50">
+            <!-- Header -->
+            <header class="gradient-bg text-white p-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <img id="userAvatar" src="" alt="Avatar" class="w-10 h-10 rounded-full border-2 border-white" style="display: none;">
+                        <div class="w-10 h-10 bg-white bg-opacity-30 rounded-full flex items-center justify-center" id="defaultAvatar">
+                            <span class="text-lg font-bold" id="userInitial">U</span>
+                        </div>
+                        <div>
+                            <h1 class="font-semibold" id="userName">Welcome!</h1>
+                            <p class="text-sm opacity-75" id="userInfo">Telegram Mini App</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="flex items-center space-x-1 text-yellow-300">
+                            <span class="text-2xl">🪙</span>
+                            <span class="text-xl font-bold" id="userCoins">0</span>
+                        </div>
+                        <p class="text-xs opacity-75" id="userLevel">Level 1</p>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Navigation -->
+            <nav class="bg-white border-b border-gray-200">
+                <div class="flex">
+                    <button class="nav-tab flex-1 py-3 text-center font-medium text-primary border-b-2 border-primary" data-tab="dashboard">
+                        🏠 Home
+                    </button>
+                    <button class="nav-tab flex-1 py-3 text-center font-medium text-gray-500" data-tab="tasks">
+                        📋 Tasks
+                    </button>
+                    <button class="nav-tab flex-1 py-3 text-center font-medium text-gray-500" data-tab="referrals">
+                        👥 Referrals
+                    </button>
+                    <button class="nav-tab flex-1 py-3 text-center font-medium text-gray-500" data-tab="withdraw">
+                        💸 Withdraw
+                    </button>
+                </div>
+            </nav>
+
+            <!-- Tab Content -->
+            <div id="tabContent" class="p-4">
+                <!-- Dashboard Tab -->
+                <div id="dashboardTab" class="tab-panel">
+                    <!-- Farming Section -->
+                    <div class="bg-white rounded-lg p-4 mb-4 card-shadow">
+                        <h3 class="font-semibold text-lg mb-3 flex items-center">
+                            🌱 <span class="ml-2">Coin Farming</span>
+                        </h3>
+                        <div id="farmingStatus" class="text-center">
+                            <div class="bg-gradient-to-r from-green-400 to-blue-500 text-white rounded-lg p-6 mb-4">
+                                <h4 class="text-xl font-bold mb-2" id="farmingTitle">Start Farming!</h4>
+                                <p class="mb-4" id="farmingDesc">Earn coins automatically every hour</p>
+                                <button id="farmingBtn" class="bg-white text-blue-600 px-6 py-2 rounded-full font-semibold">
+                                    Start Farming
+                                </button>
+                            </div>
+                            <div id="farmingTimer" class="hidden text-center">
+                                <div class="text-2xl font-mono mb-2" id="timerDisplay">00:00:00</div>
+                                <p class="text-gray-600">Farming in progress...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stats Cards -->
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div class="bg-white rounded-lg p-4 text-center card-shadow">
+                            <div class="text-2xl mb-1">📊</div>
+                            <div class="text-lg font-bold text-primary" id="totalEarnings">0</div>
+                            <div class="text-xs text-gray-500">Total Earnings</div>
+                        </div>
+                        <div class="bg-white rounded-lg p-4 text-center card-shadow">
+                            <div class="text-2xl mb-1">👥</div>
+                            <div class="text-lg font-bold text-success" id="referralCount">0</div>
+                            <div class="text-xs text-gray-500">Referrals</div>
+                        </div>
+                    </div>
+
+                    <!-- VIP Status -->
+                    <div class="bg-white rounded-lg p-4 mb-4 card-shadow">
+                        <h3 class="font-semibold text-lg mb-3 flex items-center">
+                            👑 <span class="ml-2">VIP Status</span>
+                        </h3>
+                        <div id="vipStatus" class="text-center">
+                            <div class="bg-gray-100 rounded-lg p-4">
+                                <h4 class="font-bold text-gray-600">FREE TIER</h4>
+                                <p class="text-sm text-gray-500 mb-3">Basic farming rewards</p>
+                                <button class="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-full text-sm font-semibold">
+                                    Upgrade to VIP
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tasks Tab -->
+                <div id="tasksTab" class="tab-panel hidden">
+                    <h2 class="text-xl font-bold mb-4">Available Tasks</h2>
+                    <div id="tasksList">
+                        <p class="text-gray-500 text-center py-8">Loading tasks...</p>
+                    </div>
+                </div>
+
+                <!-- Referrals Tab -->
+                <div id="referralsTab" class="tab-panel hidden">
+                    <h2 class="text-xl font-bold mb-4">Referral Program</h2>
+                    
+                    <!-- Referral Stats -->
+                    <div class="bg-white rounded-lg p-4 mb-4 card-shadow">
+                        <h3 class="font-semibold mb-3">Your Referral Stats</h3>
+                        <div class="grid grid-cols-2 gap-4 text-center">
+                            <div>
+                                <div class="text-2xl font-bold text-primary" id="refCount">0</div>
+                                <div class="text-sm text-gray-500">Total Referrals</div>
+                            </div>
+                            <div>
+                                <div class="text-2xl font-bold text-success" id="refEarnings">0</div>
+                                <div class="text-sm text-gray-500">Earned Coins</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Referral Link -->
+                    <div class="bg-white rounded-lg p-4 mb-4 card-shadow">
+                        <h3 class="font-semibold mb-3">Share Your Link</h3>
+                        <div class="flex gap-2">
+                            <input type="text" id="referralLink" readonly class="flex-1 p-2 border rounded text-sm" value="Loading...">
+                            <button id="copyLink" class="bg-primary text-white px-4 py-2 rounded text-sm">Copy</button>
+                            <button id="shareLink" class="bg-success text-white px-4 py-2 rounded text-sm">Share</button>
+                        </div>
+                    </div>
+
+                    <!-- Referral History -->
+                    <div class="bg-white rounded-lg p-4 card-shadow">
+                        <h3 class="font-semibold mb-3">Recent Referrals</h3>
+                        <div id="referralHistory">
+                            <p class="text-gray-500 text-center py-4">No referrals yet</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Withdraw Tab -->
+                <div id="withdrawTab" class="tab-panel hidden">
+                    <h2 class="text-xl font-bold mb-4">Withdraw Coins</h2>
+                    
+                    <!-- Withdrawal Form -->
+                    <div class="bg-white rounded-lg p-4 mb-4 card-shadow">
+                        <h3 class="font-semibold mb-3">Request Withdrawal</h3>
+                        <form id="withdrawalForm">
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium mb-1">Amount (Coins)</label>
+                                <input type="number" id="withdrawAmount" min="100" class="w-full p-2 border rounded">
+                                <p class="text-xs text-gray-500 mt-1">Minimum: 100 coins</p>
+                            </div>
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium mb-1">UPI ID</label>
+                                <input type="text" id="upiId" placeholder="yourname@upi" class="w-full p-2 border rounded">
+                            </div>
+                            <button type="submit" class="w-full bg-success text-white py-2 rounded font-semibold">
+                                Request Withdrawal
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Withdrawal History -->
+                    <div class="bg-white rounded-lg p-4 card-shadow">
+                        <h3 class="font-semibold mb-3">Withdrawal History</h3>
+                        <div id="withdrawalHistory">
+                            <p class="text-gray-500 text-center py-4">No withdrawals yet</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Panel -->
+        <div id="adminPanel" class="hidden min-h-screen bg-gray-100">
+            <!-- Admin Header -->
+            <header class="bg-dark text-white p-4">
+                <div class="flex items-center justify-between">
+                    <h1 class="text-xl font-bold">🛠️ Admin Panel</h1>
+                    <button id="switchToUser" class="bg-primary px-3 py-1 rounded text-sm">
+                        Switch to User View
+                    </button>
+                </div>
+            </header>
+
+            <!-- Admin Tabs -->
+            <nav class="bg-white border-b border-gray-200">
+                <div class="flex">
+                    <button class="admin-tab flex-1 py-3 text-center font-medium text-primary border-b-2 border-primary" data-tab="dashboard">
+                        📊 Dashboard
+                    </button>
+                    <button class="admin-tab flex-1 py-3 text-center font-medium text-gray-500" data-tab="tasks">
+                        📋 Tasks
+                    </button>
+                    <button class="admin-tab flex-1 py-3 text-center font-medium text-gray-500" data-tab="users">
+                        👥 Users
+                    </button>
+                    <button class="admin-tab flex-1 py-3 text-center font-medium text-gray-500" data-tab="settings">
+                        ⚙️ Settings
+                    </button>
+                </div>
+            </nav>
+
+            <!-- Admin Content -->
+            <div id="adminContent" class="p-4">
+                <!-- Admin Dashboard -->
+                <div id="adminDashboardTab" class="admin-panel">
+                    <h2 class="text-2xl font-bold mb-6">Admin Dashboard</h2>
+                    
+                    <!-- Stats Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                        <div class="bg-white rounded-lg p-6 card-shadow">
+                            <h3 class="text-lg font-semibold text-gray-700 mb-2">Total Users</h3>
+                            <div class="text-3xl font-bold text-primary" id="adminTotalUsers">0</div>
+                        </div>
+                        <div class="bg-white rounded-lg p-6 card-shadow">
+                            <h3 class="text-lg font-semibold text-gray-700 mb-2">Active Tasks</h3>
+                            <div class="text-3xl font-bold text-success" id="adminActiveTasks">0</div>
+                        </div>
+                        <div class="bg-white rounded-lg p-6 card-shadow">
+                            <h3 class="text-lg font-semibold text-gray-700 mb-2">Pending Withdrawals</h3>
+                            <div class="text-3xl font-bold text-warning" id="adminPendingWithdrawals">0</div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Activity -->
+                    <div class="bg-white rounded-lg p-6 card-shadow">
+                        <h3 class="text-lg font-semibold mb-4">Recent Activity</h3>
+                        <div id="recentActivity">
+                            <p class="text-gray-500 text-center py-4">No recent activity</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Admin Tasks -->
+                <div id="adminTasksTab" class="admin-panel hidden">
+                    <h2 class="text-2xl font-bold mb-6">Task Management</h2>
+                    
+                    <!-- Add New Task -->
+                    <div class="bg-white rounded-lg p-6 mb-6 card-shadow">
+                        <h3 class="text-lg font-semibold mb-4">Add New Task</h3>
+                        <form id="taskForm" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Task Name</label>
+                                <input type="text" id="taskName" required class="w-full p-2 border rounded">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Reward (Coins)</label>
+                                <input type="number" id="taskReward" required min="1" class="w-full p-2 border rounded">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Link (Optional)</label>
+                                <input type="url" id="taskLink" class="w-full p-2 border rounded">
+                            </div>
+                            <div class="md:col-span-3">
+                                <button type="submit" class="bg-success text-white px-6 py-2 rounded font-semibold">
+                                    Add Task
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Tasks List -->
+                    <div class="bg-white rounded-lg p-6 card-shadow">
+                        <h3 class="text-lg font-semibold mb-4">Existing Tasks</h3>
+                        <div id="adminTasksList">
+                            <p class="text-gray-500 text-center py-4">Loading tasks...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Admin Users -->
+                <div id="adminUsersTab" class="admin-panel hidden">
+                    <h2 class="text-2xl font-bold mb-6">User Management</h2>
+                    
+                    <!-- User Stats -->
+                    <div class="bg-white rounded-lg p-6 mb-6 card-shadow">
+                        <h3 class="text-lg font-semibold mb-4">User Statistics</h3>
+                        <div id="userStats">
+                            <p class="text-gray-500 text-center py-4">Loading user stats...</p>
+                        </div>
+                    </div>
+
+                    <!-- Users List -->
+                    <div class="bg-white rounded-lg p-6 card-shadow">
+                        <h3 class="text-lg font-semibold mb-4">All Users</h3>
+                        <div id="adminUsersList">
+                            <p class="text-gray-500 text-center py-4">Loading users...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Admin Settings -->
+                <div id="adminSettingsTab" class="admin-panel hidden">
+                    <h2 class="text-2xl font-bold mb-6">System Settings</h2>
+                    
+                    <div class="bg-white rounded-lg p-6 card-shadow">
+                        <h3 class="text-lg font-semibold mb-4">Global Configuration</h3>
+                        <form id="settingsForm" class="space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Referral Reward (Coins)</label>
+                                    <input type="number" id="referralReward" min="1" class="w-full p-2 border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Farming Reward (Coins/Hour)</label>
+                                    <input type="number" id="farmingReward" min="1" class="w-full p-2 border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Min Withdrawal (Coins)</label>
+                                    <input type="number" id="minWithdrawal" min="1" class="w-full p-2 border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Exchange Rate (Coins per ₹1)</label>
+                                    <input type="number" id="exchangeRate" min="1" class="w-full p-2 border rounded">
+                                </div>
+                            </div>
+                            <button type="submit" class="bg-primary text-white px-6 py-2 rounded font-semibold">
+                                Save Settings
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notifications -->
+    <div id="notifications" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <!-- Firebase SDK -->
+    <script type="module" src="js/firebase-config.js"></script>
+    
+    <!-- App Scripts -->
+    <script type="module" src="js/telegram.js"></script>
+    <script type="module" src="js/database.js"></script>
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>

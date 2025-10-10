@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Telegram Mini App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .test-result {
+            padding: 1rem;
+            margin: 0.5rem 0;
+            border-radius: 0.5rem;
+            border: 1px solid #e5e7eb;
+        }
+        .success { background-color: #f0fdf4; border-color: #bbf7d0; }
+        .error { background-color: #fef2f2; border-color: #fca5a5; }
+        .info { background-color: #eff6ff; border-color: #93c5fd; }
+    </style>
+</head>
+<body class="bg-gray-100 p-6">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold text-center mb-8">Telegram Mini App Test Suite</h1>
+        
+        <div class="bg-white rounded-lg p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Test Environment</h2>
+            <div id="testEnvironment" class="space-y-2">
+                <div>URL: <span id="currentUrl" class="font-mono"></span></div>
+                <div>User Agent: <span id="userAgent" class="font-mono text-sm"></span></div>
+                <div>Telegram WebApp: <span id="telegramStatus" class="font-semibold"></span></div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Test Controls</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <button onclick="runAllTests()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                    Run All Tests
+                </button>
+                <button onclick="testFirebase()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
+                    Test Firebase
+                </button>
+                <button onclick="testReferralSystem()" class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600">
+                    Test Referrals
+                </button>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Quick Actions</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <a href="/" class="bg-blue-500 text-white px-4 py-2 rounded text-center hover:bg-blue-600">
+                    User Panel
+                </a>
+                <a href="/?admin=true" class="bg-red-500 text-white px-4 py-2 rounded text-center hover:bg-red-600">
+                    Admin Panel
+                </a>
+                <a href="/?ref=123456789" class="bg-green-500 text-white px-4 py-2 rounded text-center hover:bg-green-600">
+                    Test Referral
+                </a>
+                <button onclick="clearFirebaseData()" class="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600">
+                    Clear Test Data
+                </button>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg p-6">
+            <h2 class="text-xl font-semibold mb-4">Test Results</h2>
+            <div id="testResults" class="space-y-4">
+                <div class="test-result info">
+                    <strong>Ready to test</strong> - Click "Run All Tests" to begin
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Firebase and App Scripts -->
+    <script type="module">
+        // Initialize test environment
+        document.getElementById('currentUrl').textContent = window.location.href;
+        document.getElementById('userAgent').textContent = navigator.userAgent;
+        document.getElementById('telegramStatus').textContent = 
+            window.Telegram && window.Telegram.WebApp ? 'Available ✅' : 'Not Available (Testing Mode) ⚠️';
+
+        // Test results container
+        const testResults = document.getElementById('testResults');
+
+        function addTestResult(title, status, details = '') {
+            const result = document.createElement('div');
+            result.className = `test-result ${status}`;
+            result.innerHTML = `
+                <strong>${title}</strong> - ${status === 'success' ? 'PASS ✅' : status === 'error' ? 'FAIL ❌' : 'INFO ℹ️'}
+                ${details ? `<div class="text-sm mt-2">${details}</div>` : ''}
+            `;
+            testResults.appendChild(result);
+        }
+
+        // Clear results
+        function clearResults() {
+            testResults.innerHTML = '';
+        }
+
+        // Firebase test
+        window.testFirebase = async function() {
+            clearResults();
+            addTestResult('Firebase Connection Test', 'info', 'Testing Firebase configuration and connection...');
+
+            try {
+                // Wait for Firebase to load
+                let attempts = 0;
+                while (!window.Firebase && attempts < 50) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    attempts++;
+                }
+
+                if (!window.Firebase) {
+                    addTestResult('Firebase Load', 'error', 'Firebase utilities not loaded after 5 seconds');
+                    return;
+                }
+
+                addTestResult('Firebase Load', 'success', 'Firebase utilities loaded successfully');
+
+                // Test basic read/write
+                const testData = { test: true, timestamp: Date.now() };
+                const writeSuccess = await window.Firebase.writeData('test/connection', testData);
+                
+                if (writeSuccess) {
+                    addTestResult('Firebase Write', 'success', 'Successfully wrote test data to Firebase');
+                } else {
+                    addTestResult('Firebase Write', 'error', 'Failed to write test data to Firebase');
+                    return;
+                }
+
+                const readData = await window.Firebase.readData('test/connection');
+                if (readData && readData.test) {
+                    addTestResult('Firebase Read', 'success', 'Successfully read test data from Firebase');
+                } else {
+                    addTestResult('Firebase Read', 'error', 'Failed to read test data from Firebase');
+                }
+
+                // Test settings
+                const settings = await window.Firebase.getSettings();
+                if (settings) {
+                    addTestResult('Firebase Settings', 'success', `Loaded settings: referralReward=${settings.referralReward}, farmingReward=${settings.farmingReward}`);
+                } else {
+                    addTestResult('Firebase Settings', 'error', 'Failed to load settings');
+                }
+
+            } catch (error) {
+                addTestResult('Firebase Error', 'error', `Exception: ${error.message}`);
+            }
+        };
+
+        // Referral system test
+        window.testReferralSystem = async function() {
+            clearResults();
+            addTestResult('Referral System Test', 'info', 'Testing referral logic and rewards...');
+
+            try {
+                // Wait for Firebase
+                while (!window.Firebase) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+
+                // Create test users
+                const referrerId = 'test_referrer_' + Date.now();
+                const newUserId = 'test_new_user_' + Date.now();
+
+                // Create referrer user
+                const referrerData = {
+                    telegramId: referrerId,
+                    username: 'test_referrer',
+                    firstName: 'Test',
+                    lastName: 'Referrer',
+                    coins: 1000,
+                    referralCount: 0,
+                    referralEarnings: 0
+                };
+
+                const referrerCreated = await window.Firebase.createUser(referrerId, referrerData);
+                if (referrerCreated) {
+                    addTestResult('Referrer Creation', 'success', `Created test referrer: ${referrerId}`);
+                } else {
+                    addTestResult('Referrer Creation', 'error', 'Failed to create test referrer');
+                    return;
+                }
+
+                // Create new user with referral
+                const newUserData = {
+                    telegramId: newUserId,
+                    username: 'test_new_user',
+                    firstName: 'Test',
+                    lastName: 'NewUser',
+                    referrerId: referrerId
+                };
+
+                const newUserCreated = await window.Firebase.createUser(newUserId, newUserData);
+                if (newUserCreated) {
+                    addTestResult('New User Creation', 'success', `Created test new user: ${newUserId}`);
+                } else {
+                    addTestResult('New User Creation', 'error', 'Failed to create test new user');
+                    return;
+                }
+
+                // Process referral
+                const referralProcessed = await window.Firebase.processReferral(newUserId, referrerId);
+                if (referralProcessed) {
+                    addTestResult('Referral Processing', 'success', 'Referral processed successfully');
+                } else {
+                    addTestResult('Referral Processing', 'error', 'Failed to process referral');
+                    return;
+                }
+
+                // Check referrer rewards
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for processing
+                const updatedReferrer = await window.Firebase.getUser(referrerId);
+                if (updatedReferrer && updatedReferrer.referralCount > 0) {
+                    addTestResult('Referral Reward', 'success', 
+                        `Referrer stats updated: ${updatedReferrer.referralCount} referrals, ${updatedReferrer.referralEarnings} earnings`);
+                } else {
+                    addTestResult('Referral Reward', 'error', 'Referrer stats not updated correctly');
+                }
+
+            } catch (error) {
+                addTestResult('Referral Error', 'error', `Exception: ${error.message}`);
+            }
+        };
+
+        // Clear test data
+        window.clearFirebaseData = async function() {
+            if (!confirm('This will clear all test data. Are you sure?')) return;
+
+            try {
+                await window.Firebase.writeData('test', null);
+                
+                // Clear test users
+                const users = await window.Firebase.readData('users');
+                if (users) {
+                    for (const userId in users) {
+                        if (userId.startsWith('test_')) {
+                            await window.Firebase.writeData(`users/${userId}`, null);
+                        }
+                    }
+                }
+
+                addTestResult('Data Cleanup', 'success', 'Test data cleared successfully');
+            } catch (error) {
+                addTestResult('Data Cleanup', 'error', `Failed to clear data: ${error.message}`);
+            }
+        };
+
+        // Run all tests
+        window.runAllTests = async function() {
+            clearResults();
+            addTestResult('Test Suite Started', 'info', 'Running comprehensive tests...');
+
+            await testFirebase();
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            await testReferralSystem();
+
+            addTestResult('Test Suite Complete', 'success', 'All tests completed. Check individual results above.');
+        };
+
+    </script>
+
+    <!-- Load Firebase Configuration -->
+    <script type="module" src="js/firebase-config.js"></script>
+</body>
+</html>
