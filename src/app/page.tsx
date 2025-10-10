@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { ADMIN_SECRET_KEY } from '@/lib/constants';
 import UserDashboard from '@/components/UserDashboard';
@@ -8,21 +9,57 @@ import AdminDashboard from '@/components/AdminDashboard';
 
 export default function Home() {
   const { user } = useAuth();
+  const router = useRouter();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check URL parameters for admin access - no key required
+    // Check if we're in browser mode and need setup
     if (typeof window !== 'undefined') {
+      const isTelegramWebApp = !!(window as any).Telegram?.WebApp;
+      
+      if (!isTelegramWebApp) {
+        // Browser mode - check if user data exists
+        const hasUserData = localStorage.getItem('browserUserData');
+        const urlParams = new URLSearchParams(window.location.search);
+        const isAdminMode = urlParams.get('admin') === 'true';
+        
+        if (!hasUserData && !isAdminMode) {
+          // Redirect to setup with referral if present
+          const referral = urlParams.get('ref') || urlParams.get('start') || urlParams.get('startapp');
+          let setupUrl = '/setup';
+          if (referral) {
+            setupUrl += `?ref=${encodeURIComponent(referral)}`;
+          }
+          router.push(setupUrl);
+          return;
+        }
+      }
+      
+      // Check for admin mode
       const urlParams = new URLSearchParams(window.location.search);
       const adminParam = urlParams.get('admin');
       
-      // Admin mode check - only need admin=true parameter
       if (adminParam === 'true') {
         setIsAdmin(true);
         console.log('Admin mode activated');
       }
     }
-  }, []);
+    
+    setIsLoading(false);
+  }, [router]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
+        <div className="text-center text-white">
+          <div className="animate-spin text-6xl mb-4">🔄</div>
+          <h2 className="text-2xl font-bold">Loading Telegram Mini App...</h2>
+          <p className="text-white/80 mt-2">Initializing your earning dashboard</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-light">

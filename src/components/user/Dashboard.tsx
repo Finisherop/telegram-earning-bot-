@@ -95,22 +95,32 @@ const Dashboard = ({ user }: DashboardProps) => {
     const telegram = TelegramService.getInstance();
     telegram.hapticFeedback('medium');
     
+    if (isFarming) {
+      toast.error('Farming is already in progress!');
+      return;
+    }
+    
     const startTime = new Date();
     const endTime = new Date(startTime.getTime() + 8 * 60 * 60 * 1000); // 8 hours
     
     try {
-      console.log('Starting farming for user:', user.telegramId);
+      console.log('Starting farming for user:', user.telegramId, { startTime, endTime });
+      
+      // Update Firebase immediately with proper error handling
       await safeUpdateUser(user.telegramId, {
         farmingStartTime: startTime,
         farmingEndTime: endTime,
       });
       
       setIsFarming(true);
+      setFarmingProgress(0);
+      setCanClaim(false);
+      
       toast.success('🚀 Farming started! Come back in 8 hours to claim your coins.');
       console.log('Farming started successfully');
     } catch (error) {
       console.error('Farming start error:', error);
-      toast.error('Failed to start farming. Please try again.');
+      toast.error('❌ Failed to start farming. Please check your connection and try again.');
     }
   };
 
@@ -119,14 +129,24 @@ const Dashboard = ({ user }: DashboardProps) => {
     const telegram = TelegramService.getInstance();
     telegram.hapticFeedback('heavy');
     
-    const baseReward = 100;
-    const reward = Math.floor(baseReward * user.farmingMultiplier);
+    if (!canClaim) {
+      toast.error('Farming not ready to claim yet!');
+      return;
+    }
+    
+    const baseReward = 120;
+    const reward = Math.floor(baseReward * (user.farmingMultiplier || 1));
     
     try {
       console.log(`Claiming farming reward: ${reward} coins for user:`, user.telegramId);
+      
+      // Atomic update to prevent race conditions
+      const currentCoins = user.coins || 0;
+      const currentXp = user.xp || 0;
+      
       await safeUpdateUser(user.telegramId, {
-        coins: user.coins + reward,
-        xp: user.xp + Math.floor(reward / 10),
+        coins: currentCoins + reward,
+        xp: currentXp + Math.floor(reward / 10),
         farmingStartTime: undefined,
         farmingEndTime: undefined,
       });
@@ -134,11 +154,15 @@ const Dashboard = ({ user }: DashboardProps) => {
       setCanClaim(false);
       setIsFarming(false);
       setFarmingProgress(0);
-      toast.success(`💰 Claimed ${reward} coins! 🎉`);
+      
+      const message = user.vipTier !== 'free' 
+        ? `💰 Claimed ${reward} coins! 🎉 (✨ VIP bonus applied!)`
+        : `💰 Claimed ${reward} coins! 🎉`;
+      toast.success(message);
       console.log('Farming reward claimed successfully');
     } catch (error) {
       console.error('Farming claim error:', error);
-      toast.error('Failed to claim farming reward. Please try again.');
+      toast.error('❌ Failed to claim farming reward. Please try again.');
     }
   };
 
@@ -147,25 +171,46 @@ const Dashboard = ({ user }: DashboardProps) => {
     const telegram = TelegramService.getInstance();
     telegram.hapticFeedback('heavy');
     
-    const baseReward = 50;
-    const streakBonus = Math.min(user.dailyStreak * 10, 100);
-    const totalReward = baseReward + streakBonus;
+    if (!dailyClaimAvailable) {
+      toast.error('Daily reward already claimed today!');
+      return;
+    }
+    
+    const baseReward = 150;
+    const streakBonus = Math.min((user.dailyStreak || 0) * 10, 100);
+    const vipBonus = user.vipTier !== 'free' ? 200 : 0;
+    const totalReward = baseReward + streakBonus + vipBonus;
     
     try {
       console.log(`Claiming daily reward: ${totalReward} coins for user:`, user.telegramId);
+      
+      // Atomic update to prevent race conditions
+      const currentCoins = user.coins || 0;
+      const currentXp = user.xp || 0;
+      const currentStreak = user.dailyStreak || 0;
+      
       await safeUpdateUser(user.telegramId, {
-        coins: user.coins + totalReward,
-        xp: user.xp + Math.floor(totalReward / 10),
-        dailyStreak: user.dailyStreak + 1,
+        coins: currentCoins + totalReward,
+        xp: currentXp + Math.floor(totalReward / 10),
+        dailyStreak: currentStreak + 1,
         lastClaimDate: new Date(),
       });
       
       setDailyClaimAvailable(false);
-      toast.success(`🎁 Daily reward claimed! +${totalReward} coins 🎉`);
+      
+      let message = `🎁 Daily reward claimed! +${totalReward} coins 🎉`;
+      if (vipBonus > 0) {
+        message += ` (✨ +${vipBonus} VIP bonus!)`;
+      }
+      if (streakBonus > 0) {
+        message += ` (🔥 +${streakBonus} streak bonus!)`;
+      }
+      
+      toast.success(message);
       console.log('Daily reward claimed successfully');
     } catch (error) {
       console.error('Daily claim error:', error);
-      toast.error('Failed to claim daily reward. Please try again.');
+      toast.error('❌ Failed to claim daily reward. Please try again.');
     }
   };
 

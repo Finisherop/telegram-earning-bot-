@@ -13,20 +13,20 @@ export const useAuth = () => {
 
     const initializeUserAuth = async () => {
       try {
-        // Wait a bit for Telegram service to initialize
+        // Wait for Telegram service to initialize
         await new Promise(resolve => setTimeout(resolve, 1000));
         
         const telegram = TelegramService.getInstance();
         const telegramUser = telegram.getUser();
         const startParam = telegram.getStartParam();
 
-        console.log('Initializing user with:', { telegramUser, startParam });
+        console.log('Initializing user auth with:', { telegramUser, startParam });
 
         let userId: string;
         let userData: Partial<User>;
 
-        if (telegramUser && telegramUser.id !== 123456789) {
-          // Real Telegram user
+        if (telegramUser && telegramUser.id && telegramUser.id > 0) {
+          // Real Telegram user or valid browser user
           userId = telegramUser.id.toString();
           userData = {
             telegramId: userId,
@@ -36,55 +36,51 @@ export const useAuth = () => {
             profilePic: telegramUser.photo_url,
             referrerId: startParam || undefined,
           };
-          console.log('Using real Telegram user:', userData);
+          console.log('Using authenticated user:', userData);
         } else {
-          // Default user - always create one
-          userId = 'default_user_123';
-          userData = {
-            telegramId: userId,
-            username: 'user',
-            firstName: 'User',
-            lastName: '',
-            referrerId: startParam || undefined,
-          };
-          console.log('Using default user:', userData);
+          // This should not happen with the improved fallback
+          console.warn('No valid user data available');
+          return;
         }
 
         try {
-          // Initialize user safely (creates if doesn't exist)
+          // Initialize or get existing user
           let existingUser = await getUser(userId);
           
           if (!existingUser) {
+            console.log('Creating new user:', userId);
             existingUser = await initializeUser(userId);
           }
           
-          // Update user with Telegram data if we have it
-          if (telegramUser && telegramUser.id !== 123456789) {
-            existingUser = await safeUpdateUser(userId, {
-              username: telegramUser.username,
-              firstName: telegramUser.first_name,
-              lastName: telegramUser.last_name,
-              profilePic: telegramUser.photo_url,
-              referrerId: startParam || undefined,
-            });
-          }
+          // Update user with latest Telegram data
+          existingUser = await safeUpdateUser(userId, {
+            username: telegramUser.username,
+            firstName: telegramUser.first_name,
+            lastName: telegramUser.last_name,
+            profilePic: telegramUser.photo_url,
+          });
           
-          // Handle referral if startParam exists and user is new
+          // Handle referral for new users
           if (startParam && startParam !== userId && existingUser.createdAt) {
             const createdTime = new Date(existingUser.createdAt).getTime();
             const now = new Date().getTime();
-            const isNewUser = (now - createdTime) < 60000; // Created within last minute
+            const isNewUser = (now - createdTime) < 300000; // Created within last 5 minutes
             
-            if (isNewUser) {
+            if (isNewUser && !existingUser.referrerId) {
               console.log('Processing referral for new user:', startParam);
               try {
-                // Add referral count to referrer using safe update
+                // Set referrer for new user
+                await safeUpdateUser(userId, {
+                  referrerId: startParam,
+                });
+                
+                // Add referral reward to referrer
                 const referrer = await getUser(startParam);
                 if (referrer) {
                   await safeUpdateUser(startParam, {
                     referralCount: (referrer.referralCount || 0) + 1,
-                    referralEarnings: (referrer.referralEarnings || 0) + 100, // 100 coins reward
-                    coins: (referrer.coins || 0) + 100,
+                    referralEarnings: (referrer.referralEarnings || 0) + 500,
+                    coins: (referrer.coins || 0) + 500,
                   });
                   console.log('Referral reward given to:', startParam);
                 }
@@ -104,9 +100,9 @@ export const useAuth = () => {
           });
 
         } catch (firebaseError) {
-          console.error('Firebase error, using local user:', firebaseError);
+          console.error('Firebase error:', firebaseError);
           
-          // Create a local user if Firebase fails
+          // Create a local user if Firebase fails temporarily
           const localUser: User = {
             id: userId,
             telegramId: userId,
@@ -114,8 +110,8 @@ export const useAuth = () => {
             firstName: userData.firstName || 'User',
             lastName: userData.lastName || '',
             profilePic: userData.profilePic,
-            coins: 1000,
-            xp: 100,
+            coins: 0,
+            xp: 0,
             level: 1,
             vipTier: 'free',
             farmingMultiplier: 1.0,
@@ -135,15 +131,15 @@ export const useAuth = () => {
       } catch (err) {
         console.error('Auth initialization error:', err);
         
-        // Always provide a fallback user
+        // Fallback user only if everything fails
         const fallbackUser: User = {
-          id: 'fallback_user_123',
-          telegramId: 'fallback_user_123',
-          username: 'user',
-          firstName: 'User',
+          id: 'error_user_' + Date.now(),
+          telegramId: 'error_user_' + Date.now(),
+          username: 'erroruser',
+          firstName: 'Error User',
           lastName: '',
-          coins: 1000,
-          xp: 100,
+          coins: 0,
+          xp: 0,
           level: 1,
           vipTier: 'free',
           farmingMultiplier: 1.0,

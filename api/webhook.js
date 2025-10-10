@@ -1,11 +1,25 @@
-// Webhook Handler for Telegram Bot
-// This handles incoming updates from Telegram
-
-// Import Firebase (you may need to adjust this based on your setup)
-// const admin = require('firebase-admin');
-
+// Webhook Handler for Telegram Bot with Firebase Integration
 const BOT_TOKEN = process.env.BOT_TOKEN || '8484469509:AAHNw8rM2fzw35Lp1d_UTLjdFhobasHoOnM';
 const APP_URL = process.env.APP_URL || 'https://telegram-earning-bot.vercel.app';
+
+// Firebase Admin Setup (if available)
+let admin;
+try {
+  admin = require('firebase-admin');
+  if (!admin.apps.length) {
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID || 'telegram-bot-2be45',
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      }),
+      databaseURL: process.env.FIREBASE_DATABASE_URL || 'https://telegram-bot-2be45-default-rtdb.firebaseio.com'
+    });
+  }
+} catch (error) {
+  console.warn('Firebase Admin not available, using HTTP API fallback');
+  admin = null;
+}
 
 class WebhookHandler {
     constructor() {
@@ -42,6 +56,9 @@ class WebhookHandler {
 
         console.log(`👤 User ${user.id} (${user.first_name}): ${text}`);
 
+        // Store/update user data in Firebase
+        await this.createOrUpdateUser(user, null);
+
         if (text.startsWith('/start')) {
             await this.handleStart(chatId, user, text);
         } else if (text === '/app') {
@@ -59,20 +76,20 @@ class WebhookHandler {
         const referralMatch = text.match(/\/start (.+)/);
         const referralCode = referralMatch ? referralMatch[1] : null;
 
-        // Store user data in Firebase (implement this based on your Firebase setup)
+        // Store user data with referral in Firebase
         await this.createOrUpdateUser(user, referralCode);
 
         const welcomeMessage = `
-🎉 <b>Welcome to Earning Bot!</b>
+🎉 <b>Welcome to the Earning Bot!</b>
 
 👋 Hi ${user.first_name}! Ready to start earning coins?
 
 🌟 <b>What you can do:</b>
-💰 Farm coins automatically  
-📋 Complete tasks for rewards
-👥 Refer friends and earn bonuses
-🎁 Daily claim rewards
-💎 Upgrade to VIP for 2x rewards
+💰 Farm coins automatically (120+ coins per 8 hours)
+📋 Complete tasks for instant rewards
+👥 Refer friends and earn 500 coins each
+🎁 Claim daily rewards (150-350 coins)
+💎 Upgrade to VIP for 2x farming rewards
 
 🎮 <b>Click the button below to open the app!</b>
         `;
@@ -81,17 +98,18 @@ class WebhookHandler {
             inline_keyboard: [
                 [{ 
                     text: '🎮 Open Earning App', 
-                    web_app: { url: referralCode ? `${APP_URL}?ref=${referralCode}` : APP_URL }
+                    web_app: { url: referralCode ? `${APP_URL}?start=${referralCode}` : APP_URL }
                 }],
                 [
-                    { text: '📊 Stats', callback_data: 'stats' },
+                    { text: '📊 My Stats', callback_data: 'stats' },
                     { text: '❓ Help', callback_data: 'help' }
                 ]
             ]
         };
 
         await this.botAPI.sendMessage(chatId, welcomeMessage, {
-            reply_markup: keyboard
+            reply_markup: keyboard,
+            parse_mode: 'HTML'
         });
     }
 
@@ -270,30 +288,135 @@ Click the button below to start earning:
         }
     }
 
-    // Helper methods (implement these based on your Firebase setup)
+    // Helper methods - Firebase integration
     async createOrUpdateUser(user, referralCode) {
-        // Implement Firebase user creation/update
-        console.log(`Creating/updating user ${user.id} with referral: ${referralCode}`);
-        // This should integrate with your existing Firebase user creation logic
+        try {
+            console.log(`Creating/updating user ${user.id} with referral: ${referralCode}`);
+            
+            const userData = {
+                telegramId: user.id.toString(),
+                username: user.username || '',
+                firstName: user.first_name,
+                lastName: user.last_name || '',
+                profilePic: user.photo_url || null,
+                referrerId: referralCode,
+                updatedAt: new Date().toISOString(),
+            };
+            
+            if (admin) {
+                // Use Firebase Admin SDK
+                const userRef = admin.database().ref(`users/${user.id}`);
+                const userSnapshot = await userRef.once('value');
+                
+                if (!userSnapshot.exists()) {
+                    // New user - create with defaults
+                    const newUser = {
+                        ...userData,
+                        coins: 0,
+                        xp: 0,
+                        level: 1,
+                        vipTier: 'free',
+                        farmingMultiplier: 1.0,
+                        referralMultiplier: 1.0,
+                        referralCount: 0,
+                        referralEarnings: 0,
+                        dailyStreak: 0,
+                        createdAt: new Date().toISOString(),
+                    };
+                    
+                    await userRef.set(newUser);
+                    
+                    // Process referral if exists
+                    if (referralCode && referralCode !== user.id.toString()) {
+                        const referrerRef = admin.database().ref(`users/${referralCode}`);
+                        const referrerSnapshot = await referrerRef.once('value');
+                        if (referrerSnapshot.exists()) {
+                            const referrerData = referrerSnapshot.val();
+                            await referrerRef.update({
+                                referralCount: (referrerData.referralCount || 0) + 1,
+                                coins: (referrerData.coins || 0) + 500,
+                                referralEarnings: (referrerData.referralEarnings || 0) + 500,
+                                updatedAt: new Date().toISOString(),
+                            });
+                            console.log(`Referral bonus given to user ${referralCode}`);
+                        }
+                    }
+                } else {
+                    // Existing user - update data
+                    await userRef.update(userData);
+                }
+            } else {
+                console.log('Firebase Admin not available, user data stored locally in bot session');
+            }
+            
+        } catch (error) {
+            console.error('Error creating/updating user:', error);
+        }
     }
 
     async getUserStats(userId) {
-        // Implement Firebase user stats retrieval
-        console.log(`Getting stats for user ${userId}`);
-        // Return mock data for now
-        return {
-            coins: 1500,
-            isFarming: true,
-            referralCount: 3,
-            totalEarned: 5000,
-            vipActive: false
-        };
+        try {
+            if (admin) {
+                const userRef = admin.database().ref(`users/${userId}`);
+                const userSnapshot = await userRef.once('value');
+                
+                if (userSnapshot.exists()) {
+                    const userData = userSnapshot.val();
+                    return {
+                        coins: userData.coins || 0,
+                        isFarming: !!(userData.farmingStartTime && userData.farmingEndTime),
+                        referralCount: userData.referralCount || 0,
+                        totalEarned: (userData.coins || 0) + (userData.referralEarnings || 0),
+                        vipActive: userData.vipTier && userData.vipTier !== 'free',
+                    };
+                }
+            }
+            
+            // Fallback data
+            return {
+                coins: 0,
+                isFarming: false,
+                referralCount: 0,
+                totalEarned: 0,
+                vipActive: false
+            };
+        } catch (error) {
+            console.error('Error getting user stats:', error);
+            return {
+                coins: 0,
+                isFarming: false,
+                referralCount: 0,
+                totalEarned: 0,
+                vipActive: false
+            };
+        }
     }
 
     async activateVIP(userId, plan) {
-        // Implement Firebase VIP activation
-        console.log(`Activating VIP for user ${userId}, plan: ${plan}`);
-        // This should integrate with your existing Firebase VIP activation logic
+        try {
+            console.log(`Activating VIP for user ${userId}, plan: ${plan}`);
+            
+            if (admin) {
+                const userRef = admin.database().ref(`users/${userId}`);
+                const vipEndTime = new Date();
+                vipEndTime.setDate(vipEndTime.getDate() + 30); // 30 days
+                
+                const vipData = {
+                    vipTier: plan.toLowerCase().includes('vip2') ? 'vip2' : 'vip1',
+                    vipEndTime: vipEndTime.toISOString(),
+                    farmingMultiplier: plan.toLowerCase().includes('vip2') ? 3.0 : 2.0,
+                    referralMultiplier: plan.toLowerCase().includes('vip2') ? 2.0 : 1.5,
+                    updatedAt: new Date().toISOString(),
+                };
+                
+                await userRef.update(vipData);
+                console.log(`VIP ${plan} activated for user ${userId} until ${vipEndTime}`);
+            } else {
+                console.log('Firebase Admin not available, VIP activation logged only');
+            }
+        } catch (error) {
+            console.error('Error activating VIP:', error);
+        }
     }
 }
 

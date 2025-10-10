@@ -118,16 +118,55 @@ export class TelegramService {
   }
 
   private setupFallbackMode() {
-    // Always create a default user - no complex conditions
-    this.user = {
-      id: 123456789,
-      first_name: 'User',
-      last_name: '',
-      username: 'user',
-      language_code: 'en',
-      is_premium: false
-    };
+    // Generate unique user ID for browser users
+    let browserId = localStorage.getItem('browserId');
+    if (!browserId) {
+      browserId = 'browser_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('browserId', browserId);
+    }
+    
+    // Get user data from localStorage or create new
+    const storedUserData = localStorage.getItem('browserUserData');
+    if (storedUserData) {
+      try {
+        const userData = JSON.parse(storedUserData);
+        this.user = {
+          id: parseInt(browserId.replace('browser_', '')) || Date.now(),
+          first_name: userData.first_name || 'Browser User',
+          last_name: userData.last_name || '',
+          username: userData.username || 'browseruser',
+          language_code: userData.language_code || 'en',
+          is_premium: false
+        };
+      } catch (error) {
+        console.error('Error parsing stored user data:', error);
+      }
+    }
+    
+    // If no user data, create default but prompt for setup
+    if (!this.user) {
+      this.user = {
+        id: parseInt(browserId.replace('browser_', '')) || Date.now(),
+        first_name: 'Browser User',
+        last_name: '',
+        username: 'browseruser',
+        language_code: 'en',
+        is_premium: false
+      };
+    }
+    
+    // Check for referral in URL
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const referral = urlParams.get('ref') || urlParams.get('start') || urlParams.get('startapp');
+      if (referral) {
+        this.startParam = referral;
+        console.log('Browser referral detected:', referral);
+      }
+    }
+    
     this.isInitialized = true;
+    console.log('Browser fallback mode setup completed:', this.user);
   }
 
   private setupWebApp() {
@@ -147,13 +186,16 @@ export class TelegramService {
       // Log all available data for debugging
       console.log('WebApp initData:', this.webApp.initData);
       console.log('WebApp initDataUnsafe:', this.webApp.initDataUnsafe);
+      console.log('WebApp version:', this.webApp.version);
+      console.log('WebApp platform:', this.webApp.platform);
       
-      // Get user data from Telegram
+      // Get user data from Telegram with better validation
       if (this.webApp.initDataUnsafe?.user) {
         const userData = this.webApp.initDataUnsafe.user;
-        console.log('Telegram user data:', userData);
+        console.log('Raw Telegram user data:', userData);
         
-        if (userData.id && userData.first_name) {
+        // Validate user data more thoroughly
+        if (userData.id && typeof userData.id === 'number' && userData.id > 0 && userData.first_name) {
           this.user = {
             id: userData.id,
             first_name: userData.first_name,
@@ -163,31 +205,39 @@ export class TelegramService {
             language_code: userData.language_code || 'en',
             is_premium: userData.is_premium || false
           };
-          console.log('User data set:', this.user);
+          console.log('Valid Telegram user data set:', this.user);
+        } else {
+          console.warn('Invalid Telegram user data:', userData);
+        }
+      } else {
+        console.log('No user data in initDataUnsafe');
+      }
+      
+      // Get start parameter with comprehensive checking
+      const startSources = [
+        this.webApp.initDataUnsafe?.start_param,
+        this.webApp.initDataUnsafe?.startapp,
+        new URLSearchParams(window.location.search).get('tgWebAppStartParam'),
+        new URLSearchParams(window.location.search).get('start'),
+        new URLSearchParams(window.location.search).get('startapp'),
+        new URLSearchParams(window.location.search).get('ref'),
+      ];
+      
+      for (const source of startSources) {
+        if (source) {
+          this.startParam = source;
+          console.log('Start param found:', this.startParam, 'from source');
+          break;
         }
       }
       
-      // Get start parameter (for referrals) - check multiple sources
-      if (this.webApp.initDataUnsafe?.start_param) {
-        this.startParam = this.webApp.initDataUnsafe.start_param;
-        console.log('Start param from initDataUnsafe:', this.startParam);
-      } else if (typeof window !== 'undefined') {
-        // Also check URL parameters as fallback
-        const urlParams = new URLSearchParams(window.location.search);
-        const startParam = urlParams.get('tgWebAppStartParam') || urlParams.get('start');
-        if (startParam) {
-          this.startParam = startParam;
-          console.log('Start param from URL:', this.startParam);
-        }
-      }
-      
-      // If no user data, use fallback but keep any referral data
-      if (!this.user) {
-        console.log('No user data found, using fallback');
+      // If no valid user data from Telegram, use enhanced fallback
+      if (!this.user || !this.user.id || this.user.id <= 0) {
+        console.log('No valid Telegram user data, using enhanced fallback');
         this.setupFallbackMode();
       } else {
         this.isInitialized = true;
-        console.log('Telegram WebApp setup completed successfully');
+        console.log('Telegram WebApp setup completed successfully with real user:', this.user);
       }
       
     } catch (error) {
@@ -287,10 +337,14 @@ export class TelegramService {
     }
   }
 
-  // Telegram Invoice Payment Integration
+  // Telegram Invoice Payment Integration - Enhanced
   public async createInvoice(amount: number, description: string, tier: 'vip1' | 'vip2'): Promise<string | null> {
     try {
       console.log(`Creating invoice for ${tier}: ${amount} Stars - ${description}`);
+      
+      if (!this.user?.id) {
+        throw new Error('User not authenticated');
+      }
       
       // Call your backend API to create Telegram invoice
       const response = await fetch('/api/create-invoice', {
@@ -302,36 +356,50 @@ export class TelegramService {
           amount: amount,
           description: description,
           tier: tier,
-          userId: this.user?.id
+          userId: this.user.id,
+          chatId: this.user.id, // Same as userId for direct messages
+          title: `${tier.toUpperCase()} Membership - 30 Days`,
         })
       });
       
-      if (response.ok) {
-        const data = await response.json();
+      const data = await response.json();
+      console.log('Invoice API response:', data);
+      
+      if (response.ok && data.success) {
+        console.log('Invoice created successfully:', data.invoiceUrl);
         return data.invoiceUrl;
       } else {
-        console.error('Failed to create invoice:', response.statusText);
+        console.error('Failed to create invoice:', data.error || response.statusText);
+        this.showAlert(`❌ Payment system error: ${data.error || 'Unknown error'}`);
         return null;
       }
     } catch (error) {
       console.error('Invoice creation error:', error);
+      this.showAlert('❌ Payment system temporarily unavailable. Please try again later.');
       return null;
     }
   }
 
   public async requestStarsPayment(amount: number, description: string, tier: 'vip1' | 'vip2'): Promise<boolean> {
     return new Promise(async (resolve) => {
-      // Validate inputs
+      // Enhanced validation
       if (!amount || amount <= 0) {
         console.error('Invalid payment amount:', amount);
-        this.showAlert('Invalid payment amount');
+        this.showAlert('❌ Invalid payment amount');
         resolve(false);
         return;
       }
 
       if (!description || !tier) {
         console.error('Missing payment description or tier');
-        this.showAlert('Payment configuration error');
+        this.showAlert('❌ Payment configuration error');
+        resolve(false);
+        return;
+      }
+
+      if (!this.user?.id) {
+        console.error('User not authenticated');
+        this.showAlert('❌ Please refresh the app and try again');
         resolve(false);
         return;
       }
@@ -340,8 +408,10 @@ export class TelegramService {
         console.log(`Requesting payment: ${amount} Stars for ${description}`);
         this.hapticFeedback('medium');
         
-        // Check if we have WebApp and openInvoice function
+        // Check if we have WebApp with invoice support
         const hasInvoiceSupport = this.webApp && 
+          this.webApp.version && 
+          parseFloat(this.webApp.version) >= 6.1 &&
           typeof this.webApp.openInvoice === 'function';
         
         if (hasInvoiceSupport) {
@@ -349,94 +419,151 @@ export class TelegramService {
           const invoiceUrl = await this.createInvoice(amount, description, tier);
           
           if (invoiceUrl) {
-            console.log('Opening invoice:', invoiceUrl);
+            console.log('Opening invoice with Telegram WebApp:', invoiceUrl);
             
-            // Open Telegram invoice with timeout
+            // Set up payment timeout
             const paymentTimeout = setTimeout(() => {
               console.warn('Payment timeout - no response from Telegram');
+              this.showAlert('⏰ Payment timeout. Please try again.');
               resolve(false);
             }, 300000); // 5 minutes timeout
             
+            // Open invoice with callback
             this.webApp.openInvoice(invoiceUrl, (status: string) => {
               clearTimeout(paymentTimeout);
-              console.log('Payment status:', status);
+              console.log('Payment callback received:', status);
               
               switch (status) {
                 case 'paid':
                   this.hapticFeedback('heavy');
-                  this.showAlert('Payment successful! VIP activated.', () => {
-                    resolve(true);
+                  console.log('Payment successful, activating VIP...');
+                  this.activateVIPAfterPayment(tier).then(() => {
+                    this.showAlert('🎉 Payment successful! VIP activated for 30 days!', () => {
+                      resolve(true);
+                    });
                   });
                   break;
                 case 'cancelled':
-                  this.showAlert('Payment cancelled.');
+                  console.log('Payment cancelled by user');
+                  this.showAlert('❌ Payment cancelled.');
                   resolve(false);
                   break;
                 case 'failed':
-                  this.showAlert('Payment failed. Please try again.');
+                  console.log('Payment failed');
+                  this.showAlert('❌ Payment failed. Please try again.');
                   resolve(false);
                   break;
                 case 'pending':
-                  this.showAlert('Payment is being processed...');
-                  // Keep waiting for final status
+                  console.log('Payment pending');
+                  this.showAlert('⏳ Payment is being processed...');
+                  // Continue waiting for final status
                   break;
                 default:
                   console.warn('Unknown payment status:', status);
+                  this.showAlert('❓ Payment status unknown. Please contact support if charged.');
                   resolve(false);
               }
             });
           } else {
-            console.warn('Failed to create invoice, using fallback');
-            this.useFallbackPayment(amount, description, tier, resolve);
+            console.warn('Failed to create invoice, using test mode');
+            this.useTestPayment(amount, description, tier, resolve);
           }
         } else {
-          console.warn('Invoice API not available, using fallback');
-          this.useFallbackPayment(amount, description, tier, resolve);
+          console.warn('Invoice API not available, using test mode');
+          console.log('WebApp version:', this.webApp?.version, 'Has openInvoice:', typeof this.webApp?.openInvoice);
+          this.useTestPayment(amount, description, tier, resolve);
         }
       } catch (error) {
         console.error('Payment request error:', error);
-        this.showAlert('Payment error. Please try again.');
+        this.showAlert('❌ Payment error. Please check your connection and try again.');
         resolve(false);
       }
     });
   }
 
-  private useFallbackPayment(
+  private async activateVIPAfterPayment(tier: 'vip1' | 'vip2'): Promise<void> => {
+    try {
+      if (!this.user?.id) {
+        throw new Error('User not authenticated');
+      }
+
+      // Import the activation function dynamically to avoid circular dependency
+      const { activateSubscription } = await import('@/lib/firebaseService');
+      
+      console.log(`Activating VIP ${tier} for user:`, this.user.id);
+      await activateSubscription(this.user.id.toString(), tier, 30); // 30 days
+      
+      console.log('VIP activation completed successfully');
+    } catch (error) {
+      console.error('VIP activation error:', error);
+      this.showAlert('✅ Payment received! VIP activation in progress...');
+    }
+  }
+
+  private useTestPayment(
     amount: number, 
     description: string, 
     tier: string, 
     resolve: (value: boolean) => void
   ) {
-    // Fallback: Show confirmation dialog for testing
-    this.showConfirm(
-      `💰 Pay ${amount} Stars for ${description}?\n\n⭐ This will activate ${tier.toUpperCase()} benefits for 30 days\n\n(Test mode - no actual payment required)`,
-      (confirmed) => {
-        if (confirmed) {
-          this.hapticFeedback('heavy');
-          // Simulate successful payment for testing
-          this.showAlert('✅ Payment successful! VIP activated.', () => {
+    // Enhanced test mode for development/browser testing
+    const testMessage = `💰 Test Payment: ${amount} Stars\n\n` +
+                       `📦 ${description}\n\n` +
+                       `⭐ This will activate ${tier.toUpperCase()} benefits for 30 days\n\n` +
+                       `🧪 Test mode - no actual payment required\n\n` +
+                       `Continue with test activation?`;
+    
+    this.showConfirm(testMessage, async (confirmed) => {
+      if (confirmed) {
+        this.hapticFeedback('heavy');
+        try {
+          // Simulate successful payment and activate VIP
+          await this.activateVIPAfterPayment(tier as 'vip1' | 'vip2');
+          this.showAlert('✅ Test payment successful! VIP activated for testing.', () => {
             resolve(true);
           });
-        } else {
+        } catch (error) {
+          console.error('Test payment activation error:', error);
+          this.showAlert('❌ Test activation failed. Please try again.');
           resolve(false);
         }
+      } else {
+        resolve(false);
       }
-    );
+    });
   }
 
   public generateReferralLink(userId: string): string {
-    return `https://t.me/Finisher_task_bot?start=${userId}`;
+    return `https://t.me/finisher_task_bot?start=${userId}`;
   }
 
   public shareReferralLink(userId: string): void {
     const link = this.generateReferralLink(userId);
-    const text = `🎉 Join me on this amazing Telegram Mini App and earn coins together! 💰\n\n${link}`;
+    const text = `🎉 Join me on this amazing Telegram earning bot and earn coins together! 💰\n\n🎮 Start earning with my referral link:\n${link}\n\n💎 You'll get bonus coins when you join!`;
     
-    if (this.webApp) {
-      this.webApp.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
+    if (this.webApp && typeof this.webApp.openTelegramLink === 'function') {
+      const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`;
+      this.webApp.openTelegramLink(shareUrl);
+    } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(link).then(() => {
+        this.showAlert('🔗 Referral link copied to clipboard!');
+      }).catch(() => {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = link;
+        document.body.appendChild(textArea);
+        textArea.select();
+        try {
+          document.execCommand('copy');
+          this.showAlert('🔗 Referral link copied to clipboard!');
+        } catch (err) {
+          this.showAlert(`Your referral link: ${link}`);
+        }
+        document.body.removeChild(textArea);
+      });
     } else {
-      navigator.clipboard.writeText(link);
-      this.showAlert('Referral link copied to clipboard!');
+      // Ultimate fallback - show the link
+      this.showAlert(`Your referral link: ${link}`);
     }
   }
 }

@@ -31,23 +31,24 @@ import { VIP_TIERS, DEFAULT_SETTINGS } from './constants';
 // Real-time listeners
 const listeners = new Map<string, () => void>();
 
-// Real-time user data listener
+// Use Realtime Database for instant sync
 export const subscribeToUser = (userId: string, callback: (user: User | null) => void): (() => void) => {
-  const userRef = doc(db, 'users', userId);
+  const userRef = ref(realtimeDb, `users/${userId}`);
   
-  const unsubscribe = onSnapshot(userRef, (doc) => {
-    if (doc.exists()) {
-      const userData = doc.data();
+  const unsubscribe = onValue(userRef, (snapshot) => {
+    if (snapshot.exists()) {
+      const userData = snapshot.val();
       const user: User = {
         ...userData,
-        id: doc.id,
-        createdAt: userData.createdAt?.toDate ? userData.createdAt.toDate() : new Date(userData.createdAt),
-        updatedAt: userData.updatedAt?.toDate ? userData.updatedAt.toDate() : new Date(userData.updatedAt),
-        lastClaimDate: userData.lastClaimDate?.toDate ? userData.lastClaimDate.toDate() : userData.lastClaimDate ? new Date(userData.lastClaimDate) : undefined,
-        farmingStartTime: userData.farmingStartTime?.toDate ? userData.farmingStartTime.toDate() : userData.farmingStartTime ? new Date(userData.farmingStartTime) : undefined,
-        farmingEndTime: userData.farmingEndTime?.toDate ? userData.farmingEndTime.toDate() : userData.farmingEndTime ? new Date(userData.farmingEndTime) : undefined,
-        vipEndTime: userData.vipEndTime?.toDate ? userData.vipEndTime.toDate() : userData.vipEndTime ? new Date(userData.vipEndTime) : undefined,
-      } as User;
+        id: userId,
+        createdAt: userData.createdAt ? new Date(userData.createdAt) : new Date(),
+        updatedAt: userData.updatedAt ? new Date(userData.updatedAt) : new Date(),
+        lastClaimDate: userData.lastClaimDate ? new Date(userData.lastClaimDate) : undefined,
+        farmingStartTime: userData.farmingStartTime ? new Date(userData.farmingStartTime) : undefined,
+        farmingEndTime: userData.farmingEndTime ? new Date(userData.farmingEndTime) : undefined,
+        vipEndTime: userData.vipEndTime ? new Date(userData.vipEndTime) : undefined,
+      };
+      console.log('Real-time user update:', user);
       callback(user);
     } else {
       callback(null);
@@ -58,47 +59,52 @@ export const subscribeToUser = (userId: string, callback: (user: User | null) =>
   });
 
   const listenerId = `user_${userId}`;
-  listeners.set(listenerId, unsubscribe);
+  listeners.set(listenerId, () => off(userRef, 'value', unsubscribe));
   
-  return unsubscribe;
+  return () => off(userRef, 'value', unsubscribe);
 };
 
-// Real-time tasks listener
+// Real-time tasks listener using Realtime Database
 export const subscribeToTasks = (callback: (tasks: Task[]) => void): (() => void) => {
-  const tasksRef = collection(db, 'tasks');
-  const q = query(tasksRef, where('isActive', '==', true), orderBy('createdAt', 'desc'));
+  const tasksRef = ref(realtimeDb, 'tasks');
   
-  const unsubscribe = onSnapshot(q, (snapshot) => {
+  const unsubscribe = onValue(tasksRef, (snapshot) => {
     const tasks: Task[] = [];
-    snapshot.forEach((doc) => {
-      const taskData = doc.data();
-      tasks.push({
-        ...taskData,
-        id: doc.id,
-        createdAt: taskData.createdAt?.toDate ? taskData.createdAt.toDate() : new Date(taskData.createdAt),
-        updatedAt: taskData.updatedAt?.toDate ? taskData.updatedAt.toDate() : new Date(taskData.updatedAt),
-      } as Task);
-    });
+    if (snapshot.exists()) {
+      const tasksData = snapshot.val();
+      Object.keys(tasksData).forEach((taskId) => {
+        const taskData = tasksData[taskId];
+        if (taskData.isActive) {
+          tasks.push({
+            ...taskData,
+            id: taskId,
+            createdAt: taskData.createdAt ? new Date(taskData.createdAt) : new Date(),
+            updatedAt: taskData.updatedAt ? new Date(taskData.updatedAt) : new Date(),
+          });
+        }
+      });
+    }
+    console.log('Real-time tasks update:', tasks);
     callback(tasks);
   }, (error) => {
     console.error('Error listening to tasks:', error);
     callback([]);
   });
 
-  listeners.set('tasks', unsubscribe);
-  return unsubscribe;
+  listeners.set('tasks', () => off(tasksRef, 'value', unsubscribe));
+  return () => off(tasksRef, 'value', unsubscribe);
 };
 
 // Real-time admin settings listener
 export const subscribeToAdminSettings = (callback: (settings: AdminSettings) => void): (() => void) => {
-  const settingsRef = doc(db, 'admin', 'settings');
+  const settingsRef = ref(realtimeDb, 'admin/settings');
   
-  const unsubscribe = onSnapshot(settingsRef, (doc) => {
-    if (doc.exists()) {
-      const settingsData = doc.data();
+  const unsubscribe = onValue(settingsRef, (snapshot) => {
+    if (snapshot.exists()) {
+      const settingsData = snapshot.val();
       const adminSettings = {
-        ...(settingsData as any),
-        updatedAt: settingsData.updatedAt?.toDate ? settingsData.updatedAt.toDate() : new Date(settingsData.updatedAt),
+        ...settingsData,
+        updatedAt: settingsData.updatedAt ? new Date(settingsData.updatedAt) : new Date(),
       } as AdminSettings;
       callback(adminSettings);
     } else {
@@ -107,7 +113,10 @@ export const subscribeToAdminSettings = (callback: (settings: AdminSettings) => 
         ...DEFAULT_SETTINGS,
         updatedAt: new Date(),
       };
-      setDoc(settingsRef, defaultSettings);
+      set(settingsRef, {
+        ...defaultSettings,
+        updatedAt: defaultSettings.updatedAt.toISOString(),
+      });
       callback(defaultSettings);
     }
   }, (error) => {
@@ -115,26 +124,28 @@ export const subscribeToAdminSettings = (callback: (settings: AdminSettings) => 
     callback(DEFAULT_SETTINGS);
   });
 
-  listeners.set('admin_settings', unsubscribe);
-  return unsubscribe;
+  listeners.set('admin_settings', () => off(settingsRef, 'value', unsubscribe));
+  return () => off(settingsRef, 'value', unsubscribe);
 };
 
 // Real-time user tasks listener
 export const subscribeToUserTasks = (userId: string, callback: (userTasks: UserTask[]) => void): (() => void) => {
-  const userTasksRef = collection(db, 'userTasks');
-  const q = query(userTasksRef, where('userId', '==', userId));
+  const userTasksRef = ref(realtimeDb, `userTasks/${userId}`);
   
-  const unsubscribe = onSnapshot(q, (snapshot) => {
+  const unsubscribe = onValue(userTasksRef, (snapshot) => {
     const userTasks: UserTask[] = [];
-    snapshot.forEach((doc) => {
-      const taskData = doc.data();
-      userTasks.push({
-        ...taskData,
-        id: doc.id,
-        completedAt: taskData.completedAt?.toDate ? taskData.completedAt.toDate() : taskData.completedAt ? new Date(taskData.completedAt) : undefined,
-        claimedAt: taskData.claimedAt?.toDate ? taskData.claimedAt.toDate() : taskData.claimedAt ? new Date(taskData.claimedAt) : undefined,
-      } as UserTask);
-    });
+    if (snapshot.exists()) {
+      const userTasksData = snapshot.val();
+      Object.keys(userTasksData).forEach((taskId) => {
+        const taskData = userTasksData[taskId];
+        userTasks.push({
+          ...taskData,
+          id: taskId,
+          completedAt: taskData.completedAt ? new Date(taskData.completedAt) : undefined,
+          claimedAt: taskData.claimedAt ? new Date(taskData.claimedAt) : undefined,
+        });
+      });
+    }
     callback(userTasks);
   }, (error) => {
     console.error('Error listening to user tasks:', error);
@@ -142,25 +153,25 @@ export const subscribeToUserTasks = (userId: string, callback: (userTasks: UserT
   });
 
   const listenerId = `user_tasks_${userId}`;
-  listeners.set(listenerId, unsubscribe);
-  return unsubscribe;
+  listeners.set(listenerId, () => off(userTasksRef, 'value', unsubscribe));
+  return () => off(userTasksRef, 'value', unsubscribe);
 };
 
 // Cleanup function to remove all listeners
 export const cleanupListeners = () => {
-  listeners.forEach((unsubscribe) => {
-    unsubscribe();
+  listeners.forEach((cleanup) => {
+    cleanup();
   });
   listeners.clear();
 };
 
-// Initialize user document with default values if it doesn't exist
+// Initialize user with Realtime Database
 export const initializeUser = async (userId: string): Promise<User> => {
   try {
-    const userRef = doc(db, 'users', userId);
-    const userDoc = await getDoc(userRef);
+    const userRef = ref(realtimeDb, `users/${userId}`);
+    const userSnapshot = await get(userRef);
     
-    if (!userDoc.exists()) {
+    if (!userSnapshot.exists()) {
       console.log('Creating new user document for:', userId);
       const defaultUserData: User = {
         id: userId,
@@ -188,19 +199,23 @@ export const initializeUser = async (userId: string): Promise<User> => {
         updatedAt: new Date(),
       };
       
-      await setDoc(userRef, defaultUserData);
+      await set(userRef, {
+        ...defaultUserData,
+        createdAt: defaultUserData.createdAt.toISOString(),
+        updatedAt: defaultUserData.updatedAt.toISOString(),
+      });
       return defaultUserData;
     } else {
-      const userData = userDoc.data();
+      const userData = userSnapshot.val();
       return {
         ...userData,
-        id: userDoc.id,
-        createdAt: userData.createdAt?.toDate ? userData.createdAt.toDate() : new Date(userData.createdAt),
-        updatedAt: userData.updatedAt?.toDate ? userData.updatedAt.toDate() : new Date(userData.updatedAt),
-        lastClaimDate: userData.lastClaimDate?.toDate ? userData.lastClaimDate.toDate() : userData.lastClaimDate ? new Date(userData.lastClaimDate) : undefined,
-        farmingStartTime: userData.farmingStartTime?.toDate ? userData.farmingStartTime.toDate() : userData.farmingStartTime ? new Date(userData.farmingStartTime) : undefined,
-        farmingEndTime: userData.farmingEndTime?.toDate ? userData.farmingEndTime.toDate() : userData.farmingEndTime ? new Date(userData.farmingEndTime) : undefined,
-        vipEndTime: userData.vipEndTime?.toDate ? userData.vipEndTime.toDate() : userData.vipEndTime ? new Date(userData.vipEndTime) : undefined,
+        id: userId,
+        createdAt: userData.createdAt ? new Date(userData.createdAt) : new Date(),
+        updatedAt: userData.updatedAt ? new Date(userData.updatedAt) : new Date(),
+        lastClaimDate: userData.lastClaimDate ? new Date(userData.lastClaimDate) : undefined,
+        farmingStartTime: userData.farmingStartTime ? new Date(userData.farmingStartTime) : undefined,
+        farmingEndTime: userData.farmingEndTime ? new Date(userData.farmingEndTime) : undefined,
+        vipEndTime: userData.vipEndTime ? new Date(userData.vipEndTime) : undefined,
       } as User;
     }
   } catch (error) {
@@ -209,14 +224,14 @@ export const initializeUser = async (userId: string): Promise<User> => {
   }
 };
 
-// Safe update function that creates document if it doesn't exist
+// Safe update function using Realtime Database
 export const safeUpdateUser = async (userId: string, updateData: Partial<User>): Promise<User> => {
   try {
-    const userRef = doc(db, 'users', userId);
-    const userDoc = await getDoc(userRef);
+    const userRef = ref(realtimeDb, `users/${userId}`);
+    const userSnapshot = await get(userRef);
     
-    if (!userDoc.exists()) {
-      // Create document with default values + update data
+    if (!userSnapshot.exists()) {
+      // Create new user
       const defaultData: User = {
         id: userId,
         telegramId: userId,
@@ -244,18 +259,43 @@ export const safeUpdateUser = async (userId: string, updateData: Partial<User>):
         ...updateData
       };
       
-      await setDoc(userRef, defaultData);
+      await set(userRef, {
+        ...defaultData,
+        createdAt: defaultData.createdAt.toISOString(),
+        updatedAt: defaultData.updatedAt.toISOString(),
+        lastClaimDate: defaultData.lastClaimDate?.toISOString(),
+        farmingStartTime: defaultData.farmingStartTime?.toISOString(),
+        farmingEndTime: defaultData.farmingEndTime?.toISOString(),
+        vipEndTime: defaultData.vipEndTime?.toISOString(),
+      });
       return defaultData;
     } else {
-      // Update existing document
-      const updatedData = {
+      // Update existing user
+      const updates: any = {
         ...updateData,
-        updatedAt: new Date()
+        updatedAt: new Date().toISOString()
       };
       
-      await updateDoc(userRef, updatedData);
-      const updatedDoc = await getDoc(userRef);
-      return { id: updatedDoc.id, ...updatedDoc.data() } as User;
+      // Convert dates to ISO strings
+      if (updates.lastClaimDate) updates.lastClaimDate = updates.lastClaimDate.toISOString();
+      if (updates.farmingStartTime) updates.farmingStartTime = updates.farmingStartTime.toISOString();
+      if (updates.farmingEndTime) updates.farmingEndTime = updates.farmingEndTime.toISOString();
+      if (updates.vipEndTime) updates.vipEndTime = updates.vipEndTime.toISOString();
+      
+      await update(userRef, updates);
+      
+      const updatedSnapshot = await get(userRef);
+      const userData = updatedSnapshot.val();
+      return {
+        ...userData,
+        id: userId,
+        createdAt: userData.createdAt ? new Date(userData.createdAt) : new Date(),
+        updatedAt: userData.updatedAt ? new Date(userData.updatedAt) : new Date(),
+        lastClaimDate: userData.lastClaimDate ? new Date(userData.lastClaimDate) : undefined,
+        farmingStartTime: userData.farmingStartTime ? new Date(userData.farmingStartTime) : undefined,
+        farmingEndTime: userData.farmingEndTime ? new Date(userData.farmingEndTime) : undefined,
+        vipEndTime: userData.vipEndTime ? new Date(userData.vipEndTime) : undefined,
+      } as User;
     }
   } catch (error) {
     console.error('Error updating user:', error);
@@ -263,12 +303,12 @@ export const safeUpdateUser = async (userId: string, updateData: Partial<User>):
   }
 };
 
-// User operations
+// User operations with Realtime Database
 export const createUser = async (userData: Partial<User>): Promise<void> => {
-  const userRef = doc(db, 'users', userData.telegramId!);
-  const userDoc = await getDoc(userRef);
+  const userRef = ref(realtimeDb, `users/${userData.telegramId}`);
+  const userSnapshot = await get(userRef);
   
-  if (!userDoc.exists()) {
+  if (!userSnapshot.exists()) {
     const newUser: User = {
       id: userData.telegramId!,
       telegramId: userData.telegramId!,
@@ -293,40 +333,46 @@ export const createUser = async (userData: Partial<User>): Promise<void> => {
       updatedAt: new Date(),
     };
     
-    await setDoc(userRef, newUser);
+    await set(userRef, {
+      ...newUser,
+      createdAt: newUser.createdAt.toISOString(),
+      updatedAt: newUser.updatedAt.toISOString(),
+    });
     
     // If user has a referrer, update referrer's count
     if (userData.referrerId) {
-      const referrerRef = doc(db, 'users', userData.referrerId);
-      await updateDoc(referrerRef, {
-        referralCount: increment(1),
-        updatedAt: serverTimestamp(),
-      });
+      const referrerRef = ref(realtimeDb, `users/${userData.referrerId}`);
+      const referrerSnapshot = await get(referrerRef);
+      if (referrerSnapshot.exists()) {
+        const referrerData = referrerSnapshot.val();
+        await update(referrerRef, {
+          referralCount: (referrerData.referralCount || 0) + 1,
+          coins: (referrerData.coins || 0) + 500, // Referral bonus
+          referralEarnings: (referrerData.referralEarnings || 0) + 500,
+          updatedAt: new Date().toISOString(),
+        });
+      }
     }
   }
 };
 
 export const getUser = async (telegramId: string): Promise<User | null> => {
   try {
-    const userRef = doc(db, 'users', telegramId);
-    const userDoc = await getDoc(userRef);
+    const userRef = ref(realtimeDb, `users/${telegramId}`);
+    const userSnapshot = await get(userRef);
     
-    if (userDoc.exists()) {
-      const userData = userDoc.data();
-      
-      // Convert Firestore timestamps to Date objects
-      const convertedData = {
+    if (userSnapshot.exists()) {
+      const userData = userSnapshot.val();
+      return {
         ...userData,
-        id: userDoc.id,
-        createdAt: userData.createdAt?.toDate ? userData.createdAt.toDate() : new Date(userData.createdAt),
-        updatedAt: userData.updatedAt?.toDate ? userData.updatedAt.toDate() : new Date(userData.updatedAt),
-        lastClaimDate: userData.lastClaimDate?.toDate ? userData.lastClaimDate.toDate() : userData.lastClaimDate ? new Date(userData.lastClaimDate) : undefined,
-        farmingStartTime: userData.farmingStartTime?.toDate ? userData.farmingStartTime.toDate() : userData.farmingStartTime ? new Date(userData.farmingStartTime) : undefined,
-        farmingEndTime: userData.farmingEndTime?.toDate ? userData.farmingEndTime.toDate() : userData.farmingEndTime ? new Date(userData.farmingEndTime) : undefined,
-        vipEndTime: userData.vipEndTime?.toDate ? userData.vipEndTime.toDate() : userData.vipEndTime ? new Date(userData.vipEndTime) : undefined,
+        id: telegramId,
+        createdAt: userData.createdAt ? new Date(userData.createdAt) : new Date(),
+        updatedAt: userData.updatedAt ? new Date(userData.updatedAt) : new Date(),
+        lastClaimDate: userData.lastClaimDate ? new Date(userData.lastClaimDate) : undefined,
+        farmingStartTime: userData.farmingStartTime ? new Date(userData.farmingStartTime) : undefined,
+        farmingEndTime: userData.farmingEndTime ? new Date(userData.farmingEndTime) : undefined,
+        vipEndTime: userData.vipEndTime ? new Date(userData.vipEndTime) : undefined,
       } as User;
-      
-      return convertedData;
     }
     
     return null;
@@ -337,11 +383,19 @@ export const getUser = async (telegramId: string): Promise<User | null> => {
 };
 
 export const updateUser = async (telegramId: string, updates: Partial<User>): Promise<void> => {
-  const userRef = doc(db, 'users', telegramId);
-  await updateDoc(userRef, {
+  const userRef = ref(realtimeDb, `users/${telegramId}`);
+  const updateData: any = {
     ...updates,
-    updatedAt: serverTimestamp(),
-  });
+    updatedAt: new Date().toISOString()
+  };
+  
+  // Convert dates to ISO strings
+  if (updateData.lastClaimDate) updateData.lastClaimDate = updateData.lastClaimDate.toISOString();
+  if (updateData.farmingStartTime) updateData.farmingStartTime = updateData.farmingStartTime.toISOString();
+  if (updateData.farmingEndTime) updateData.farmingEndTime = updateData.farmingEndTime.toISOString();
+  if (updateData.vipEndTime) updateData.vipEndTime = updateData.vipEndTime.toISOString();
+  
+  await update(userRef, updateData);
 };
 
 // VIP subscription
@@ -365,22 +419,29 @@ export const activateSubscription = async (
   });
 };
 
-// Task operations
+// Task operations with Realtime Database
 export const getTasks = async (): Promise<Task[]> => {
   try {
-    const tasksRef = collection(db, 'tasks');
-    const q = query(tasksRef, where('isActive', '==', true), orderBy('createdAt', 'desc'));
-    const querySnapshot = await getDocs(q);
+    const tasksRef = ref(realtimeDb, 'tasks');
+    const tasksSnapshot = await get(tasksRef);
     
-    return querySnapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        ...data,
-        id: doc.id,
-        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
-        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt),
-      } as Task;
-    });
+    const tasks: Task[] = [];
+    if (tasksSnapshot.exists()) {
+      const tasksData = tasksSnapshot.val();
+      Object.keys(tasksData).forEach((taskId) => {
+        const taskData = tasksData[taskId];
+        if (taskData.isActive) {
+          tasks.push({
+            ...taskData,
+            id: taskId,
+            createdAt: taskData.createdAt ? new Date(taskData.createdAt) : new Date(),
+            updatedAt: taskData.updatedAt ? new Date(taskData.updatedAt) : new Date(),
+          });
+        }
+      });
+    }
+    
+    return tasks.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   } catch (error) {
     console.error('Error getting tasks:', error);
     return [];
@@ -388,29 +449,38 @@ export const getTasks = async (): Promise<Task[]> => {
 };
 
 export const createTask = async (taskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> => {
-  const tasksRef = collection(db, 'tasks');
-  await addDoc(tasksRef, {
+  const tasksRef = ref(realtimeDb, 'tasks');
+  const newTaskRef = push(tasksRef);
+  
+  await set(newTaskRef, {
     ...taskData,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   });
+  
+  console.log('Task created with real-time sync');
 };
 
 export const getUserTasks = async (userId: string): Promise<UserTask[]> => {
   try {
-    const userTasksRef = collection(db, 'userTasks');
-    const q = query(userTasksRef, where('userId', '==', userId));
-    const querySnapshot = await getDocs(q);
+    const userTasksRef = ref(realtimeDb, `userTasks/${userId}`);
+    const userTasksSnapshot = await get(userTasksRef);
     
-    return querySnapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        ...data,
-        id: doc.id,
-        completedAt: data.completedAt?.toDate ? data.completedAt.toDate() : data.completedAt ? new Date(data.completedAt) : undefined,
-        claimedAt: data.claimedAt?.toDate ? data.claimedAt.toDate() : data.claimedAt ? new Date(data.claimedAt) : undefined,
-      } as UserTask;
-    });
+    const userTasks: UserTask[] = [];
+    if (userTasksSnapshot.exists()) {
+      const userTasksData = userTasksSnapshot.val();
+      Object.keys(userTasksData).forEach((taskId) => {
+        const taskData = userTasksData[taskId];
+        userTasks.push({
+          ...taskData,
+          id: taskId,
+          completedAt: taskData.completedAt ? new Date(taskData.completedAt) : undefined,
+          claimedAt: taskData.claimedAt ? new Date(taskData.claimedAt) : undefined,
+        });
+      });
+    }
+    
+    return userTasks;
   } catch (error) {
     console.error('Error getting user tasks:', error);
     return [];
@@ -418,39 +488,44 @@ export const getUserTasks = async (userId: string): Promise<UserTask[]> => {
 };
 
 export const completeTask = async (userId: string, taskId: string): Promise<void> => {
-  const userTasksRef = collection(db, 'userTasks');
-  await addDoc(userTasksRef, {
+  const userTaskRef = ref(realtimeDb, `userTasks/${userId}/${taskId}`);
+  await set(userTaskRef, {
     userId,
     taskId,
     status: 'completed',
-    completedAt: serverTimestamp(),
+    completedAt: new Date().toISOString(),
   });
 };
 
 export const claimTask = async (userId: string, taskId: string, reward: number): Promise<void> => {
-  // Update user task status
-  const userTasksRef = collection(db, 'userTasks');
-  const q = query(userTasksRef, where('userId', '==', userId), where('taskId', '==', taskId));
-  const querySnapshot = await getDocs(q);
-  
-  if (!querySnapshot.empty) {
-    const userTaskDoc = querySnapshot.docs[0];
-    await updateDoc(userTaskDoc.ref, {
+  try {
+    // Update user task status
+    const userTaskRef = ref(realtimeDb, `userTasks/${userId}/${taskId}`);
+    await update(userTaskRef, {
       status: 'claimed',
-      claimedAt: serverTimestamp(),
+      claimedAt: new Date().toISOString(),
     });
+    
+    // Add coins to user atomically
+    const userRef = ref(realtimeDb, `users/${userId}`);
+    const userSnapshot = await get(userRef);
+    
+    if (userSnapshot.exists()) {
+      const userData = userSnapshot.val();
+      await update(userRef, {
+        coins: (userData.coins || 0) + reward,
+        xp: (userData.xp || 0) + Math.floor(reward / 10),
+        updatedAt: new Date().toISOString(),
+      });
+      console.log(`Task claimed: +${reward} coins for user ${userId}`);
+    }
+  } catch (error) {
+    console.error('Error claiming task:', error);
+    throw error;
   }
-  
-  // Add coins to user
-  const userRef = doc(db, 'users', userId);
-  await updateDoc(userRef, {
-    coins: increment(reward),
-    xp: increment(reward / 10),
-    updatedAt: serverTimestamp(),
-  });
 };
 
-// Withdrawal operations
+// Withdrawal operations - keep using Firestore for admin management
 export const createWithdrawalRequest = async (
   userId: string,
   amount: number,
@@ -490,46 +565,63 @@ export const updateWithdrawalStatus = async (
   });
 };
 
-// Admin operations
+// Admin operations with Realtime Database
 export const getAdminSettings = async (): Promise<AdminSettings> => {
-  const settingsRef = doc(db, 'settings', 'admin');
-  const settingsDoc = await getDoc(settingsRef);
+  const settingsRef = ref(realtimeDb, 'admin/settings');
+  const settingsSnapshot = await get(settingsRef);
   
-  if (settingsDoc.exists()) {
-    return settingsDoc.data() as AdminSettings;
+  if (settingsSnapshot.exists()) {
+    const settingsData = settingsSnapshot.val();
+    return {
+      ...settingsData,
+      updatedAt: settingsData.updatedAt ? new Date(settingsData.updatedAt) : new Date(),
+    } as AdminSettings;
   }
   
   // Create default settings if they don't exist
-  await setDoc(settingsRef, DEFAULT_SETTINGS);
-  return DEFAULT_SETTINGS;
+  const defaultSettings = {
+    ...DEFAULT_SETTINGS,
+    updatedAt: new Date().toISOString(),
+  };
+  await set(settingsRef, defaultSettings);
+  return {
+    ...DEFAULT_SETTINGS,
+    updatedAt: new Date(),
+  };
 };
 
 export const updateAdminSettings = async (settings: Partial<AdminSettings>): Promise<void> => {
-  const settingsRef = doc(db, 'settings', 'admin');
-  await updateDoc(settingsRef, settings);
+  const settingsRef = ref(realtimeDb, 'admin/settings');
+  const updateData = {
+    ...settings,
+    updatedAt: new Date().toISOString(),
+  };
+  await update(settingsRef, updateData);
+  console.log('Admin settings updated with real-time sync');
 };
 
 export const getDailyStats = async (): Promise<DailyStats> => {
-  const usersRef = collection(db, 'users');
-  const withdrawalsRef = collection(db, 'withdrawals');
+  const usersRef = ref(realtimeDb, 'users');
+  const usersSnapshot = await get(usersRef);
   
-  // Get total users
-  const usersSnapshot = await getDocs(usersRef);
-  const totalUsers = usersSnapshot.size;
-  
-  // Get active VIP users
-  const vipQuery = query(usersRef, where('vipTier', 'in', ['vip1', 'vip2']));
-  const vipSnapshot = await getDocs(vipQuery);
-  const activeVipUsers = vipSnapshot.size;
-  
-  // Calculate total coins distributed
+  let totalUsers = 0;
+  let activeVipUsers = 0;
   let totalCoinsDistributed = 0;
-  usersSnapshot.docs.forEach(doc => {
-    const user = doc.data() as User;
-    totalCoinsDistributed += user.coins;
-  });
   
-  // Get pending withdrawals
+  if (usersSnapshot.exists()) {
+    const usersData = usersSnapshot.val();
+    Object.keys(usersData).forEach((userId) => {
+      const user = usersData[userId];
+      totalUsers++;
+      if (user.vipTier && user.vipTier !== 'free') {
+        activeVipUsers++;
+      }
+      totalCoinsDistributed += user.coins || 0;
+    });
+  }
+  
+  // Get pending withdrawals from Firestore
+  const withdrawalsRef = collection(db, 'withdrawals');
   const pendingQuery = query(withdrawalsRef, where('status', '==', 'pending'));
   const pendingSnapshot = await getDocs(pendingQuery);
   const pendingWithdrawals = pendingSnapshot.size;
