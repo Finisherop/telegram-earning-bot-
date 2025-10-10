@@ -26,11 +26,11 @@
 
 ### 🤖 **Telegram Bot API**
 - ✅ `api/telegram-bot.js` - Bot API utilities
-- ✅ `api/webhook.js` - Webhook handler (nodejs18.x)
-- ✅ `api/create-invoice.js` - Payment API (nodejs18.x)
+- ✅ `api/webhook.js` - Webhook handler (nodejs22.x)
+- ✅ `api/create-invoice.js` - Payment API (nodejs22.x)
 
 ### ⚙️ **Configuration Files**
-- ✅ `vercel.json` - **FIXED** with nodejs18.x runtime
+- ✅ `vercel.json` - **FIXED** with nodejs22.x runtime
 - ✅ `netlify.toml` - Netlify deployment config
 - ✅ `package.json` - Dependencies and scripts
 - ✅ `.env` - Environment variables with bot token
@@ -71,7 +71,7 @@
 ## ✅ **All Issues Resolved**
 
 ### **✅ Vercel Runtime Error Fixed**
-- All serverless functions have valid `nodejs18.x` runtime
+- All serverless functions have valid `nodejs22.x` runtime
 - Proper function export format for Vercel
 - CORS headers configured for API endpoints
 

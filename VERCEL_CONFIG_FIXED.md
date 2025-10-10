@@ -19,7 +19,7 @@
       "src": "api/**/*.js",
       "use": "@vercel/node",
       "config": {
-        "runtime": "nodejs18.x"
+        "runtime": "nodejs22.x"
       }
     },
     {
@@ -54,10 +54,10 @@
 ```json
 "functions": {
   "api/webhook.js": {
-    "runtime": "nodejs18.x"
+    "runtime": "nodejs22.x"
   },
   "api/create-invoice.js": {
-    "runtime": "nodejs18.x"
+    "runtime": "nodejs22.x"
   }
 }
 ```
@@ -69,7 +69,7 @@
     "src": "api/**/*.js",
     "use": "@vercel/node",
     "config": {
-      "runtime": "nodejs18.x"
+      "runtime": "nodejs22.x"
     }
   }
 ]
@@ -81,7 +81,7 @@
 
 ### **✅ Configuration Benefits:**
 - ✅ **No Conflicts** - Single build configuration approach
-- ✅ **Node.js 18.x Runtime** - All API functions use correct runtime
+- ✅ **Node.js 22.x Runtime** - All API functions use correct runtime
 - ✅ **Static Files** - Frontend served efficiently  
 - ✅ **API Routing** - Proper `/api/*` endpoint mapping
 - ✅ **Environment Variables** - All secrets configured
