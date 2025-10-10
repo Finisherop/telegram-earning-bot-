@@ -307,6 +307,129 @@ window.Firebase = {
         return settings || defaultSettings;
     },
 
+    // ✅ VIP Settings Management
+    async getVIPSettings() {
+        const defaultVIPSettings = {
+            vipAmount: 49900, // Amount in smallest currency unit (e.g., paise for INR)
+            vipCurrency: "INR",
+            vipDuration: 30, // days
+            vipBenefits: {
+                farmingMultiplier: 2,
+                referralMultiplier: 1.5,
+                dailyClaimBonus: 200,
+                minWithdrawal: 500
+            },
+            paymentProviderToken: "YOUR_BOT_PAYMENT_PROVIDER_TOKEN",
+            updatedAt: serverTimestamp()
+        };
+
+        const vipSettings = await this.readData('settings/vip');
+        return vipSettings || defaultVIPSettings;
+    },
+
+    async updateVIPSettings(newSettings) {
+        const currentSettings = await this.getVIPSettings();
+        const updatedSettings = {
+            ...currentSettings,
+            ...newSettings,
+            updatedAt: serverTimestamp()
+        };
+        return await this.writeData('settings/vip', updatedSettings);
+    },
+
+    // ✅ VIP User Management
+    async activateVIP(userId, duration = 30) {
+        try {
+            const now = Date.now();
+            const vipEndTime = now + (duration * 24 * 60 * 60 * 1000);
+            
+            const vipUpdate = {
+                vipTier: 'vip1',
+                vipActivated: true,
+                vipStartTime: now,
+                vipEndTime: vipEndTime,
+                farmingMultiplier: 2,
+                referralMultiplier: 1.5
+            };
+
+            const success = await this.updateUser(userId, vipUpdate);
+            if (success) {
+                await this.logActivity(userId, 'vip_activated', { 
+                    duration, 
+                    endTime: vipEndTime 
+                });
+            }
+            return success;
+        } catch (error) {
+            console.error('Error activating VIP:', error);
+            return false;
+        }
+    },
+
+    async checkVIPStatus(userId) {
+        const user = await this.getUser(userId);
+        if (!user || !user.vipActivated) return false;
+
+        const now = Date.now();
+        if (user.vipEndTime && now > user.vipEndTime) {
+            // VIP expired, deactivate
+            await this.updateUser(userId, {
+                vipActivated: false,
+                vipTier: 'free',
+                farmingMultiplier: 1,
+                referralMultiplier: 1
+            });
+            return false;
+        }
+
+        return true;
+    },
+
+    // ✅ Daily Claim System
+    async processDailyClaim(userId) {
+        try {
+            const user = await this.getUser(userId);
+            if (!user) return { success: false, message: 'User not found' };
+
+            const now = Date.now();
+            const lastClaim = user.lastDailyClaim || 0;
+            const oneDay = 24 * 60 * 60 * 1000;
+
+            if (now - lastClaim < oneDay) {
+                const timeLeft = oneDay - (now - lastClaim);
+                const hoursLeft = Math.ceil(timeLeft / (60 * 60 * 1000));
+                return { 
+                    success: false, 
+                    message: `Already claimed today! Next claim in ${hoursLeft} hours.` 
+                };
+            }
+
+            // Calculate reward based on VIP status
+            const isVIP = await this.checkVIPStatus(userId);
+            const baseReward = 100;
+            const vipBonus = isVIP ? 200 : 0;
+            const totalReward = baseReward + vipBonus;
+
+            // Add coins and update claim time
+            const coinsAdded = await this.addCoins(userId, totalReward, 'Daily claim reward');
+            if (coinsAdded) {
+                await this.updateUser(userId, { lastDailyClaim: now });
+                return { 
+                    success: true, 
+                    reward: totalReward,
+                    isVIP: isVIP,
+                    message: `Claimed ${totalReward} coins!${isVIP ? ' (VIP Bonus included)' : ''}`
+                };
+            }
+
+            return { success: false, message: 'Failed to process daily claim' };
+
+        } catch (error) {
+            console.error('Error processing daily claim:', error);
+            return { success: false, message: 'Daily claim failed' };
+        }
+    },
+
     async updateSettings(newSettings) {
         const currentSettings = await this.getSettings();
         const updatedSettings = {

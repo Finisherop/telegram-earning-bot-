@@ -146,12 +146,45 @@
                             👑 <span class="ml-2">VIP Status</span>
                         </h3>
                         <div id="vipStatus" class="text-center">
-                            <div class="bg-gray-100 rounded-lg p-4">
+                            <div id="freeVipStatus" class="bg-gray-100 rounded-lg p-4">
                                 <h4 class="font-bold text-gray-600">FREE TIER</h4>
                                 <p class="text-sm text-gray-500 mb-3">Basic farming rewards</p>
-                                <button class="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-full text-sm font-semibold">
-                                    Upgrade to VIP
+                                <button id="buyVipBtn" class="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-full text-sm font-semibold">
+                                    ⭐ Upgrade to VIP
                                 </button>
+                            </div>
+                            <div id="activeVipStatus" class="bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg p-4 hidden">
+                                <h4 class="font-bold">👑 VIP ACTIVE</h4>
+                                <p class="text-sm mb-2" id="vipExpiry">Expires in 30 days</p>
+                                <div class="text-xs opacity-75">
+                                    ✨ 2x Farming • 1.5x Referrals • Daily Bonus
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Daily Claim Section -->
+                    <div class="bg-white rounded-lg p-4 mb-4 card-shadow">
+                        <h3 class="font-semibold text-lg mb-3 flex items-center">
+                            🎁 <span class="ml-2">Daily Claim</span>
+                        </h3>
+                        <div id="dailyClaimSection" class="text-center">
+                            <div class="bg-gradient-to-r from-green-400 to-blue-500 text-white rounded-lg p-4">
+                                <h4 class="font-bold mb-2">Daily Reward Available!</h4>
+                                <p class="text-sm mb-3">Claim your daily coins</p>
+                                <div class="mb-3">
+                                    <span class="text-lg">🪙 </span>
+                                    <span id="dailyRewardAmount" class="font-bold">100 Coins</span>
+                                    <span id="vipBonusText" class="text-xs opacity-75 hidden"> + 200 VIP Bonus</span>
+                                </div>
+                                <button id="dailyClaimBtn" class="bg-white text-blue-600 px-6 py-2 rounded-full font-semibold">
+                                    Claim Now
+                                </button>
+                            </div>
+                            <div id="dailyClaimCooldown" class="text-center p-4 hidden">
+                                <div class="text-gray-600 mb-2">⏰ Next claim available in:</div>
+                                <div class="text-xl font-bold text-primary" id="claimCooldownTimer">23:59:59</div>
+                                <div class="text-sm text-gray-500">Come back tomorrow!</div>
                             </div>
                         </div>
                     </div>
@@ -360,7 +393,8 @@
                 <div id="adminSettingsTab" class="admin-panel hidden">
                     <h2 class="text-2xl font-bold mb-6">System Settings</h2>
                     
-                    <div class="bg-white rounded-lg p-6 card-shadow">
+                    <!-- Global Settings -->
+                    <div class="bg-white rounded-lg p-6 mb-6 card-shadow">
                         <h3 class="text-lg font-semibold mb-4">Global Configuration</h3>
                         <form id="settingsForm" class="space-y-4">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -382,7 +416,60 @@
                                 </div>
                             </div>
                             <button type="submit" class="bg-primary text-white px-6 py-2 rounded font-semibold">
-                                Save Settings
+                                Save Global Settings
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- VIP Settings -->
+                    <div class="bg-white rounded-lg p-6 card-shadow">
+                        <h3 class="text-lg font-semibold mb-4">⭐ VIP Configuration</h3>
+                        <form id="vipSettingsForm" class="space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">VIP Price (Stars/INR)</label>
+                                    <input type="number" id="vipAmount" min="1" class="w-full p-2 border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">VIP Currency</label>
+                                    <select id="vipCurrency" class="w-full p-2 border rounded">
+                                        <option value="XTR">Telegram Stars (XTR)</option>
+                                        <option value="INR">Indian Rupees (INR)</option>
+                                        <option value="USD">US Dollars (USD)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">VIP Duration (Days)</label>
+                                    <input type="number" id="vipDuration" min="1" max="365" class="w-full p-2 border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Payment Provider Token</label>
+                                    <input type="text" id="paymentProviderToken" placeholder="Your bot payment token" class="w-full p-2 border rounded">
+                                </div>
+                            </div>
+                            
+                            <h4 class="text-md font-medium mt-6 mb-3">VIP Benefits</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Farming Multiplier</label>
+                                    <input type="number" id="vipFarmingMultiplier" min="1" step="0.1" class="w-full p-2 border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Referral Multiplier</label>
+                                    <input type="number" id="vipReferralMultiplier" min="1" step="0.1" class="w-full p-2 border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Daily Claim Bonus</label>
+                                    <input type="number" id="vipDailyBonus" min="0" class="w-full p-2 border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">VIP Min Withdrawal</label>
+                                    <input type="number" id="vipMinWithdrawal" min="1" class="w-full p-2 border rounded">
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="bg-purple-500 text-white px-6 py-2 rounded font-semibold">
+                                💎 Save VIP Settings
                             </button>
                         </form>
                     </div>
