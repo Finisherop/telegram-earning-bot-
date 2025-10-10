@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "echo 'Static build - no build needed'",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "setup-bot": "node setup-bot.js"
   },
   "dependencies": {
     "@telegram-apps/sdk": "^2.11.0",
@@ -28,5 +29,8 @@
     "@types/react-dom": "^18.3.5",
     "eslint": "^8.57.1",
     "eslint-config-next": "^15.5.4"
+  },
+  "engines": {
+    "node": "18.x"
   }
 }

@@ -4,8 +4,8 @@
 // Import Firebase (you may need to adjust this based on your setup)
 // const admin = require('firebase-admin');
 
-const BOT_TOKEN = '8484469509:AAHNw8rM2fzw35Lp1d_UTLjdFhobasHoOnM';
-const APP_URL = 'https://your-app-domain.com';
+const BOT_TOKEN = process.env.BOT_TOKEN || '8484469509:AAHNw8rM2fzw35Lp1d_UTLjdFhobasHoOnM';
+const APP_URL = process.env.APP_URL || 'https://telegram-earning-bot.vercel.app';
 
 class WebhookHandler {
     constructor() {
@@ -297,37 +297,34 @@ Click the button below to start earning:
     }
 }
 
-// Export for serverless functions
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = WebhookHandler;
-}
+// Export class for reuse
+WebhookHandler.WebhookHandler = WebhookHandler;
 
-// For Netlify Functions or Vercel API routes
-exports.handler = async (event, context) => {
-    if (event.httpMethod !== 'POST') {
-        return {
-            statusCode: 405,
-            body: JSON.stringify({ error: 'Method not allowed' })
-        };
+// Export as default handler for Vercel
+module.exports = async (req, res) => {
+    // Set CORS headers
+    res.setHeader('Access-Control-Allow-Credentials', true);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+
+    if (req.method === 'OPTIONS') {
+        res.status(200).end();
+        return;
+    }
+
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
     }
 
     try {
-        const update = JSON.parse(event.body);
+        const update = req.body;
         const handler = new WebhookHandler();
         const result = await handler.handleUpdate(update);
         
-        return {
-            statusCode: 200,
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(result)
-        };
+        res.status(200).json(result);
     } catch (error) {
         console.error('Webhook error:', error);
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ error: 'Internal server error' })
-        };
+        res.status(500).json({ error: 'Internal server error' });
     }
 };
