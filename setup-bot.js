@@ -6,7 +6,7 @@ const TelegramBotAPI = require('./api/telegram-bot.js');
 class BotSetup {
     constructor() {
         this.bot = new TelegramBotAPI();
-        this.APP_URL = 'https://your-app-domain.com'; // Replace with your deployed URL
+        this.APP_URL = process.env.APP_URL || 'https://telegram-earning-bot.vercel.app'; // Updated with Vercel URL
     }
 
     async setupBot() {

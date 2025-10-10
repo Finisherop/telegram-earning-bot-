@@ -1,6 +1,6 @@
 // Telegram Bot API Handler for Payment Integration
-const BOT_TOKEN = '8484469509:AAHNw8rM2fzw35Lp1d_UTLjdFhobasHoOnM';
-const APP_URL = 'https://your-app-domain.com';
+const BOT_TOKEN = process.env.BOT_TOKEN || '8484469509:AAHNw8rM2fzw35Lp1d_UTLjdFhobasHoOnM';
+const APP_URL = process.env.APP_URL || 'https://telegram-earning-bot.vercel.app';
 
 class TelegramBotAPI {
     constructor() {

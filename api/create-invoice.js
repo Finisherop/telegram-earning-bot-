@@ -1,5 +1,5 @@
 // Payment API Handler for VIP purchases
-const BOT_TOKEN = '8484469509:AAHNw8rM2fzw35Lp1d_UTLjdFhobasHoOnM';
+const BOT_TOKEN = process.env.BOT_TOKEN || '8484469509:AAHNw8rM2fzw35Lp1d_UTLjdFhobasHoOnM';
 
 class PaymentAPI {
     constructor() {
@@ -151,65 +151,37 @@ class PaymentAPI {
     }
 }
 
-// Export for use in API endpoints
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = PaymentAPI;
-}
+// Export class for reuse  
+PaymentAPI.PaymentAPI = PaymentAPI;
 
-// API endpoint for creating invoices
-exports.createInvoice = async (event, context) => {
-    if (event.httpMethod !== 'POST') {
-        return {
-            statusCode: 405,
-            body: JSON.stringify({ error: 'Method not allowed' })
-        };
+// Export as default handler for Vercel
+module.exports = async (req, res) => {
+    // Set CORS headers
+    res.setHeader('Access-Control-Allow-Credentials', true);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+
+    if (req.method === 'OPTIONS') {
+        res.status(200).end();
+        return;
+    }
+
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
     }
 
     try {
-        const requestData = JSON.parse(event.body);
+        const requestData = req.body;
         const paymentAPI = new PaymentAPI();
         const result = await paymentAPI.createInvoice(requestData);
         
-        return {
-            statusCode: 200,
-            headers: {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type',
-                'Access-Control-Allow-Methods': 'POST, OPTIONS'
-            },
-            body: JSON.stringify(result)
-        };
+        res.status(200).json(result);
     } catch (error) {
         console.error('Create invoice error:', error);
-        return {
-            statusCode: 500,
-            headers: {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            body: JSON.stringify({ 
-                success: false, 
-                error: 'Internal server error' 
-            })
-        };
+        res.status(500).json({ 
+            success: false, 
+            error: 'Internal server error' 
+        });
     }
-};
-
-// Handle preflight requests
-exports.handler = async (event, context) => {
-    // Handle CORS preflight
-    if (event.httpMethod === 'OPTIONS') {
-        return {
-            statusCode: 200,
-            headers: {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type',
-                'Access-Control-Allow-Methods': 'POST, OPTIONS'
-            },
-            body: ''
-        };
-    }
-    
-    return exports.createInvoice(event, context);
 };
