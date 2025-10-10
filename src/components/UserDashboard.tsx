@@ -8,6 +8,7 @@ import Task from './user/Task';
 import Referral from './user/Referral';
 import ShopWithdrawal from './user/ShopWithdrawal';
 import Profile from './user/Profile';
+import UserDataDisplay from './UserDataDisplay';
 
 interface UserDashboardProps {
   user: User | null;
@@ -39,7 +40,12 @@ const UserDashboard = ({ user }: UserDashboardProps) => {
   const renderTabContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard user={user} />;
+        return (
+          <div>
+            <UserDataDisplay />
+            <Dashboard user={user} />
+          </div>
+        );
       case 'task':
         return <Task user={user} />;
       case 'referral':

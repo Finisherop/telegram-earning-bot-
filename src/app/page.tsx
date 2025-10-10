@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { useTelegramUser } from '@/hooks/useTelegramUser';
 import { ADMIN_SECRET_KEY } from '@/lib/constants';
 import UserDashboard from '@/components/UserDashboard';
 import AdminDashboard from '@/components/AdminDashboard';
 
 export default function Home() {
   const { user } = useAuth();
+  const { userData: telegramUser, isLoading: telegramLoading, isTelegramUser, displayName } = useTelegramUser();
   const router = useRouter();
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -49,13 +51,20 @@ export default function Home() {
     setIsLoading(false);
   }, [router]);
 
-  if (isLoading) {
+  if (isLoading || telegramLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
         <div className="text-center text-white">
           <div className="animate-spin text-6xl mb-4">🔄</div>
           <h2 className="text-2xl font-bold">Loading Telegram Mini App...</h2>
-          <p className="text-white/80 mt-2">Initializing your earning dashboard</p>
+          <p className="text-white/80 mt-2">
+            {telegramLoading ? 'Capturing user data...' : 'Initializing your earning dashboard'}
+          </p>
+          {telegramUser && (
+            <p className="text-white/60 mt-1 text-sm">
+              Welcome, {displayName}! {isTelegramUser ? '(Telegram User)' : '(Browser User)'}
+            </p>
+          )}
         </div>
       </div>
     );

@@ -274,6 +274,23 @@ export class TelegramService {
   }
 
   public getUser(): TelegramUser | null {
+    // First try to get from the new capture system
+    if (typeof window !== 'undefined' && (window as any).__TELEGRAM_USER_DATA__) {
+      const capturedData = (window as any).__TELEGRAM_USER_DATA__;
+      if (capturedData.source === 'telegram') {
+        return {
+          id: capturedData.id,
+          first_name: capturedData.first_name,
+          last_name: capturedData.last_name,
+          username: capturedData.username,
+          photo_url: capturedData.photo_url,
+          language_code: capturedData.language_code,
+          is_premium: capturedData.is_premium
+        };
+      }
+    }
+    
+    // Fallback to existing user data
     return this.user;
   }
 
