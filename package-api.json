@@ -1,0 +1,25 @@
+// Package.json for Node.js dependencies (if needed for bot setup)
+{
+  "name": "telegram-earning-bot-api",
+  "version": "1.0.0",
+  "description": "API for Telegram Earning Bot with payment integration",
+  "main": "setup-bot.js",
+  "scripts": {
+    "setup": "node setup-bot.js",
+    "test-bot": "node setup-bot.js --test",
+    "config": "node setup-bot.js --config",
+    "start": "node api/webhook.js"
+  },
+  "dependencies": {
+    "node-fetch": "^2.6.7"
+  },
+  "keywords": [
+    "telegram",
+    "bot", 
+    "earning",
+    "payment",
+    "api"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}

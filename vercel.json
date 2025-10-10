@@ -1,0 +1,18 @@
+{
+  "functions": {
+    "api/*": {
+      "runtime": "nodejs18.x"
+    }
+  },
+  "env": {
+    "BOT_TOKEN": "8484469509:AAHNw8rM2fzw35Lp1d_UTLjdFhobasHoOnM",
+    "FIREBASE_API_KEY": "AIzaSyA_cKKrwrqNyb0xl28IbHAnaJa3ChOdsZU",
+    "FIREBASE_DATABASE_URL": "https://telegram-bot-2be45-default-rtdb.firebaseio.com"
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    }
+  ]
+}

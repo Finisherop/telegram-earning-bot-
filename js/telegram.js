@@ -260,25 +260,24 @@ class TelegramApp {
         }
     }
 
-    // Generate referral link
+    // Generate referral link with proper bot username
     generateReferralLink(userId) {
-        return `https://t.me/Finisher_task_bot/app?startapp=${userId}`;
+        return `https://t.me/finisher_task_bot?start=${userId}`;
     }
 
-    // Share referral link
+    // Share referral link with proper bot integration
     shareReferralLink(userId) {
         const link = this.generateReferralLink(userId);
-        const text = `🎉 Join me on this amazing Telegram Mini App and earn coins together! 💰`;
+        const text = `🎉 Join me on this amazing Telegram Mini App and earn coins together! 💰\n\n🎮 Complete tasks, farm coins, and refer friends!\n💎 Get VIP for 2x rewards!\n\n${link}`;
         
         if (this.webApp) {
-            const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`;
-            this.openTelegramLink(shareUrl);
+            this.webApp.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
         } else {
-            // Fallback - copy to clipboard
+            // Fallback for browser mode
             navigator.clipboard.writeText(link).then(() => {
-                this.showAlert('Referral link copied to clipboard!');
+                this.showAlert('🔗 Referral link copied to clipboard!\n\nShare it with friends to earn 500 coins per referral! 💰');
             }).catch(() => {
-                this.showAlert(`Share this link: ${link}`);
+                this.showAlert(`Share this link with friends:\n\n${link}\n\nEarn 500 coins per referral! 💰`);
             });
         }
     }
@@ -474,15 +473,45 @@ class TelegramApp {
         }
     }
 
-    // Create payment invoice (would typically call your backend)
+    // Create payment invoice (integrates with your API)
     async createPaymentInvoice(paymentData) {
         try {
-            // This would typically call your backend API
-            // For now, we'll return a mock invoice URL
-            console.log('Creating payment invoice:', paymentData);
-            return `https://t.me/invoice/${Date.now()}`;
+            console.log('🔄 Creating payment invoice via API...');
+            
+            // Call your backend API to create invoice
+            const response = await fetch('/api/create-invoice', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    userId: this.user?.id,
+                    chatId: this.user?.id, // Same as userId for Telegram
+                    amount: paymentData.prices[0].amount,
+                    currency: paymentData.currency,
+                    title: paymentData.title,
+                    description: paymentData.description,
+                    plan: 'VIP'
+                })
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                console.log('✅ Invoice created via API:', result);
+                
+                if (result.success) {
+                    return `https://t.me/invoice/${result.invoiceId}`;
+                } else {
+                    throw new Error(result.error || 'Invoice creation failed');
+                }
+            } else {
+                throw new Error(`API Error: ${response.status} ${response.statusText}`);
+            }
         } catch (error) {
-            console.error('Invoice creation failed:', error);
+            console.error('❌ Invoice creation error:', error);
+            
+            // If API fails, show user-friendly message
+            this.showAlert(`💳 Payment system temporarily unavailable.\n\nPlease try again later or contact support.`);
             return null;
         }
     }

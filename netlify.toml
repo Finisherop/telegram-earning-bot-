@@ -1,0 +1,26 @@
+[build]
+  functions = "api"
+  publish = "."
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Headers = "Content-Type"
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Environment variables (set in Netlify dashboard)
+# BOT_TOKEN = "8484469509:AAHNw8rM2fzw35Lp1d_UTLjdFhobasHoOnM"
+# FIREBASE_API_KEY = "AIzaSyA_cKKrwrqNyb0xl28IbHAnaJa3ChOdsZU"
