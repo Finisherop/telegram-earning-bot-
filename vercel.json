@@ -1,12 +1,35 @@
 {
-  "functions": {
-    "api/webhook.js": {
-      "runtime": "nodejs22.x"
+  "version": 2,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next"
     },
-    "api/create-invoice.js": {
-      "runtime": "nodejs22.x"
+    {
+      "src": "api/webhook.js",
+      "use": "@vercel/node",
+      "config": {
+        "runtime": "nodejs22.x"
+      }
+    },
+    {
+      "src": "api/create-invoice.js",
+      "use": "@vercel/node",
+      "config": {
+        "runtime": "nodejs22.x"
+      }
     }
-  },
+  ],
+  "routes": [
+    {
+      "src": "/api/webhook",
+      "dest": "/api/webhook.js"
+    },
+    {
+      "src": "/api/create-invoice",
+      "dest": "/api/create-invoice.js"
+    }
+  ],
   "env": {
     "BOT_TOKEN": "8484469509:AAHNw8rM2fzw35Lp1d_UTLjdFhobasHoOnM",
     "FIREBASE_API_KEY": "AIzaSyA_cKKrwrqNyb0xl28IbHAnaJa3ChOdsZU",
