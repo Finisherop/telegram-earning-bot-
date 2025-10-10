@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "echo 'Static build - no build needed'",
+    "build": "echo 'Static HTML build - no build needed'",
     "start": "next start",
     "lint": "next lint",
     "setup-bot": "node setup-bot.js"

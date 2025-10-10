@@ -16,7 +16,7 @@
       }
     },
     {
-      "src": "**!(api)/**",
+      "src": "**",
       "use": "@vercel/static"
     }
   ],
@@ -26,8 +26,12 @@
       "dest": "/api/$1"
     },
     {
-      "src": "/(.*)",
+      "src": "/(.*\\.(js|css|html|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot))",
       "dest": "/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ],
   "env": {
