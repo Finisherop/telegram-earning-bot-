@@ -124,6 +124,49 @@ class TelegramBotAPI {
         });
     }
 
+    // Create invoice link
+    async createInvoiceLink(invoiceData) {
+        const {
+            title,
+            description,
+            payload,
+            provider_token,
+            currency,
+            prices,
+            photo_url = null,
+            photo_size = null,
+            photo_width = null,
+            photo_height = null,
+            need_name = false,
+            need_phone_number = false,
+            need_email = false,
+            need_shipping_address = false,
+            send_phone_number_to_provider = false,
+            send_email_to_provider = false,
+            is_flexible = false
+        } = invoiceData;
+
+        return await this.sendRequest('createInvoiceLink', {
+            title,
+            description,
+            payload,
+            provider_token,
+            currency,
+            prices,
+            photo_url,
+            photo_size,
+            photo_width,
+            photo_height,
+            need_name,
+            need_phone_number,
+            need_email,
+            need_shipping_address,
+            send_phone_number_to_provider,
+            send_email_to_provider,
+            is_flexible
+        });
+    }
+
     // Answer pre-checkout query
     async answerPreCheckoutQuery(preCheckoutQueryId, ok = true, errorMessage = null) {
         return await this.sendRequest('answerPreCheckoutQuery', {

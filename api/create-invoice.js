@@ -20,13 +20,16 @@ class PaymentAPI {
                 currency = 'XTR', // Telegram Stars
                 title = 'VIP Membership',
                 description = 'Upgrade to VIP for exclusive benefits',
-                plan = 'VIP'
+                plan = 'VIP',
+                tier
             } = requestData;
 
-            // Validate required fields
-            if (!userId || !chatId || !amount) {
-                throw new Error('Missing required fields: userId, chatId, amount');
+            // Validate required fields - use userId as chatId if not provided
+            if (!userId || !amount) {
+                throw new Error('Missing required fields: userId, amount');
             }
+            
+            const actualChatId = chatId || userId;
 
             // Create payload for tracking
             const payload = JSON.stringify({
@@ -35,12 +38,12 @@ class PaymentAPI {
                 timestamp: Date.now()
             });
 
-            // Prepare invoice data
+            // Prepare invoice data for createInvoiceLink
             const invoiceData = {
                 title: title,
                 description: description,
                 payload: payload,
-                providerToken: '', // Empty for Telegram Stars
+                provider_token: '', // Empty for Telegram Stars
                 currency: currency,
                 prices: [
                     {
@@ -48,20 +51,20 @@ class PaymentAPI {
                         amount: amount // Amount in smallest currency unit
                     }
                 ],
-                photoUrl: 'https://i.imgur.com/VIP_BADGE.png', // Optional VIP badge image
-                photoWidth: 512,
-                photoHeight: 512
+                photo_url: 'https://via.placeholder.com/512x512/0088cc/ffffff?text=VIP',
+                photo_width: 512,
+                photo_height: 512
             };
 
-            // Send invoice to user
-            const result = await this.botAPI.sendInvoice(chatId, invoiceData);
+            // Create invoice link using Telegram Bot API
+            const result = await this.botAPI.createInvoiceLink(invoiceData);
             
-            console.log('✅ Invoice created successfully:', result);
+            console.log('✅ Invoice link created successfully:', result);
             
             return {
                 success: true,
-                invoiceId: result.message_id,
-                payload: payload
+                invoiceUrl: result, // The invoice link URL
+                invoiceId: payload // Use payload as invoice ID for tracking
             };
 
         } catch (error) {
