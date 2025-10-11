@@ -7,7 +7,7 @@ import EnhancedDashboard from './user/EnhancedDashboard';
 import Task from './user/Task';
 import Referral from './user/Referral';
 import ShopWithdrawal from './user/ShopWithdrawal';
-import UserDataDisplay from './UserDataDisplay';
+import Profile from './user/Profile';
 
 interface UserDashboardProps {
   user: User | null;
@@ -18,6 +18,7 @@ const tabs = [
   { id: 'dashboard', label: 'Dashboard', icon: '🏠' },
   { id: 'task', label: 'Tasks', icon: '📋' },
   { id: 'referral', label: 'Referral', icon: '👥' },
+  { id: 'profile', label: 'Profile', icon: '👤' },
   { id: 'shop', label: 'Shop/W.D.', icon: '💎' },
 ];
 
@@ -54,16 +55,13 @@ const UserDashboard = ({ user, setUser }: UserDashboardProps) => {
   const renderTabContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return (
-          <div>
-            {!isLoading && <UserDataDisplay />}
-            <EnhancedDashboard user={safeUser} />
-          </div>
-        );
+        return <EnhancedDashboard user={safeUser} />;
       case 'task':
         return <Task user={safeUser} />;
       case 'referral':
         return <Referral user={safeUser} />;
+      case 'profile':
+        return <Profile user={safeUser} />;
       case 'shop':
         return (
           <ShopWithdrawal 

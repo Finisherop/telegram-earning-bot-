@@ -56,6 +56,8 @@ export const TIER_CONFIGS = {
     farmingMultiplier: 2.0,
     referralMultiplier: 1.5,
     dailyWithdrawals: 3,
+    minWithdrawal: 150,
+    adsLimitPerDay: -1, // unlimited
     badge: 'bronze_vip',
     color: '#CD7F32'
   },
@@ -66,6 +68,8 @@ export const TIER_CONFIGS = {
     farmingMultiplier: 2.5,
     referralMultiplier: 2.0,
     dailyWithdrawals: 5,
+    minWithdrawal: 100,
+    adsLimitPerDay: -1, // unlimited
     badge: 'diamond_vip',
     color: '#B9F2FF'
   }

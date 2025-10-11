@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { User } from '@/types';
 import { TIER_CONFIGS } from '@/lib/constants';
-import { createTelegramStarInvoice, createVipRequest } from '@/lib/firebaseService';
+import { createTelegramStarInvoice, createVipRequest, createWithdrawalRequest } from '@/lib/firebaseService';
 import { playSound } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -100,13 +100,25 @@ const ShopWithdrawal = ({ user, setUser, onClose }: ShopWithdrawalProps) => {
 
     const updatedUser = {
       ...user,
+      // Set all VIP tier fields
+      vipTier: tier,
       tier,
       vip_tier: tier,
       vip_expiry: vipExpiry,
       vipExpiry: vipExpiry,
+      vipEndTime: new Date(vipExpiry),
+      
+      // Update multipliers and limits
+      farmingMultiplier: tierConfig.farmingMultiplier,
+      referralMultiplier: tierConfig.referralMultiplier,
       multiplier: tierConfig.farmingMultiplier,
       withdraw_limit: tierConfig.dailyWithdrawals,
+      withdrawalLimit: tierConfig.dailyWithdrawals,
+      minWithdrawal: tierConfig.minWithdrawal,
+      adsLimitPerDay: tierConfig.adsLimitPerDay,
       referral_boost: tierConfig.referralMultiplier,
+      
+      // Add badge
       badges: [
         ...(user.badges || []),
         {
@@ -311,66 +323,172 @@ const ShopWithdrawal = ({ user, setUser, onClose }: ShopWithdrawalProps) => {
       )}
 
       {activeSection === 'withdrawal' && (
+        <WithdrawalSection user={user} />
+      )}
+    </div>
+  );
+};
+
+// Withdrawal Section Component
+const WithdrawalSection = ({ user }: { user: User }) => {
+  const [withdrawalAmount, setWithdrawalAmount] = useState('');
+  const [upiId, setUpiId] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const minWithdrawal = user.minWithdrawal || 200;
+  const maxWithdrawal = Math.floor(user.coins / 100); // Convert coins to INR
+  const dailyLimit = user.withdrawalLimit || 1;
+
+  const handleWithdrawal = async () => {
+    if (!withdrawalAmount || !upiId) {
+      toast.error('Please fill in all fields');
+      return;
+    }
+
+    const amount = parseInt(withdrawalAmount);
+    if (amount < minWithdrawal) {
+      toast.error(`Minimum withdrawal amount is ₹${minWithdrawal}`);
+      return;
+    }
+
+    if (amount > maxWithdrawal) {
+      toast.error(`Insufficient balance. Maximum withdrawal: ₹${maxWithdrawal}`);
+      return;
+    }
+
+    // Validate UPI ID format
+    const upiRegex = /^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$/;
+    if (!upiRegex.test(upiId)) {
+      toast.error('Please enter a valid UPI ID (e.g., user@paytm)');
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      await createWithdrawalRequest(user.telegramId, amount, upiId);
+      toast.success('Withdrawal request submitted successfully! Admin will review it soon.');
+      setWithdrawalAmount('');
+      setUpiId('');
+    } catch (error) {
+      console.error('Withdrawal request error:', error);
+      toast.error('Failed to submit withdrawal request. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* User Balance */}
+      <div className="bg-white rounded-2xl p-6 shadow-lg">
+        <h2 className="text-xl font-bold text-gray-800 mb-4">Your Balance</h2>
+        
+        <div className="grid grid-cols-2 gap-4">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-primary">
+              💰 {(user.coins || 0).toLocaleString()}
+            </div>
+            <p className="text-gray-600 text-sm">Available Coins</p>
+          </div>
+          
+          <div className="text-center">
+            <div className="text-2xl font-bold text-accent">
+              ₹{Math.floor(user.coins / 100)}
+            </div>
+            <p className="text-gray-600 text-sm">INR Equivalent</p>
+          </div>
+        </div>
+        
+        <div className="mt-4 bg-gray-50 rounded-lg p-3">
+          <p className="text-gray-600 text-sm text-center">
+            Exchange Rate: 100 coins = ₹1
+          </p>
+        </div>
+      </div>
+
+      {/* Withdrawal Form */}
+      <div className="bg-white rounded-2xl p-6 shadow-lg">
+        <h3 className="text-lg font-bold text-gray-800 mb-4">💸 Request Withdrawal</h3>
+        
         <div className="space-y-4">
-          {/* User Balance */}
-          <div className="bg-white rounded-2xl p-6 shadow-lg">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Your Balance</h2>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-primary">
-                  💰 {(user.coins || 0).toLocaleString()}
-                </div>
-                <p className="text-gray-600 text-sm">Available Coins</p>
-              </div>
-              
-              <div className="text-center">
-                <div className="text-2xl font-bold text-accent">
-                  ₹{Math.floor(user.coins / 100)}
-                </div>
-                <p className="text-gray-600 text-sm">INR Equivalent</p>
-              </div>
-            </div>
-            
-            <div className="mt-4 bg-gray-50 rounded-lg p-3">
-              <p className="text-gray-600 text-sm text-center">
-                Exchange Rate: 100 coins = ₹1
-              </p>
-            </div>
+          {/* Amount Input */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Withdrawal Amount (₹)
+            </label>
+            <input
+              type="number"
+              value={withdrawalAmount}
+              onChange={(e) => setWithdrawalAmount(e.target.value)}
+              placeholder={`Min: ₹${minWithdrawal}, Max: ₹${maxWithdrawal}`}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent"
+              min={minWithdrawal}
+              max={maxWithdrawal}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Available: ₹{maxWithdrawal} • Min: ₹{minWithdrawal} • Daily Limit: {dailyLimit} withdrawal(s)
+            </p>
           </div>
 
-          {/* Withdrawal Notice */}
-          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6">
-            <div className="text-center">
-              <div className="text-4xl mb-3">🚧</div>
-              <h3 className="text-lg font-bold text-blue-800 mb-2">Withdrawal System Update</h3>
-              <p className="text-blue-700 text-sm mb-4">
-                We're upgrading our withdrawal system to support Telegram Stars payments. 
-                Traditional withdrawals will be available soon.
-              </p>
-              <div className="bg-blue-100 rounded-lg p-3">
-                <p className="text-blue-800 text-xs">
-                  💡 Tip: Use your coins to purchase VIP upgrades with Telegram Stars for instant benefits!
-                </p>
-              </div>
-            </div>
+          {/* UPI ID Input */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              UPI ID
+            </label>
+            <input
+              type="text"
+              value={upiId}
+              onChange={(e) => setUpiId(e.target.value)}
+              placeholder="yourname@paytm, yourname@phonepe, etc."
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Enter your UPI ID (e.g., 9876543210@paytm)
+            </p>
           </div>
 
-          {/* VIP Benefits Reminder */}
-          <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl p-6 text-white">
-            <h3 className="text-lg font-bold mb-3">🌟 Maximize Your Earnings</h3>
-            <div className="space-y-2 text-sm">
-              <p>• Upgrade to VIP for faster coin generation</p>
-              <p>• Higher referral bonuses with VIP status</p>
-              <p>• Exclusive access to premium features</p>
+          {/* Submit Button */}
+          <motion.button
+            onClick={handleWithdrawal}
+            disabled={isProcessing || !withdrawalAmount || !upiId}
+            className={`w-full py-3 rounded-xl font-bold transition-all ${
+              isProcessing || !withdrawalAmount || !upiId
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-primary text-white hover:bg-primary/90'
+            }`}
+            whileTap={{ scale: 0.95 }}
+            whileHover={{ scale: (!isProcessing && withdrawalAmount && upiId) ? 1.02 : 1 }}
+          >
+            {isProcessing ? '⏳ Processing...' : '💸 Submit Withdrawal Request'}
+          </motion.button>
+        </div>
+      </div>
+
+      {/* Withdrawal Info */}
+      <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6">
+        <div className="flex items-start space-x-3">
+          <div className="text-blue-600 text-xl">ℹ️</div>
+          <div>
+            <h4 className="font-bold text-blue-800 mb-2">Withdrawal Information</h4>
+            <div className="space-y-1 text-blue-700 text-sm">
+              <p>• Withdrawals are processed within 24-48 hours</p>
+              <p>• Minimum withdrawal: ₹{minWithdrawal}</p>
+              <p>• Daily withdrawal limit: {dailyLimit} request(s)</p>
+              <p>• VIP members get higher limits and faster processing</p>
+              <p>• Make sure your UPI ID is correct and active</p>
             </div>
-            <motion.button
-              onClick={() => setActiveSection('shop')}
-              className="mt-4 bg-white text-purple-600 px-4 py-2 rounded-lg font-bold text-sm hover:bg-gray-100 transition-colors"
-              whileTap={{ scale: 0.95 }}
-            >
-              View VIP Plans →
-            </motion.button>
+          </div>
+        </div>
+      </div>
+
+      {/* VIP Benefits Reminder */}
+      {user.vipTier === 'free' && (
+        <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl p-6 text-white">
+          <h3 className="text-lg font-bold mb-3">🌟 Upgrade for Better Withdrawal Limits</h3>
+          <div className="space-y-2 text-sm">
+            <p>• VIP Bronze: {TIER_CONFIGS.bronze.dailyWithdrawals} withdrawals/day, Min: ₹{TIER_CONFIGS.bronze.minWithdrawal}</p>
+            <p>• VIP Diamond: {TIER_CONFIGS.diamond.dailyWithdrawals} withdrawals/day, Min: ₹{TIER_CONFIGS.diamond.minWithdrawal}</p>
+            <p>• Faster processing for VIP members</p>
           </div>
         </div>
       )}

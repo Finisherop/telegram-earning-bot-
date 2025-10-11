@@ -50,6 +50,12 @@ class TelegramUserCapture {
    * Automatically capture user data from Telegram WebApp or create browser fallback
    */
   public async captureUserData(): Promise<TelegramUserData | BrowserUserData | null> {
+    // If we already have user data, return it immediately
+    if (this.userData) {
+      console.log('[UserCapture] User data already captured, returning existing data');
+      return this.userData;
+    }
+
     if (this.isCapturing) {
       console.log('[UserCapture] Already capturing user data...');
       return this.userData;
@@ -87,6 +93,8 @@ class TelegramUserCapture {
           };
 
           this.userData = userData;
+          // Cache the user data locally
+          localStorage.setItem('telegram_user_data', JSON.stringify(userData));
           await this.storeUserData(userData);
           return userData;
         } else {
@@ -98,6 +106,8 @@ class TelegramUserCapture {
       console.log('[UserCapture] Creating browser fallback user');
       const browserUserData = await this.createBrowserUser();
       this.userData = browserUserData;
+      // Cache the user data locally
+      localStorage.setItem('telegram_user_data', JSON.stringify(browserUserData));
       await this.storeUserData(browserUserData);
       return browserUserData;
 
@@ -252,25 +262,41 @@ class TelegramUserCapture {
   public async initialize(): Promise<void> {
     console.log('[UserCapture] Initializing automatic user capture...');
 
-    // Wait for Telegram WebApp to be ready
+    // Check if we already have cached user data
     if (typeof window !== 'undefined') {
-      // Listen for Telegram WebApp ready event
-      window.addEventListener('telegramWebAppReady', async () => {
-        console.log('[UserCapture] Telegram WebApp ready, capturing user data...');
-        await this.captureUserData();
-      });
-
-      // Fallback timeout for browser mode
-      setTimeout(async () => {
-        if (!this.userData) {
-          console.log('[UserCapture] Timeout reached, capturing user data...');
-          await this.captureUserData();
+      const cachedData = localStorage.getItem('telegram_user_data');
+      if (cachedData) {
+        try {
+          this.userData = JSON.parse(cachedData);
+          console.log('[UserCapture] Loaded cached user data:', this.userData);
+          return; // Don't capture again if we have cached data
+        } catch (error) {
+          console.error('[UserCapture] Failed to parse cached data:', error);
         }
-      }, 2000);
+      }
 
-      // Update last seen periodically
+      // Only set up capture if we don't have data yet
+      if (!this.userData) {
+        // Listen for Telegram WebApp ready event
+        window.addEventListener('telegramWebAppReady', async () => {
+          console.log('[UserCapture] Telegram WebApp ready, capturing user data...');
+          await this.captureUserData();
+        });
+
+        // Fallback timeout for browser mode
+        setTimeout(async () => {
+          if (!this.userData) {
+            console.log('[UserCapture] Timeout reached, capturing user data...');
+            await this.captureUserData();
+          }
+        }, 2000);
+      }
+
+      // Update last seen periodically (only if we have user data)
       setInterval(() => {
-        this.updateLastSeen();
+        if (this.userData) {
+          this.updateLastSeen();
+        }
       }, 30000); // Every 30 seconds
     }
   }

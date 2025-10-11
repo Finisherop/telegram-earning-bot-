@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 interface InvoiceRequest {
   amount: number;
   description: string;
-  tier: 'vip1' | 'vip2';
+  tier: 'vip1' | 'vip2' | 'bronze' | 'diamond';
   userId: number;
 }
 
@@ -25,9 +25,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Map tier names for display
+    const tierDisplayName = tier === 'bronze' ? 'BRONZE VIP' : 
+                           tier === 'diamond' ? 'DIAMOND VIP' :
+                           tier.toUpperCase();
+
     // Create invoice using Telegram Bot API
     const invoiceData = {
-      title: `${tier.toUpperCase()} Subscription`,
+      title: `${tierDisplayName} Subscription`,
       description: description,
       payload: JSON.stringify({
         tier: tier,
@@ -38,7 +43,7 @@ export async function POST(request: NextRequest) {
       currency: 'XTR', // Telegram Stars currency
       prices: [
         {
-          label: `${tier.toUpperCase()} - 30 days`,
+          label: `${tierDisplayName} - 30 days`,
           amount: amount // Amount in Stars
         }
       ],
@@ -48,7 +53,7 @@ export async function POST(request: NextRequest) {
         receipt: {
           items: [
             {
-              description: `${tier.toUpperCase()} Subscription - 30 days`,
+              description: `${tierDisplayName} Subscription - 30 days`,
               quantity: '1',
               amount: {
                 value: amount,
