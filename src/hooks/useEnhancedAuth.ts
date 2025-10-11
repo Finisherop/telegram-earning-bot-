@@ -1,55 +1,82 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { User, PaymentData, ConversionData, BotMessage } from '@/types';
+import { useState, useEffect, useRef } from 'react';
+import { User } from '@/types';
 import { TelegramService } from '@/lib/telegram';
-import { getUser, initializeUser } from '@/lib/firebaseService';
 import { 
-  subscribeToUserWithExtendedData, 
-  safeUpdateUserWithRetry,
-  cleanupAllListeners 
-} from '@/lib/enhancedFirebaseService';
+  enhancedDataPersistence,
+  initializeUserData,
+  updateUserData,
+  subscribeToUserData,
+  getCurrentUserData
+} from '@/lib/enhancedDataPersistence';
+import { initializeUser } from '@/lib/firebaseService';
 
-interface EnhancedAuthData {
+export interface AuthState {
   user: User | null;
-  payments: PaymentData[];
-  conversions: ConversionData[];
-  messages: BotMessage[];
   isLoading: boolean;
-  lastUpdate: Date | null;
+  hasError: boolean;
+  isInitialized: boolean;
 }
 
 export const useEnhancedAuth = () => {
-  const [authData, setAuthData] = useState<EnhancedAuthData>({
+  const [authState, setAuthState] = useState<AuthState>({
     user: null,
-    payments: [],
-    conversions: [],
-    messages: [],
     isLoading: true,
-    lastUpdate: null,
+    hasError: false,
+    isInitialized: false
   });
 
-  useEffect(() => {
-    let unsubscribeExtended: (() => void) | null = null;
+  const initializationRef = useRef<boolean>(false);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
 
-    const initializeEnhancedAuth = async () => {
+  useEffect(() => {
+    // Prevent multiple initializations
+    if (initializationRef.current) return;
+    initializationRef.current = true;
+
+    const initializeAuth = async () => {
+      console.log('[EnhancedAuth] Starting authentication initialization...');
+      
       try {
-        console.log('[Enhanced Auth] Initializing enhanced authentication...');
+        // Check for immediate cached data
+        const cachedUser = getCurrentUserData();
+        if (cachedUser) {
+          console.log('[EnhancedAuth] Found cached user, showing immediately');
+          setAuthState(prev => ({
+            ...prev,
+            user: cachedUser,
+            isLoading: false,
+            isInitialized: true
+          }));
+        }
+
+        // Subscribe to data persistence updates
+        const unsubscribe = subscribeToUserData(({ user, isLoading, hasError }) => {
+          setAuthState(prev => ({
+            ...prev,
+            user,
+            isLoading,
+            hasError,
+            isInitialized: true
+          }));
+        });
         
+        unsubscribeRef.current = unsubscribe;
+
         // Wait for Telegram service to initialize
         await new Promise(resolve => setTimeout(resolve, 1000));
         
         const telegram = TelegramService.getInstance();
         const telegramUser = telegram.getUser();
-        const startParam = telegram.getStartParam();
 
-        console.log('[Enhanced Auth] Telegram data:', { telegramUser, startParam });
+        console.log('[EnhancedAuth] Telegram user data:', telegramUser);
 
         let userId: string;
         let userData: Partial<User>;
 
         if (telegramUser && telegramUser.id && telegramUser.id > 0) {
-          // Real Telegram user or valid browser user
+          // Real Telegram user
           userId = telegramUser.id.toString();
           userData = {
             telegramId: userId,
@@ -57,186 +84,149 @@ export const useEnhancedAuth = () => {
             firstName: telegramUser.first_name,
             lastName: telegramUser.last_name,
             profilePic: telegramUser.photo_url,
-            referrerId: startParam || undefined,
+            referrerId: telegram.getStartParam() || undefined,
           };
-          console.log('[Enhanced Auth] Using authenticated user:', userData);
+          console.log('[EnhancedAuth] Using Telegram user:', userData);
         } else {
-          console.warn('[Enhanced Auth] No valid user data available');
-          setAuthData(prev => ({ ...prev, isLoading: false }));
+          console.warn('[EnhancedAuth] No valid Telegram user, cannot proceed');
+          setAuthState(prev => ({
+            ...prev,
+            isLoading: false,
+            hasError: true,
+            isInitialized: true
+          }));
           return;
         }
 
-        try {
-          // Initialize or get existing user
-          let existingUser = await getUser(userId);
-          
-          if (!existingUser) {
-            console.log('[Enhanced Auth] Creating new user:', userId);
-            existingUser = await initializeUser(userId);
+        // Initialize user data through enhanced persistence
+        const initializedUser = await initializeUserData(userId);
+        
+        if (initializedUser) {
+          // Update with latest Telegram data if needed
+          const needsUpdate = 
+            initializedUser.username !== userData.username ||
+            initializedUser.firstName !== userData.firstName ||
+            initializedUser.lastName !== userData.lastName ||
+            initializedUser.profilePic !== userData.profilePic;
+
+          if (needsUpdate) {
+            console.log('[EnhancedAuth] Updating user profile data');
+            await updateUserData(userId, {
+              username: userData.username,
+              firstName: userData.firstName,
+              lastName: userData.lastName,
+              profilePic: userData.profilePic,
+            });
           }
-          
-          // Update user with latest Telegram data using enhanced service
-          existingUser = await safeUpdateUserWithRetry(userId, {
-            username: telegramUser.username,
-            firstName: telegramUser.first_name,
-            lastName: telegramUser.last_name,
-            profilePic: telegramUser.photo_url,
-          });
-          
+
           // Handle referral for new users
-          if (startParam && startParam !== userId && existingUser.createdAt) {
-            const createdTime = new Date(existingUser.createdAt).getTime();
+          const startParam = telegram.getStartParam();
+          if (startParam && startParam !== userId && initializedUser.createdAt) {
+            const createdTime = new Date(initializedUser.createdAt).getTime();
             const now = new Date().getTime();
             const isNewUser = (now - createdTime) < 300000; // Created within last 5 minutes
             
-            if (isNewUser && !existingUser.referrerId) {
-              console.log('[Enhanced Auth] Processing referral for new user:', startParam);
+            if (isNewUser && !initializedUser.referrerId) {
+              console.log('[EnhancedAuth] Processing referral for new user:', startParam);
               try {
-                // Set referrer for new user
-                await safeUpdateUserWithRetry(userId, {
+                // Process referral logic here if needed
+                await updateUserData(userId, {
                   referrerId: startParam,
                 });
-                
-                // Add referral reward to referrer
-                const referrer = await getUser(startParam);
-                if (referrer) {
-                  await safeUpdateUserWithRetry(startParam, {
-                    referralCount: (referrer.referralCount || 0) + 1,
-                    referralEarnings: (referrer.referralEarnings || 0) + 500,
-                    coins: (referrer.coins || 0) + 500,
-                  });
-                  console.log('[Enhanced Auth] Referral reward given to:', startParam);
-                }
               } catch (referralError) {
-                console.error('[Enhanced Auth] Error processing referral:', referralError);
+                console.error('[EnhancedAuth] Error processing referral:', referralError);
               }
             }
           }
-
-          // Set up enhanced real-time listener for user data with payments, conversions, and messages
-          console.log('[Enhanced Auth] Setting up enhanced real-time listener for user:', userId);
-          unsubscribeExtended = subscribeToUserWithExtendedData(
-            userId,
-            ({ user: updatedUser, payments, conversions, messages }) => {
-              console.log('[Enhanced Auth] Enhanced real-time update received:', {
-                user: !!updatedUser,
-                payments: payments.length,
-                conversions: conversions.length,
-                messages: messages.length,
-              });
-
-              setAuthData({
-                user: updatedUser,
-                payments,
-                conversions,
-                messages,
-                isLoading: false,
-                lastUpdate: new Date(),
-              });
+        } else {
+          // Create new user if initialization failed
+          console.log('[EnhancedAuth] Creating new user');
+          try {
+            const newUser = await initializeUser(userId);
+            if (newUser) {
+              await updateUserData(userId, userData);
             }
-          );
-
-        } catch (firebaseError) {
-          console.error('[Enhanced Auth] Firebase error:', firebaseError);
-          
-          // Create a local user if Firebase fails temporarily
-          const localUser: User = {
-            id: userId,
-            telegramId: userId,
-            username: userData.username || 'user',
-            firstName: userData.firstName || 'User',
-            lastName: userData.lastName || '',
-            profilePic: userData.profilePic,
-            coins: 0,
-            xp: 0,
-            level: 1,
-            vipTier: 'free',
-            farmingMultiplier: 1.0,
-            referralMultiplier: 1.0,
-            adsLimitPerDay: 5,
-            withdrawalLimit: 1,
-            minWithdrawal: 200,
-            referralCount: 0,
-            referralEarnings: 0,
-            referrerId: userData.referrerId,
-            dailyStreak: 0,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          };
-          
-          setAuthData({
-            user: localUser,
-            payments: [],
-            conversions: [],
-            messages: [],
-            isLoading: false,
-            lastUpdate: new Date(),
-          });
+          } catch (createError) {
+            console.error('[EnhancedAuth] Error creating user:', createError);
+            setAuthState(prev => ({
+              ...prev,
+              isLoading: false,
+              hasError: true,
+              isInitialized: true
+            }));
+          }
         }
-      } catch (err) {
-        console.error('[Enhanced Auth] Auth initialization error:', err);
-        
-        // Fallback user only if everything fails
-        const fallbackUser: User = {
-          id: 'error_user_' + Date.now(),
-          telegramId: 'error_user_' + Date.now(),
-          username: 'erroruser',
-          firstName: 'Error User',
-          lastName: '',
-          coins: 0,
-          xp: 0,
-          level: 1,
-          vipTier: 'free',
-          farmingMultiplier: 1.0,
-          referralMultiplier: 1.0,
-          adsLimitPerDay: 5,
-          withdrawalLimit: 1,
-          minWithdrawal: 200,
-          referralCount: 0,
-          referralEarnings: 0,
-          dailyStreak: 0,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-        
-        setAuthData({
-          user: fallbackUser,
-          payments: [],
-          conversions: [],
-          messages: [],
+
+      } catch (error) {
+        console.error('[EnhancedAuth] Authentication initialization error:', error);
+        setAuthState(prev => ({
+          ...prev,
           isLoading: false,
-          lastUpdate: new Date(),
-        });
+          hasError: true,
+          isInitialized: true
+        }));
       }
     };
 
-    initializeEnhancedAuth();
+    initializeAuth();
 
     // Cleanup function
     return () => {
-      console.log('[Enhanced Auth] Cleaning up enhanced auth listeners');
-      if (unsubscribeExtended) {
-        unsubscribeExtended();
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
       }
-      cleanupAllListeners();
     };
   }, []);
 
-  const refreshUser = async () => {
-    if (authData.user) {
-      const updatedUser = await getUser(authData.user.telegramId);
-      if (updatedUser) {
-        setAuthData(prev => ({
-          ...prev,
-          user: updatedUser,
-          lastUpdate: new Date(),
-        }));
-      }
+  // Update user function
+  const updateUser = async (updateData: Partial<User>): Promise<User | null> => {
+    if (!authState.user?.telegramId) {
+      console.error('[EnhancedAuth] Cannot update user: no telegramId');
+      return null;
+    }
+
+    try {
+      return await updateUserData(authState.user.telegramId, updateData);
+    } catch (error) {
+      console.error('[EnhancedAuth] Error updating user:', error);
+      throw error;
     }
   };
 
+  // Refresh user data
+  const refreshUser = async (): Promise<User | null> => {
+    if (!authState.user?.telegramId) {
+      console.error('[EnhancedAuth] Cannot refresh user: no telegramId');
+      return null;
+    }
+
+    try {
+      return await enhancedDataPersistence.refreshFromFirebase(authState.user.telegramId);
+    } catch (error) {
+      console.error('[EnhancedAuth] Error refreshing user:', error);
+      return null;
+    }
+  };
+
+  // Clear user data and logout
+  const logout = (): void => {
+    enhancedDataPersistence.clearCache();
+    setAuthState({
+      user: null,
+      isLoading: false,
+      hasError: false,
+      isInitialized: false
+    });
+  };
+
   return {
-    ...authData,
+    ...authState,
+    updateUser,
     refreshUser,
+    logout,
+    // Additional helpers
+    isAuthenticated: !!authState.user && authState.isInitialized,
+    syncState: enhancedDataPersistence.getSyncState(),
   };
 };

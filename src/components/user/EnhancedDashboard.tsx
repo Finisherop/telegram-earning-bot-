@@ -15,9 +15,10 @@ import toast from 'react-hot-toast';
 
 interface EnhancedDashboardProps {
   user: User;
+  onUserUpdate?: (updateData: Partial<User>) => void;
 }
 
-const EnhancedDashboard = ({ user: initialUser }: EnhancedDashboardProps) => {
+const EnhancedDashboard = ({ user: initialUser, onUserUpdate }: EnhancedDashboardProps) => {
   const [user, setUser] = useState<User>(initialUser);
   const [payments, setPayments] = useState<PaymentData[]>([]);
   const [conversions, setConversions] = useState<ConversionData[]>([]);
