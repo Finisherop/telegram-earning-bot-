@@ -3,7 +3,10 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { AdminSettings as AdminSettingsType } from '@/types';
-import { getAdminSettings, updateAdminSettings, subscribeToAdminSettings } from '@/lib/firebaseService';
+import { 
+  subscribeToAdminSettings,
+  updateAdminSettingsSafe 
+} from '@/lib/firebaseRealtimeManager';
 import toast from 'react-hot-toast';
 
 const AdminSettings = () => {
@@ -32,9 +35,15 @@ const AdminSettings = () => {
     
     setSaving(true);
     try {
-      await updateAdminSettings(settings);
-      toast.success('Settings updated successfully!');
+      // Use the enhanced Firebase manager for instant sync
+      await updateAdminSettingsSafe(settings);
+      toast.success('⚡ Settings updated and synced to all users instantly!', {
+        duration: 3000,
+        icon: '🚀'
+      });
+      console.log('[Admin Settings] Settings saved and synced globally');
     } catch (error) {
+      console.error('[Admin Settings] Failed to update settings:', error);
       toast.error('Failed to update settings');
     } finally {
       setSaving(false);
