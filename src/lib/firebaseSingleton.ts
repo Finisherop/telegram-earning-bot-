@@ -1,14 +1,21 @@
 /**
  * Firebase Singleton Service
  * 
- * Ensures Firebase is initialized only once and provides shared instances
- * of Firestore, Realtime Database, and Auth services.
+ * Updated to use the new FirebaseConnectionManager for better
+ * real-time connection management and Telegram WebApp integration.
  */
 
-import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getFirestore, Firestore, connectFirestoreEmulator } from 'firebase/firestore';
-import { getDatabase, Database, connectDatabaseEmulator } from 'firebase/database';
-import { getAuth, Auth, connectAuthEmulator } from 'firebase/auth';
+import { 
+  firebaseConnectionManager, 
+  getFirebaseServices as getConnectionManagerServices,
+  getFirebaseServicesSync as getConnectionManagerServicesSync,
+  reconnectFirebase,
+  isFirebaseConnected
+} from './firebaseConnectionManager';
+import { FirebaseApp, getApps } from 'firebase/app';
+import { Firestore } from 'firebase/firestore';
+import { Database } from 'firebase/database';
+import { Auth } from 'firebase/auth';
 
 // Firebase configuration with environment variables
 const firebaseConfig = {
@@ -27,13 +34,21 @@ export interface FirebaseServices {
   realtimeDb: Database;
   auth: Auth;
   isInitialized: boolean;
-  initializationError: Error | null;
+  connectionStatus: {
+    isConnected: boolean;
+    isInitialized: boolean;
+    lastConnectionTime: number;
+    connectionAttempts: number;
+    error: Error | null;
+  };
 }
 
+/**
+ * Legacy singleton class for backwards compatibility
+ * Now delegates to the new FirebaseConnectionManager
+ */
 class FirebaseSingleton {
   private static instance: FirebaseSingleton;
-  private services: FirebaseServices | null = null;
-  private initializationPromise: Promise<FirebaseServices> | null = null;
 
   private constructor() {}
 
@@ -45,167 +60,46 @@ class FirebaseSingleton {
   }
 
   /**
-   * Validates Firebase configuration
-   */
-  private validateConfig(): void {
-    const requiredFields = ['apiKey', 'projectId', 'appId'];
-    const missingFields = requiredFields.filter(field => {
-      const value = firebaseConfig[field as keyof typeof firebaseConfig];
-      return !value || value === 'undefined' || value === '' || value === 'null';
-    });
-
-    if (missingFields.length > 0) {
-      throw new Error(`Firebase configuration incomplete. Missing: ${missingFields.join(', ')}`);
-    }
-
-    console.log('[FirebaseSingleton] Configuration validated successfully');
-  }
-
-  /**
-   * Initializes Firebase services (only once)
-   */
-  private async initializeServices(): Promise<FirebaseServices> {
-    try {
-      console.log('[FirebaseSingleton] Starting Firebase initialization...');
-      
-      // Validate configuration first
-      this.validateConfig();
-
-      // Initialize Firebase app (singleton pattern)
-      let app: FirebaseApp;
-      const existingApps = getApps();
-      
-      if (existingApps.length > 0) {
-        console.log('[FirebaseSingleton] Using existing Firebase app');
-        app = existingApps[0];
-      } else {
-        console.log('[FirebaseSingleton] Creating new Firebase app');
-        app = initializeApp(firebaseConfig);
-      }
-
-      // Initialize services
-      console.log('[FirebaseSingleton] Initializing Firebase services...');
-      
-      const db = getFirestore(app);
-      const realtimeDb = getDatabase(app);
-      const auth = getAuth(app);
-
-      // Connect to emulators in development (optional)
-      if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
-        try {
-          // Only connect to emulators if they're not already connected
-          if (!('_delegate' in db) || !(db as any)._delegate._databaseId) {
-            // Check if emulator connection should be made
-            const useEmulator = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true';
-            if (useEmulator) {
-              console.log('[FirebaseSingleton] Connecting to Firebase emulators...');
-              connectFirestoreEmulator(db, 'localhost', 8080);
-              connectDatabaseEmulator(realtimeDb, 'localhost', 9000);
-              connectAuthEmulator(auth, 'http://localhost:9099');
-            }
-          }
-        } catch (emulatorError) {
-          console.warn('[FirebaseSingleton] Emulator connection failed:', emulatorError);
-          // Continue without emulators
-        }
-      }
-
-      const services: FirebaseServices = {
-        app,
-        db,
-        realtimeDb,
-        auth,
-        isInitialized: true,
-        initializationError: null
-      };
-
-      console.log('[FirebaseSingleton] Firebase services initialized successfully');
-      
-      // Store global reference for debugging
-      if (typeof window !== 'undefined') {
-        (window as any).__FIREBASE_SERVICES__ = services;
-      }
-
-      return services;
-
-    } catch (error) {
-      console.error('[FirebaseSingleton] Firebase initialization failed:', error);
-      
-      const errorServices: FirebaseServices = {
-        app: null as any,
-        db: null as any,
-        realtimeDb: null as any,
-        auth: null as any,
-        isInitialized: false,
-        initializationError: error as Error
-      };
-
-      // Store error state for debugging
-      if (typeof window !== 'undefined') {
-        (window as any).__FIREBASE_INITIALIZATION_ERROR__ = error;
-      }
-
-      throw error;
-    }
-  }
-
-  /**
-   * Gets Firebase services (initializes on first call)
+   * Gets Firebase services using the connection manager
    */
   public async getServices(): Promise<FirebaseServices> {
-    // Return cached services if already initialized
-    if (this.services && this.services.isInitialized) {
-      return this.services;
-    }
-
-    // Return existing promise if initialization is in progress
-    if (this.initializationPromise) {
-      return this.initializationPromise;
-    }
-
-    // Start initialization
-    this.initializationPromise = this.initializeServices();
-    
-    try {
-      this.services = await this.initializationPromise;
-      return this.services;
-    } catch (error) {
-      // Reset promise so next call can retry
-      this.initializationPromise = null;
-      throw error;
-    }
+    return getConnectionManagerServices();
   }
 
   /**
-   * Gets Firebase services synchronously (for cases where async isn't possible)
-   * Returns null if services aren't initialized yet
+   * Gets Firebase services synchronously
    */
   public getServicesSync(): FirebaseServices | null {
-    return this.services;
+    return getConnectionManagerServicesSync();
   }
 
   /**
-   * Checks if Firebase is initialized
+   * Checks if Firebase is initialized and connected
    */
   public isInitialized(): boolean {
-    return this.services?.isInitialized ?? false;
+    return isFirebaseConnected();
   }
 
   /**
-   * Gets initialization error if any
+   * Gets connection status
    */
-  public getInitializationError(): Error | null {
-    return this.services?.initializationError ?? null;
+  public getConnectionStatus() {
+    return firebaseConnectionManager.getConnectionStatus();
   }
 
   /**
-   * Force re-initialization (for testing or error recovery)
+   * Force re-initialization
    */
   public async reinitialize(): Promise<FirebaseServices> {
-    console.log('[FirebaseSingleton] Force re-initializing Firebase...');
-    this.services = null;
-    this.initializationPromise = null;
-    return this.getServices();
+    console.log('[FirebaseSingleton] Delegating reinitialize to connection manager');
+    return firebaseConnectionManager.reinitialize();
+  }
+
+  /**
+   * Manually trigger reconnection
+   */
+  public async reconnect(): Promise<void> {
+    return reconnectFirebase();
   }
 }
 
@@ -216,25 +110,28 @@ export const firebaseSingleton = FirebaseSingleton.getInstance();
  * Convenience function to get Firebase services
  */
 export async function getFirebaseServices(): Promise<FirebaseServices> {
-  return firebaseSingleton.getServices();
+  return getConnectionManagerServices();
 }
 
 /**
  * Convenience function to get Firebase services synchronously
  */
 export function getFirebaseServicesSync(): FirebaseServices | null {
-  return firebaseSingleton.getServicesSync();
+  return getConnectionManagerServicesSync();
 }
 
 /**
- * Initialize Firebase on client-side only
+ * Check if Firebase is connected
  */
-if (typeof window !== 'undefined') {
-  // Auto-initialize Firebase when module loads on client
-  firebaseSingleton.getServices().catch(error => {
-    console.error('[FirebaseSingleton] Auto-initialization failed:', error);
-    // Don't throw here to prevent breaking the app
-  });
+export function isFirebaseInitialized(): boolean {
+  return isFirebaseConnected();
+}
+
+/**
+ * Manually reconnect Firebase
+ */
+export function reconnectFirebaseServices(): Promise<void> {
+  return reconnectFirebase();
 }
 
 // Export individual services for backward compatibility

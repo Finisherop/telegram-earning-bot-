@@ -1,8 +1,8 @@
 /**
  * Real-time Firebase Listeners Service
  * 
- * Provides onSnapshot listeners for real-time data updates
- * with proper error handling and data sanitization.
+ * Enhanced with Firebase Connection Manager for better reliability
+ * and Telegram WebApp lifecycle integration with auto-reconnection.
  */
 
 import { 
@@ -21,7 +21,7 @@ import {
   off, 
   DatabaseReference 
 } from 'firebase/database';
-import { getFirebaseServices } from './firebaseSingleton';
+import { getFirebaseServices, isFirebaseInitialized, reconnectFirebaseServices } from './firebaseSingleton';
 import { User, WithdrawalRequest, Task, UserTask } from '@/types';
 
 export interface RealtimeListenerOptions {
@@ -39,12 +39,101 @@ const DEFAULT_OPTIONS: RealtimeListenerOptions = {
 };
 
 /**
- * Listener manager to track active subscriptions
+ * Enhanced listener manager with connection recovery
  */
 class ListenerManager {
   private listeners: Map<string, () => void> = new Map();
+  private listenerCallbacks: Map<string, { callback: Function; options: RealtimeListenerOptions }> = new Map();
+  private isReconnecting = false;
   
-  add(id: string, unsubscribe: () => void) {
+  constructor() {
+    // Listen for Telegram WebApp lifecycle events
+    if (typeof window !== 'undefined') {
+      window.addEventListener('telegramWebAppResume', this.handleAppResume.bind(this));
+      window.addEventListener('online', this.handleNetworkOnline.bind(this));
+    }
+  }
+
+  /**
+   * Handle app resume - reconnect all listeners
+   */
+  private async handleAppResume(): Promise<void> {
+    try {
+      if (this.isReconnecting) return;
+      
+      console.log('[ListenerManager] App resumed, checking listener connections...');
+      this.isReconnecting = true;
+
+      // Wait for Firebase to be ready
+      if (!isFirebaseInitialized()) {
+        console.log('[ListenerManager] Firebase not ready, triggering reconnection...');
+        await reconnectFirebaseServices();
+      }
+
+      // Reconnect all listeners after a short delay
+      setTimeout(() => {
+        this.reconnectAllListeners();
+        this.isReconnecting = false;
+      }, 1000);
+
+    } catch (error) {
+      console.error('[ListenerManager] Error handling app resume:', error);
+      this.isReconnecting = false;
+    }
+  }
+
+  /**
+   * Handle network online - reconnect listeners
+   */
+  private async handleNetworkOnline(): Promise<void> {
+    try {
+      if (this.isReconnecting) return;
+      
+      console.log('[ListenerManager] Network online, reconnecting listeners...');
+      this.isReconnecting = true;
+
+      // Trigger Firebase reconnection
+      await reconnectFirebaseServices();
+      
+      // Reconnect listeners
+      setTimeout(() => {
+        this.reconnectAllListeners();
+        this.isReconnecting = false;
+      }, 2000);
+
+    } catch (error) {
+      console.error('[ListenerManager] Error handling network online:', error);
+      this.isReconnecting = false;
+    }
+  }
+
+  /**
+   * Reconnect all active listeners
+   */
+  private reconnectAllListeners(): void {
+    console.log(`[ListenerManager] Reconnecting ${this.listenerCallbacks.size} listeners...`);
+    
+    this.listenerCallbacks.forEach(({ callback, options }, id) => {
+      try {
+        // Remove old listener
+        this.remove(id);
+        
+        // Re-establish listener
+        setTimeout(() => {
+          try {
+            callback();
+          } catch (error) {
+            console.error(`[ListenerManager] Error reconnecting listener ${id}:`, error);
+          }
+        }, 500);
+        
+      } catch (error) {
+        console.error(`[ListenerManager] Error reconnecting listener ${id}:`, error);
+      }
+    });
+  }
+  
+  add(id: string, unsubscribe: () => void, callback?: Function, options?: RealtimeListenerOptions) {
     // Clean up existing listener if any
     const existing = this.listeners.get(id);
     if (existing) {
@@ -52,6 +141,11 @@ class ListenerManager {
     }
     
     this.listeners.set(id, unsubscribe);
+    
+    // Store callback for reconnection
+    if (callback) {
+      this.listenerCallbacks.set(id, { callback, options: options || DEFAULT_OPTIONS });
+    }
   }
   
   remove(id: string) {
@@ -60,11 +154,15 @@ class ListenerManager {
       unsubscribe();
       this.listeners.delete(id);
     }
+    
+    // Remove callback reference
+    this.listenerCallbacks.delete(id);
   }
   
   cleanup() {
     this.listeners.forEach(unsubscribe => unsubscribe());
     this.listeners.clear();
+    this.listenerCallbacks.clear();
   }
   
   getActiveCount(): number {
@@ -141,7 +239,7 @@ function sanitizeUserData(userData: any, userId: string): User {
 }
 
 /**
- * Real-time user data listener using both Firestore and Realtime Database
+ * Real-time user data listener with enhanced reconnection
  */
 export function subscribeToUser(
   userId: string,
@@ -155,6 +253,12 @@ export function subscribeToUser(
   const createListener = async () => {
     try {
       console.log(`[RealtimeListener] Setting up user subscription for ${userId}`);
+      
+      // Check Firebase connection status
+      if (!isFirebaseInitialized()) {
+        console.log('[RealtimeListener] Firebase not initialized, waiting...');
+        await reconnectFirebaseServices();
+      }
       
       const { db, realtimeDb } = await getFirebaseServices();
       
@@ -219,13 +323,20 @@ export function subscribeToUser(
         console.log(`[RealtimeListener] Unsubscribed from user ${userId}`);
       };
       
-      listenerManager.add(listenerId, combinedUnsubscribe);
+      listenerManager.add(listenerId, combinedUnsubscribe, createListener, opts);
       return combinedUnsubscribe;
       
     } catch (error) {
       console.error(`[RealtimeListener] Failed to create user listener for ${userId}:`, error);
       if (opts.onError) {
         opts.onError(error as Error);
+      }
+      
+      // Retry logic for connection failures
+      if (opts.retryOnError && retryCount < (opts.maxRetries || 3)) {
+        retryCount++;
+        console.log(`[RealtimeListener] Retrying user listener creation (${retryCount}/${opts.maxRetries})`);
+        setTimeout(createListener, opts.retryDelay || 2000);
       }
       
       // Return empty unsubscribe function

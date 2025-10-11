@@ -1,15 +1,16 @@
 /**
- * App Initializer Component
+ * Enhanced App Initializer with Firebase Connection Manager
  * 
- * Handles app initialization with the new Firebase singleton,
- * Telegram user capture, and error prevention systems.
+ * Handles app initialization with robust Firebase and Telegram WebApp
+ * integration with automatic reconnection capabilities.
  */
 
 'use client';
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { getFirebaseServices } from '@/lib/firebaseSingleton';
+import { getFirebaseServices, isFirebaseInitialized, reconnectFirebaseServices } from '@/lib/firebaseSingleton';
+import { telegramWebAppManager, getTelegramWebAppState } from '@/lib/telegramWebAppManager';
 import { 
   getTelegramUserSafe, 
   getCachedTelegramUser,
@@ -32,6 +33,8 @@ interface InitializationState {
   isFirebaseReady: boolean;
   isTelegramReady: boolean;
   isUserSynced: boolean;
+  isConnected: boolean;
+  connectionStatus: string;
   error: string | null;
   progress: number;
 }
@@ -42,6 +45,8 @@ const AppInitializer = ({ children }: AppInitializerProps) => {
     isFirebaseReady: false,
     isTelegramReady: false,
     isUserSynced: false,
+    isConnected: false,
+    connectionStatus: 'Initializing...',
     error: null,
     progress: 0
   });
@@ -84,7 +89,7 @@ const AppInitializer = ({ children }: AppInitializerProps) => {
       const services = await getFirebaseServices();
       
       if (!services.isInitialized) {
-        throw new Error(services.initializationError?.message || 'Firebase initialization failed');
+        throw new Error(services.connectionStatus?.error?.message || 'Firebase initialization failed');
       }
       
       console.log('[AppInitializer] Firebase services initialized successfully');
@@ -247,6 +252,73 @@ const AppInitializer = ({ children }: AppInitializerProps) => {
   }, []);
 
   /**
+   * Monitor connection status and Telegram WebApp lifecycle
+   */
+  useEffect(() => {
+    const checkConnectionStatus = () => {
+      const isConnected = isFirebaseInitialized();
+      const telegramState = getTelegramWebAppState();
+      
+      setState(prev => ({
+        ...prev,
+        isConnected,
+        connectionStatus: isConnected 
+          ? telegramState.isBackground 
+            ? 'Connected (Background)' 
+            : 'Connected'
+          : 'Disconnected'
+      }));
+    };
+
+    // Initial check
+    checkConnectionStatus();
+
+    // Listen for Telegram WebApp lifecycle events
+    const handleAppResume = () => {
+      console.log('[AppInitializer] Telegram WebApp resumed');
+      checkConnectionStatus();
+    };
+
+    const handleAppBackground = () => {
+      console.log('[AppInitializer] Telegram WebApp backgrounded');
+      checkConnectionStatus();
+    };
+
+    // Listen for network changes
+    const handleOnline = () => {
+      console.log('[AppInitializer] Network online');
+      checkConnectionStatus();
+    };
+
+    const handleOffline = () => {
+      console.log('[AppInitializer] Network offline');
+      setState(prev => ({
+        ...prev,
+        isConnected: false,
+        connectionStatus: 'Offline'
+      }));
+    };
+
+    // Add event listeners
+    window.addEventListener('telegramWebAppResume', handleAppResume);
+    window.addEventListener('telegramWebAppBackground', handleAppBackground);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Set up periodic connection check
+    const connectionCheckInterval = setInterval(checkConnectionStatus, 30000); // Every 30 seconds
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('telegramWebAppResume', handleAppResume);
+      window.removeEventListener('telegramWebAppBackground', handleAppBackground);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      clearInterval(connectionCheckInterval);
+    };
+  }, []);
+
+  /**
    * Auto-retry on certain errors
    */
   useEffect(() => {
@@ -320,6 +392,12 @@ const AppInitializer = ({ children }: AppInitializerProps) => {
               <span className="text-gray-600">Firebase Services</span>
               <span className={`font-bold ${state.isFirebaseReady ? 'text-green-600' : 'text-gray-400'}`}>
                 {state.isFirebaseReady ? '✅' : '⏳'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-600">Connection Status</span>
+              <span className={`text-xs font-medium ${state.isConnected ? 'text-green-600' : 'text-orange-500'}`}>
+                {state.connectionStatus}
               </span>
             </div>
             <div className="flex items-center justify-between text-sm">
