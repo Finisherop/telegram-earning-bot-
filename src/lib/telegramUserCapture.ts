@@ -147,7 +147,7 @@ class TelegramUserCapture {
   }
 
   /**
-   * Store user data in Firebase (both Firestore and Realtime DB for redundancy)
+   * Store user data in Firebase Realtime Database
    * Enhanced with safe data handling and error resilience
    */
   private async storeUserData(userData: TelegramUserData | BrowserUserData): Promise<void> {
@@ -184,7 +184,6 @@ class TelegramUserCapture {
       // Use the safe storage utility
       const storageResult = await safeTelegramUserStorage(userData, {
         realtimeDb,
-        collection: 'telegram_users',
         path: 'telegram_users',
         enableLocalBackup: true
       });
@@ -246,12 +245,12 @@ class TelegramUserCapture {
       const { realtimeDb } = await import('./firebase');
 
       // Use the safe update utility  
-      const updateResult = await safeUpdateLastSeen(null, realtimeDb, userId, 'telegram_users', 'telegram_users');
+      const updateResult = await safeUpdateLastSeen(realtimeDb, userId, 'telegram_users');
       
-      if (updateResult.firestore || updateResult.realtime) {
+      if (updateResult.realtime) {
         console.log('[UserCapture] Last seen updated successfully', updateResult);
       } else {
-        console.warn('[UserCapture] Failed to update last seen in both Firebase services');
+        console.warn('[UserCapture] Failed to update last seen in Realtime Database');
       }
 
       // Always update locally as backup

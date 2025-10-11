@@ -1,5 +1,5 @@
 /**
- * Enhanced Tab-Aware Firebase Connection Manager
+ * Enhanced Tab-Aware Firebase Connection Manager (Realtime Database Only)
  * 
  * Fixes tab switching issues by distinguishing between:
  * 1. Tab switching (should maintain connection)
@@ -8,7 +8,6 @@
  */
 
 import { initializeApp, getApps, FirebaseApp, deleteApp } from 'firebase/app';
-import { getFirestore, Firestore, connectFirestoreEmulator, enableNetwork, disableNetwork } from 'firebase/firestore';
 import { getDatabase, Database, connectDatabaseEmulator, goOffline, goOnline } from 'firebase/database';
 import { getAuth, Auth, connectAuthEmulator } from 'firebase/auth';
 
@@ -35,7 +34,6 @@ export interface ConnectionStatus {
 
 export interface FirebaseServices {
   app: FirebaseApp;
-  db: Firestore;
   realtimeDb: Database;
   auth: Auth;
   isInitialized: boolean;
@@ -314,8 +312,7 @@ class EnhancedFirebaseConnectionManager {
   private async verifyConnection(): Promise<void> {
     try {
       if (this.services) {
-        // Try to enable network (no-op if already enabled)
-        await enableNetwork(this.services.db);
+        // Try to go online (no-op if already online)
         goOnline(this.services.realtimeDb);
         
         this.connectionStatus.isConnected = true;
@@ -377,14 +374,12 @@ class EnhancedFirebaseConnectionManager {
         app = existingApps[0];
       }
 
-      const db = getFirestore(app);
       const realtimeDb = getDatabase(app);
       const auth = getAuth(app);
 
       // Connect to emulators in development
       if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
         try {
-          connectFirestoreEmulator(db, 'localhost', 8080);
           connectDatabaseEmulator(realtimeDb, 'localhost', 9000);
           connectAuthEmulator(auth, 'http://localhost:9099');
         } catch (emulatorError) {
@@ -403,7 +398,6 @@ class EnhancedFirebaseConnectionManager {
 
       const services: FirebaseServices = {
         app,
-        db,
         realtimeDb,
         auth,
         isInitialized: true,
@@ -475,7 +469,6 @@ class EnhancedFirebaseConnectionManager {
 
       if (this.services) {
         try {
-          await enableNetwork(this.services.db);
           goOnline(this.services.realtimeDb);
           
           this.connectionStatus.isConnected = true;
@@ -517,7 +510,6 @@ class EnhancedFirebaseConnectionManager {
     try {
       if (this.services) {
         console.log('[EnhancedFirebaseManager] Gracefully disconnecting...');
-        disableNetwork(this.services.db).catch(() => {});
         goOffline(this.services.realtimeDb);
         this.connectionStatus.isConnected = false;
       }
