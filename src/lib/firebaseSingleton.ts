@@ -1,17 +1,16 @@
 /**
  * Firebase Singleton Service
  * 
- * Updated to use the new FirebaseConnectionManager for better
- * real-time connection management and Telegram WebApp integration.
+ * Updated to use Enhanced Firebase Manager with better tab switching support
  */
 
 import { 
-  firebaseConnectionManager, 
-  getFirebaseServices as getConnectionManagerServices,
-  getFirebaseServicesSync as getConnectionManagerServicesSync,
-  reconnectFirebase,
-  isFirebaseConnected
-} from './firebaseConnectionManager';
+  enhancedFirebaseManager, 
+  getFirebaseServices as getEnhancedServices,
+  getFirebaseServicesSync as getEnhancedServicesSync,
+  reconnectFirebase as enhancedReconnect,
+  isFirebaseConnected as enhancedIsConnected
+} from './enhancedFirebaseManager';
 import { FirebaseApp, getApps } from 'firebase/app';
 import { Firestore } from 'firebase/firestore';
 import { Database } from 'firebase/database';
@@ -60,46 +59,46 @@ class FirebaseSingleton {
   }
 
   /**
-   * Gets Firebase services using the connection manager
+   * Gets Firebase services using the enhanced manager
    */
   public async getServices(): Promise<FirebaseServices> {
-    return getConnectionManagerServices();
+    return getEnhancedServices();
   }
 
   /**
    * Gets Firebase services synchronously
    */
   public getServicesSync(): FirebaseServices | null {
-    return getConnectionManagerServicesSync();
+    return getEnhancedServicesSync();
   }
 
   /**
    * Checks if Firebase is initialized and connected
    */
   public isInitialized(): boolean {
-    return isFirebaseConnected();
+    return enhancedIsConnected();
   }
 
   /**
    * Gets connection status
    */
   public getConnectionStatus() {
-    return firebaseConnectionManager.getConnectionStatus();
+    return enhancedFirebaseManager.getConnectionStatus();
   }
 
   /**
    * Force re-initialization
    */
   public async reinitialize(): Promise<FirebaseServices> {
-    console.log('[FirebaseSingleton] Delegating reinitialize to connection manager');
-    return firebaseConnectionManager.reinitialize();
+    console.log('[FirebaseSingleton] Delegating reinitialize to enhanced manager');
+    return enhancedFirebaseManager.reinitialize();
   }
 
   /**
    * Manually trigger reconnection
    */
   public async reconnect(): Promise<void> {
-    return reconnectFirebase();
+    return enhancedReconnect();
   }
 }
 
@@ -110,28 +109,28 @@ export const firebaseSingleton = FirebaseSingleton.getInstance();
  * Convenience function to get Firebase services
  */
 export async function getFirebaseServices(): Promise<FirebaseServices> {
-  return getConnectionManagerServices();
+  return getEnhancedServices();
 }
 
 /**
  * Convenience function to get Firebase services synchronously
  */
 export function getFirebaseServicesSync(): FirebaseServices | null {
-  return getConnectionManagerServicesSync();
+  return getEnhancedServicesSync();
 }
 
 /**
  * Check if Firebase is connected
  */
 export function isFirebaseInitialized(): boolean {
-  return isFirebaseConnected();
+  return enhancedIsConnected();
 }
 
 /**
  * Manually reconnect Firebase
  */
 export function reconnectFirebaseServices(): Promise<void> {
-  return reconnectFirebase();
+  return enhancedReconnect();
 }
 
 // Export individual services for backward compatibility
