@@ -11,6 +11,7 @@ import UserDataDisplay from './UserDataDisplay';
 
 interface UserDashboardProps {
   user: User | null;
+  setUser?: (user: User) => void;
 }
 
 const tabs = [
@@ -20,13 +21,14 @@ const tabs = [
   { id: 'shop', label: 'Shop/W.D.', icon: '💎' },
 ];
 
-const UserDashboard = ({ user }: UserDashboardProps) => {
+const UserDashboard = ({ user, setUser }: UserDashboardProps) => {
   const [activeTab, setActiveTab] = useState('dashboard');
 
   // Create a safe user object with defaults to prevent undefined errors
   const safeUser: User = user || {
     id: 'loading',
     telegramId: 'loading',
+    userId: 'loading',
     username: 'loading',
     firstName: 'Loading...',
     lastName: '',
@@ -42,6 +44,7 @@ const UserDashboard = ({ user }: UserDashboardProps) => {
     referralCount: 0,
     referralEarnings: 0,
     dailyStreak: 0,
+    badges: [],
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -62,7 +65,13 @@ const UserDashboard = ({ user }: UserDashboardProps) => {
       case 'referral':
         return <Referral user={safeUser} />;
       case 'shop':
-        return <ShopWithdrawal user={safeUser} />;
+        return (
+          <ShopWithdrawal 
+            user={safeUser} 
+            setUser={setUser || (() => {})} 
+            onClose={() => setActiveTab('dashboard')} 
+          />
+        );
       default:
         return <EnhancedDashboard user={safeUser} />;
     }

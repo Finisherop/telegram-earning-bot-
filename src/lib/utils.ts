@@ -130,3 +130,42 @@ export const throttle = <T extends (...args: any[]) => any>(
     }
   };
 };
+
+// Simple sound utility for UI feedback
+export const playSound = (type: 'click' | 'success' | 'error') => {
+  try {
+    // Use Web Audio API for simple sound feedback
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    // Different frequencies for different sound types
+    switch (type) {
+      case 'click':
+        oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+        break;
+      case 'success':
+        oscillator.frequency.setValueAtTime(600, audioContext.currentTime);
+        oscillator.frequency.setValueAtTime(800, audioContext.currentTime + 0.1);
+        gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+        break;
+      case 'error':
+        oscillator.frequency.setValueAtTime(300, audioContext.currentTime);
+        gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+        break;
+    }
+
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + (type === 'success' ? 0.3 : 0.2));
+  } catch (error) {
+    // Silently fail if audio is not supported
+    console.debug('Audio not supported:', error);
+  }
+};

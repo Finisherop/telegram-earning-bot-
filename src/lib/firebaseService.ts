@@ -750,3 +750,77 @@ export const getDailyStats = async (): Promise<DailyStats> => {
     totalConversions: 0,
   };
 };
+
+// VIP Request interface
+export interface VipRequest {
+  userId: string;
+  username?: string;
+  tier: 'bronze' | 'diamond';
+  paymentMethod: 'stars';
+  amount: number;
+  status: 'approved';
+  requestedAt: number;
+  processedAt: number;
+  adminNotes: string;
+  paymentDetails: {
+    invoiceId: string;
+  };
+}
+
+// Create VIP request (for Telegram Stars payments)
+export const createVipRequest = async (vipRequest: VipRequest): Promise<void> => {
+  if (!checkFirebaseConnection() || !db) {
+    throw new Error('Firebase not initialized');
+  }
+
+  try {
+    const vipRequestsRef = collection(db, 'vipRequests');
+    await addDoc(vipRequestsRef, {
+      ...vipRequest,
+      createdAt: serverTimestamp(),
+    });
+    
+    console.log('VIP request created successfully:', vipRequest);
+  } catch (error) {
+    console.error('Error creating VIP request:', error);
+    throw error;
+  }
+};
+
+// Create Telegram Star invoice
+export const createTelegramStarInvoice = async (
+  userId: number,
+  title: string,
+  description: string,
+  payload: string,
+  amount: number
+): Promise<{ invoice_link: string } | null> => {
+  try {
+    const response = await fetch('/api/create-invoice', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userId,
+        amount,
+        description,
+        tier: payload.includes('bronze') ? 'vip1' : 'vip2',
+      }),
+    });
+
+    const result = await response.json();
+    
+    if (result.success) {
+      return {
+        invoice_link: result.invoiceUrl
+      };
+    } else {
+      console.error('Failed to create invoice:', result.error);
+      return null;
+    }
+  } catch (error) {
+    console.error('Error creating Telegram Star invoice:', error);
+    return null;
+  }
+};
