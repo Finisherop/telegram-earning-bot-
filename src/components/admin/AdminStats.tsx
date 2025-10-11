@@ -131,7 +131,7 @@ const AdminStats = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <h2 className="text-3xl font-bold mb-2">Enhanced Admin Dashboard! 👋</h2>
+          <h2 className="text-3xl font-bold mb-2">Admin Dashboard! 👋</h2>
           <p className="text-white/90 text-lg">
             Real-time performance overview with payment & conversion tracking
           </p>
@@ -301,7 +301,7 @@ const AdminStats = () => {
 
       {/* Enhanced System Status */}
       <div className="bg-white rounded-2xl p-6 shadow-lg">
-        <h3 className="text-xl font-bold text-gray-800 mb-4">Enhanced System Status</h3>
+        <h3 className="text-xl font-bold text-gray-800 mb-4">System Status</h3>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="flex items-center space-x-3">
@@ -329,7 +329,7 @@ const AdminStats = () => {
           <div className="flex items-center space-x-3">
             <div className="text-green-600 text-xl">✅</div>
             <div>
-              <h4 className="font-bold text-gray-800">All Enhanced Features Operational</h4>
+              <h4 className="font-bold text-gray-800">All Features Operational</h4>
               <p className="text-gray-600 text-sm">
                 Real-time sync, payment tracking ({stats.totalPayments} payments), 
                 conversion analytics ({stats.totalConversions} events), and comprehensive error handling are all functioning normally.

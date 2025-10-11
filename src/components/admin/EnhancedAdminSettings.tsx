@@ -163,7 +163,7 @@ const EnhancedAdminSettings = () => {
     <div className="p-6 space-y-6">
       {/* Header with Enhanced Stats */}
       <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl p-6 text-white">
-        <h2 className="text-2xl font-bold mb-2">⚙️ Enhanced Admin Settings</h2>
+        <h2 className="text-2xl font-bold mb-2">⚙️ Admin Settings</h2>
         <p className="text-white/90">Configure your app with real-time sync</p>
         
         {stats && (
@@ -557,7 +557,7 @@ const EnhancedAdminSettings = () => {
         <div className="flex items-start space-x-3">
           <div className="text-amber-600 text-xl">⚠️</div>
           <div>
-            <h4 className="font-bold text-amber-800">Enhanced Admin Panel</h4>
+            <h4 className="font-bold text-amber-800">Admin Panel</h4>
             <p className="text-amber-700 text-sm mt-1">
               All changes are synced in real-time across all users. VIP upgrades are instant and include bot notifications.
               Payment tracking and conversion analytics are automatically logged.
