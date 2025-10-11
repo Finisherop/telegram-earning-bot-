@@ -46,3 +46,27 @@ export const DEFAULT_SETTINGS = {
   },
   secretKey: ADMIN_SECRET_KEY,
 };
+
+// New tier configurations for Telegram Stars payment system
+export const TIER_CONFIGS = {
+  bronze: {
+    name: 'Bronze VIP',
+    starCost: 75,
+    duration: 30,
+    farmingMultiplier: 2.0,
+    referralMultiplier: 1.5,
+    dailyWithdrawals: 3,
+    badge: 'bronze_vip',
+    color: '#CD7F32'
+  },
+  diamond: {
+    name: 'Diamond VIP',
+    starCost: 150,
+    duration: 30,
+    farmingMultiplier: 2.5,
+    referralMultiplier: 2.0,
+    dailyWithdrawals: 5,
+    badge: 'diamond_vip',
+    color: '#B9F2FF'
+  }
+};

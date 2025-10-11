@@ -1,6 +1,7 @@
 export interface User {
   id: string;
   telegramId: string;
+  userId?: string;
   username?: string;
   firstName?: string;
   lastName?: string;
@@ -8,10 +9,17 @@ export interface User {
   coins: number;
   xp: number;
   level: number;
+  tier?: 'bronze' | 'diamond';
+  vip_tier?: 'bronze' | 'diamond';
+  vip_expiry?: number;
   vipTier: 'free' | 'vip1' | 'vip2';
+  vipExpiry?: number;
   vipEndTime?: Date;
   farmingMultiplier: number;
   referralMultiplier: number;
+  multiplier?: number;
+  withdraw_limit?: number;
+  referral_boost?: number;
   adsLimitPerDay: number;
   withdrawalLimit: number;
   minWithdrawal: number;
@@ -22,6 +30,14 @@ export interface User {
   lastClaimDate?: Date;
   farmingStartTime?: Date;
   farmingEndTime?: Date;
+  badges?: Array<{
+    type: string;
+    name: string;
+    description: string;
+    icon: string;
+    color: string;
+    unlockedAt: number;
+  }>;
   createdAt: Date;
   updatedAt: Date;
 }
