@@ -2,11 +2,10 @@
  * Firebase Singleton Service
  * 
  * Ensures Firebase is initialized only once and provides shared instances
- * of Firestore, Realtime Database, and Auth services.
+ * of Realtime Database and Auth services.
  */
 
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getFirestore, Firestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getDatabase, Database, connectDatabaseEmulator } from 'firebase/database';
 import { getAuth, Auth, connectAuthEmulator } from 'firebase/auth';
 
@@ -23,7 +22,6 @@ const firebaseConfig = {
 
 export interface FirebaseServices {
   app: FirebaseApp;
-  db: Firestore;
   realtimeDb: Database;
   auth: Auth;
   isInitialized: boolean;
@@ -86,7 +84,6 @@ class FirebaseSingleton {
       // Initialize services
       console.log('[FirebaseSingleton] Initializing Firebase services...');
       
-      const db = getFirestore(app);
       const realtimeDb = getDatabase(app);
       const auth = getAuth(app);
 
@@ -94,15 +91,11 @@ class FirebaseSingleton {
       if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
         try {
           // Only connect to emulators if they're not already connected
-          if (!('_delegate' in db) || !(db as any)._delegate._databaseId) {
-            // Check if emulator connection should be made
-            const useEmulator = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true';
-            if (useEmulator) {
-              console.log('[FirebaseSingleton] Connecting to Firebase emulators...');
-              connectFirestoreEmulator(db, 'localhost', 8080);
-              connectDatabaseEmulator(realtimeDb, 'localhost', 9000);
-              connectAuthEmulator(auth, 'http://localhost:9099');
-            }
+          const useEmulator = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true';
+          if (useEmulator) {
+            console.log('[FirebaseSingleton] Connecting to Firebase emulators...');
+            connectDatabaseEmulator(realtimeDb, 'localhost', 9000);
+            connectAuthEmulator(auth, 'http://localhost:9099');
           }
         } catch (emulatorError) {
           console.warn('[FirebaseSingleton] Emulator connection failed:', emulatorError);
@@ -112,7 +105,6 @@ class FirebaseSingleton {
 
       const services: FirebaseServices = {
         app,
-        db,
         realtimeDb,
         auth,
         isInitialized: true,
@@ -133,7 +125,6 @@ class FirebaseSingleton {
       
       const errorServices: FirebaseServices = {
         app: null as any,
-        db: null as any,
         realtimeDb: null as any,
         auth: null as any,
         isInitialized: false,
@@ -238,11 +229,6 @@ if (typeof window !== 'undefined') {
 }
 
 // Export individual services for backward compatibility
-export async function getFirestoreInstance(): Promise<Firestore> {
-  const services = await getFirebaseServices();
-  return services.db;
-}
-
 export async function getRealtimeDatabaseInstance(): Promise<Database> {
   const services = await getFirebaseServices();
   return services.realtimeDb;
@@ -254,13 +240,12 @@ export async function getFirebaseAuthInstance(): Promise<Auth> {
 }
 
 // Export the legacy firebase services for existing code compatibility
-export const { db, realtimeDb, auth } = (() => {
+export const { realtimeDb, auth } = (() => {
   // Only try to get sync services on client-side
   if (typeof window !== 'undefined') {
     const services = getFirebaseServicesSync();
     if (services) {
       return {
-        db: services.db,
         realtimeDb: services.realtimeDb,
         auth: services.auth
       };
@@ -269,7 +254,6 @@ export const { db, realtimeDb, auth } = (() => {
   
   // Return null for server-side rendering
   return {
-    db: null as any,
     realtimeDb: null as any,
     auth: null as any
   };

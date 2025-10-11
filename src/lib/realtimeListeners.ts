@@ -1,25 +1,19 @@
 /**
- * Real-time Firebase Listeners Service
+ * Real-time Firebase Listeners Service (Realtime Database Only)
  * 
- * Provides onSnapshot listeners for real-time data updates
+ * Provides onValue listeners for real-time data updates
  * with proper error handling and data sanitization.
  */
 
 import { 
-  onSnapshot, 
-  doc, 
-  collection, 
-  query, 
-  where, 
-  orderBy, 
-  limit,
-  Unsubscribe 
-} from 'firebase/firestore';
-import { 
   ref, 
   onValue, 
   off, 
-  DatabaseReference 
+  DatabaseReference,
+  get,
+  query,
+  orderByChild,
+  orderByKey
 } from 'firebase/database';
 import { getFirebaseServices } from './firebaseSingleton';
 import { User, WithdrawalRequest, Task, UserTask } from '@/types';
@@ -27,46 +21,41 @@ import { User, WithdrawalRequest, Task, UserTask } from '@/types';
 export interface RealtimeListenerOptions {
   onError?: (error: Error) => void;
   retryOnError?: boolean;
-  retryDelay?: number;
   maxRetries?: number;
+  retryDelay?: number;
 }
 
 const DEFAULT_OPTIONS: RealtimeListenerOptions = {
-  onError: (error) => console.error('[RealtimeListener] Error:', error),
   retryOnError: true,
-  retryDelay: 2000,
-  maxRetries: 3
+  maxRetries: 3,
+  retryDelay: 2000
 };
 
 /**
  * Listener manager to track active subscriptions
  */
 class ListenerManager {
-  private listeners: Map<string, () => void> = new Map();
-  
+  private listeners = new Map<string, () => void>();
+
   add(id: string, unsubscribe: () => void) {
-    // Clean up existing listener if any
-    const existing = this.listeners.get(id);
-    if (existing) {
-      existing();
-    }
-    
     this.listeners.set(id, unsubscribe);
   }
-  
-  remove(id: string) {
-    const unsubscribe = this.listeners.get(id);
-    if (unsubscribe) {
-      unsubscribe();
+
+  remove(id: string): boolean {
+    const listener = this.listeners.get(id);
+    if (listener) {
+      listener();
       this.listeners.delete(id);
+      return true;
     }
+    return false;
   }
-  
-  cleanup() {
-    this.listeners.forEach(unsubscribe => unsubscribe());
+
+  removeAll(): void {
+    this.listeners.forEach((unsubscribe) => unsubscribe());
     this.listeners.clear();
   }
-  
+
   getActiveCount(): number {
     return this.listeners.size;
   }
@@ -75,30 +64,36 @@ class ListenerManager {
 export const listenerManager = new ListenerManager();
 
 /**
- * Converts Firestore timestamp to Date safely
+ * Converts timestamp to Date safely
  */
 function safeTimestampToDate(timestamp: any): Date {
   if (!timestamp) {
     return new Date();
   }
   
-  if (timestamp.toDate && typeof timestamp.toDate === 'function') {
-    return timestamp.toDate();
-  }
-  
-  if (timestamp.seconds) {
-    return new Date(timestamp.seconds * 1000);
+  // Handle different timestamp formats
+  if (timestamp instanceof Date) {
+    return timestamp;
   }
   
   if (typeof timestamp === 'string') {
     return new Date(timestamp);
   }
   
+  if (typeof timestamp === 'number') {
+    return new Date(timestamp);
+  }
+  
+  // Handle Firebase timestamp objects
+  if (timestamp && typeof timestamp.toDate === 'function') {
+    return timestamp.toDate();
+  }
+  
   return new Date();
 }
 
 /**
- * Sanitizes user data from Firebase
+ * Sanitizes user data from database
  */
 function sanitizeUserData(userData: any, userId: string): User {
   return {
@@ -108,6 +103,7 @@ function sanitizeUserData(userData: any, userId: string): User {
     firstName: userData.firstName || 'User',
     lastName: userData.lastName || undefined,
     profilePic: userData.profilePic || undefined,
+    
     // Game data with safe defaults
     coins: userData.coins || 0,
     xp: userData.xp || 0,
@@ -140,7 +136,7 @@ function sanitizeUserData(userData: any, userId: string): User {
 }
 
 /**
- * Real-time user data listener using both Firestore and Realtime Database
+ * Real-time user data listener using Realtime Database
  */
 export function subscribeToUser(
   userId: string,
@@ -155,9 +151,9 @@ export function subscribeToUser(
     try {
       console.log(`[RealtimeListener] Setting up user subscription for ${userId}`);
       
-      const { db, realtimeDb } = await getFirebaseServices();
+      const { realtimeDb } = await getFirebaseServices();
       
-      // Primary listener: Realtime Database (for faster updates)
+      // Realtime Database listener
       const realtimeUserRef = ref(realtimeDb, `telegram_users/${userId}`);
       
       const realtimeUnsubscribe = onValue(realtimeUserRef, (snapshot) => {
@@ -191,57 +187,32 @@ export function subscribeToUser(
         }
       });
       
-      // Fallback listener: Firestore (for data consistency)
-      const firestoreUserRef = doc(db, 'telegram_users', userId);
-      
-      const firestoreUnsubscribe = onSnapshot(firestoreUserRef, (docSnapshot) => {
-        try {
-          if (docSnapshot.exists()) {
-            const userData = docSnapshot.data();
-            const user = sanitizeUserData(userData, userId);
-            console.log(`[RealtimeListener] Firestore update for user ${userId}`);
-            // Only call callback if we don't have realtime data to avoid duplicate calls
-            // This is a fallback mechanism
-          }
-        } catch (callbackError) {
-          console.error(`[RealtimeListener] Firestore callback error for user ${userId}:`, callbackError);
-        }
-      }, (error) => {
-        console.error(`[RealtimeListener] Firestore error for user ${userId}:`, error);
-      });
-      
-      // Combined unsubscribe function
-      const combinedUnsubscribe = () => {
+      // Unsubscribe function
+      const unsubscribe = () => {
         off(realtimeUserRef, 'value', realtimeUnsubscribe);
-        firestoreUnsubscribe();
         listenerManager.remove(listenerId);
         console.log(`[RealtimeListener] Unsubscribed from user ${userId}`);
       };
       
-      listenerManager.add(listenerId, combinedUnsubscribe);
-      return combinedUnsubscribe;
+      listenerManager.add(listenerId, unsubscribe);
       
     } catch (error) {
       console.error(`[RealtimeListener] Failed to create user listener for ${userId}:`, error);
       if (opts.onError) {
         opts.onError(error as Error);
       }
-      
-      // Return empty unsubscribe function
-      return () => {};
     }
   };
   
   createListener();
   
-  // Return unsubscribe function
   return () => {
     listenerManager.remove(listenerId);
   };
 }
 
 /**
- * Real-time withdrawals listener for a specific user
+ * Real-time withdrawals listener
  */
 export function subscribeToUserWithdrawals(
   userId: string,
@@ -250,44 +221,39 @@ export function subscribeToUserWithdrawals(
 ): () => void {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   const listenerId = `withdrawals_${userId}`;
+  let retryCount = 0;
   
   const createListener = async () => {
     try {
-      console.log(`[RealtimeListener] Setting up withdrawals subscription for ${userId}`);
+      console.log(`[RealtimeListener] Setting up withdrawals subscription for user ${userId}`);
       
-      const { db } = await getFirebaseServices();
+      const { realtimeDb } = await getFirebaseServices();
       
-      // Query withdrawals for this user
-      const withdrawalsQuery = query(
-        collection(db, 'withdrawals'),
-        where('userId', '==', userId),
-        orderBy('requestedAt', 'desc'),
-        limit(20) // Limit to last 20 withdrawals
-      );
+      const withdrawalsRef = ref(realtimeDb, 'withdrawals');
       
-      const unsubscribe = onSnapshot(withdrawalsQuery, (querySnapshot) => {
+      const unsubscribe = onValue(withdrawalsRef, (snapshot) => {
         try {
           const withdrawals: WithdrawalRequest[] = [];
-          
-          querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            const withdrawal: WithdrawalRequest = {
-              id: doc.id,
-              userId: data.userId,
-              amount: data.amount || 0,
-              upiId: data.upiId || '',
-              status: data.status || 'pending',
-              requestedAt: safeTimestampToDate(data.requestedAt),
-              processedAt: data.processedAt ? safeTimestampToDate(data.processedAt) : undefined,
-              adminNotes: data.adminNotes || undefined
-            };
-            
-            withdrawals.push(withdrawal);
-          });
-          
-          console.log(`[RealtimeListener] Withdrawals update for user ${userId}: ${withdrawals.length} items`);
+          if (snapshot.exists()) {
+            const withdrawalsData = snapshot.val();
+            Object.entries(withdrawalsData).forEach(([id, data]: [string, any]) => {
+              if (data && typeof data === 'object' && data.userId === userId) {
+                const withdrawal: WithdrawalRequest = {
+                  id,
+                  userId: data.userId,
+                  amount: data.amount || 0,
+                  upiId: data.upiId || '',
+                  status: data.status || 'pending',
+                  requestedAt: safeTimestampToDate(data.requestedAt),
+                  processedAt: data.processedAt ? safeTimestampToDate(data.processedAt) : undefined,
+                  adminNotes: data.adminNotes || undefined
+                };
+                
+                withdrawals.push(withdrawal);
+              }
+            });
+          }
           callback(withdrawals);
-          
         } catch (callbackError) {
           console.error(`[RealtimeListener] Withdrawals callback error for user ${userId}:`, callbackError);
           if (opts.onError) {
@@ -295,22 +261,31 @@ export function subscribeToUserWithdrawals(
           }
         }
       }, (error) => {
-        console.error(`[RealtimeListener] Withdrawals query error for user ${userId}:`, error);
+        console.error(`[RealtimeListener] Withdrawals subscription error for user ${userId}:`, error);
         if (opts.onError) {
           opts.onError(error);
         }
+        
+        if (opts.retryOnError && retryCount < (opts.maxRetries || 3)) {
+          retryCount++;
+          console.log(`[RealtimeListener] Retrying withdrawals subscription ${retryCount}/${opts.maxRetries}`);
+          setTimeout(createListener, opts.retryDelay || 2000);
+        }
       });
       
-      listenerManager.add(listenerId, unsubscribe);
-      return unsubscribe;
+      const unsubscribeFn = () => {
+        off(withdrawalsRef, 'value', unsubscribe);
+        listenerManager.remove(listenerId);
+        console.log(`[RealtimeListener] Unsubscribed from withdrawals for user ${userId}`);
+      };
+      
+      listenerManager.add(listenerId, unsubscribeFn);
       
     } catch (error) {
-      console.error(`[RealtimeListener] Failed to create withdrawals listener for ${userId}:`, error);
+      console.error(`[RealtimeListener] Failed to create withdrawals listener for user ${userId}:`, error);
       if (opts.onError) {
         opts.onError(error as Error);
       }
-      
-      return () => {};
     }
   };
   
@@ -329,11 +304,12 @@ export function subscribeToTasks(
   options: RealtimeListenerOptions = {}
 ): () => void {
   const opts = { ...DEFAULT_OPTIONS, ...options };
-  const listenerId = 'tasks';
+  const listenerId = 'tasks_global';
+  let retryCount = 0;
   
   const createListener = async () => {
     try {
-      console.log('[RealtimeListener] Setting up tasks subscription');
+      console.log(`[RealtimeListener] Setting up tasks subscription`);
       
       const { realtimeDb } = await getFirebaseServices();
       
@@ -342,16 +318,13 @@ export function subscribeToTasks(
       const unsubscribe = onValue(tasksRef, (snapshot) => {
         try {
           const tasks: Task[] = [];
-          
           if (snapshot.exists()) {
             const tasksData = snapshot.val();
-            Object.keys(tasksData).forEach((taskId) => {
-              const taskData = tasksData[taskId];
-              
-              if (taskData.isActive) {
+            Object.entries(tasksData).forEach(([taskId, taskData]: [string, any]) => {
+              if (taskData && typeof taskData === 'object') {
                 const task: Task = {
                   id: taskId,
-                  title: taskData.title || 'Untitled Task',
+                  title: taskData.title || '',
                   description: taskData.description || '',
                   type: (taskData.type as 'link' | 'ads' | 'social' | 'referral' | 'farming' | 'daily') || 'link',
                   reward: taskData.reward || 0,
@@ -365,36 +338,39 @@ export function subscribeToTasks(
               }
             });
           }
-          
-          // Sort by creation date (newest first)
-          tasks.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-          
-          console.log(`[RealtimeListener] Tasks update: ${tasks.length} active tasks`);
           callback(tasks);
-          
         } catch (callbackError) {
-          console.error('[RealtimeListener] Tasks callback error:', callbackError);
+          console.error(`[RealtimeListener] Tasks callback error:`, callbackError);
           if (opts.onError) {
             opts.onError(callbackError as Error);
           }
         }
       }, (error) => {
-        console.error('[RealtimeListener] Tasks error:', error);
+        console.error(`[RealtimeListener] Tasks subscription error:`, error);
         if (opts.onError) {
           opts.onError(error);
         }
+        
+        if (opts.retryOnError && retryCount < (opts.maxRetries || 3)) {
+          retryCount++;
+          console.log(`[RealtimeListener] Retrying tasks subscription ${retryCount}/${opts.maxRetries}`);
+          setTimeout(createListener, opts.retryDelay || 2000);
+        }
       });
       
-      listenerManager.add(listenerId, () => off(tasksRef, 'value', unsubscribe));
-      return () => off(tasksRef, 'value', unsubscribe);
+      const unsubscribeFn = () => {
+        off(tasksRef, 'value', unsubscribe);
+        listenerManager.remove(listenerId);
+        console.log(`[RealtimeListener] Unsubscribed from tasks`);
+      };
+      
+      listenerManager.add(listenerId, unsubscribeFn);
       
     } catch (error) {
-      console.error('[RealtimeListener] Failed to create tasks listener:', error);
+      console.error(`[RealtimeListener] Failed to create tasks listener:`, error);
       if (opts.onError) {
         opts.onError(error as Error);
       }
-      
-      return () => {};
     }
   };
   
@@ -415,6 +391,7 @@ export function subscribeToUserTasks(
 ): () => void {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   const listenerId = `user_tasks_${userId}`;
+  let retryCount = 0;
   
   const createListener = async () => {
     try {
@@ -427,28 +404,24 @@ export function subscribeToUserTasks(
       const unsubscribe = onValue(userTasksRef, (snapshot) => {
         try {
           const userTasks: UserTask[] = [];
-          
           if (snapshot.exists()) {
             const userTasksData = snapshot.val();
-            Object.keys(userTasksData).forEach((taskId) => {
-              const taskData = userTasksData[taskId];
-              
-              const userTask: UserTask = {
-                id: taskId,
-                userId: userId,
-                taskId: taskId,
-                status: (taskData.status as 'pending' | 'completed' | 'claimed') || 'pending',
-                completedAt: taskData.completedAt ? new Date(taskData.completedAt) : undefined,
-                claimedAt: taskData.claimedAt ? new Date(taskData.claimedAt) : undefined
-              };
-              
-              userTasks.push(userTask);
+            Object.entries(userTasksData).forEach(([taskId, taskData]: [string, any]) => {
+              if (taskData && typeof taskData === 'object') {
+                const userTask: UserTask = {
+                  id: taskId,
+                  userId: userId,
+                  taskId: taskId,
+                  status: (taskData.status as 'pending' | 'completed' | 'claimed') || 'pending',
+                  completedAt: taskData.completedAt ? new Date(taskData.completedAt) : undefined,
+                  claimedAt: taskData.claimedAt ? new Date(taskData.claimedAt) : undefined
+                };
+                
+                userTasks.push(userTask);
+              }
             });
           }
-          
-          console.log(`[RealtimeListener] User tasks update for ${userId}: ${userTasks.length} tasks`);
           callback(userTasks);
-          
         } catch (callbackError) {
           console.error(`[RealtimeListener] User tasks callback error for ${userId}:`, callbackError);
           if (opts.onError) {
@@ -456,22 +429,31 @@ export function subscribeToUserTasks(
           }
         }
       }, (error) => {
-        console.error(`[RealtimeListener] User tasks error for ${userId}:`, error);
+        console.error(`[RealtimeListener] User tasks subscription error for ${userId}:`, error);
         if (opts.onError) {
           opts.onError(error);
         }
+        
+        if (opts.retryOnError && retryCount < (opts.maxRetries || 3)) {
+          retryCount++;
+          console.log(`[RealtimeListener] Retrying user tasks subscription ${retryCount}/${opts.maxRetries}`);
+          setTimeout(createListener, opts.retryDelay || 2000);
+        }
       });
       
-      listenerManager.add(listenerId, () => off(userTasksRef, 'value', unsubscribe));
-      return () => off(userTasksRef, 'value', unsubscribe);
+      const unsubscribeFn = () => {
+        off(userTasksRef, 'value', unsubscribe);
+        listenerManager.remove(listenerId);
+        console.log(`[RealtimeListener] Unsubscribed from user tasks for ${userId}`);
+      };
+      
+      listenerManager.add(listenerId, unsubscribeFn);
       
     } catch (error) {
       console.error(`[RealtimeListener] Failed to create user tasks listener for ${userId}:`, error);
       if (opts.onError) {
         opts.onError(error as Error);
       }
-      
-      return () => {};
     }
   };
   
@@ -483,8 +465,7 @@ export function subscribeToUserTasks(
 }
 
 /**
- * Combined real-time dashboard listener
- * Subscribes to user data, tasks, user tasks, and withdrawals
+ * Dashboard data subscription (combines user, tasks, and user tasks)
  */
 export function subscribeToDashboardData(
   userId: string,
@@ -492,17 +473,15 @@ export function subscribeToDashboardData(
     user: User | null;
     tasks: Task[];
     userTasks: UserTask[];
-    withdrawals: WithdrawalRequest[];
   }) => void,
   options: RealtimeListenerOptions = {}
 ): () => void {
   let user: User | null = null;
   let tasks: Task[] = [];
   let userTasks: UserTask[] = [];
-  let withdrawals: WithdrawalRequest[] = [];
   
   const updateCallback = () => {
-    callback({ user, tasks, userTasks, withdrawals });
+    callback({ user, tasks, userTasks });
   };
   
   // Subscribe to all data sources
@@ -521,31 +500,18 @@ export function subscribeToDashboardData(
     updateCallback();
   }, options);
   
-  const unsubscribeWithdrawals = subscribeToUserWithdrawals(userId, (withdrawalsData) => {
-    withdrawals = withdrawalsData;
-    updateCallback();
-  }, options);
-  
-  // Return combined unsubscribe function
   return () => {
     unsubscribeUser();
     unsubscribeTasks();
     unsubscribeUserTasks();
-    unsubscribeWithdrawals();
   };
 }
 
-/**
- * Cleanup all active listeners
- */
-export function cleanupAllListeners(): void {
-  console.log(`[RealtimeListener] Cleaning up ${listenerManager.getActiveCount()} active listeners`);
-  listenerManager.cleanup();
-}
-
-/**
- * Get active listeners count (for debugging)
- */
-export function getActiveListenersCount(): number {
-  return listenerManager.getActiveCount();
-}
+export default {
+  subscribeToUser,
+  subscribeToUserWithdrawals,
+  subscribeToTasks,
+  subscribeToUserTasks,
+  subscribeToDashboardData,
+  listenerManager
+};

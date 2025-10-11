@@ -1,5 +1,4 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getFirestore, Firestore } from 'firebase/firestore';
 import { getDatabase, Database } from 'firebase/database';
 import { getAuth, Auth } from 'firebase/auth';
 
@@ -83,7 +82,6 @@ const validateFirebaseConfig = () => {
 
 // Initialize Firebase with robust error handling for deployment
 let app: FirebaseApp | null = null;
-let db: Firestore | null = null;
 let realtimeDb: Database | null = null;
 let auth: Auth | null = null;
 
@@ -100,14 +98,6 @@ if (typeof window !== 'undefined') {
     console.log('[Firebase] Firebase app initialized, setting up services...');
     
     // Initialize services with individual error handling
-    try {
-      db = getFirestore(app);
-      console.log('[Firebase] Firestore initialized successfully');
-    } catch (firestoreError) {
-      console.error('[Firebase] Firestore initialization failed:', firestoreError);
-      db = null;
-    }
-    
     try {
       realtimeDb = getDatabase(app);
       console.log('[Firebase] Realtime Database initialized successfully');
@@ -130,7 +120,6 @@ if (typeof window !== 'undefined') {
     (window as any).__FIREBASE_INITIALIZED__ = true;
     (window as any).__FIREBASE_SERVICES__ = {
       app: !!app,
-      firestore: !!db,
       realtimeDb: !!realtimeDb,
       auth: !!auth
     };
@@ -153,7 +142,6 @@ if (typeof window !== 'undefined') {
     
     // Ensure services are null on error
     app = null;
-    db = null;
     realtimeDb = null;
     auth = null;
   }
@@ -162,5 +150,5 @@ if (typeof window !== 'undefined') {
   console.log('[Firebase] Server-side rendering detected, skipping Firebase initialization');
 }
 
-export { db, realtimeDb, auth };
+export { realtimeDb, auth };
 export default app;

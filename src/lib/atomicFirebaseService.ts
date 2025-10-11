@@ -1,26 +1,10 @@
 /**
- * Enhanced Firebase Service with Atomic Operations
+ * Enhanced Firebase Service with Atomic Operations (Realtime Database Only)
  * 
  * Provides atomic coin operations, safe user updates, and proper error handling
- * to prevent race conditions and undefined value errors.
+ * to prevent race conditions and undefined value errors using Firebase Realtime Database.
  */
 
-import { 
-  doc, 
-  updateDoc, 
-  increment, 
-  serverTimestamp,
-  runTransaction,
-  getDoc,
-  setDoc,
-  onSnapshot,
-  collection,
-  query,
-  where,
-  orderBy,
-  addDoc,
-  Unsubscribe
-} from 'firebase/firestore';
 import { 
   ref, 
   update, 
@@ -28,7 +12,6 @@ import {
   set, 
   onValue, 
   off, 
-  serverTimestamp as realtimeServerTimestamp,
   push 
 } from 'firebase/database';
 import { getFirebaseServices } from './firebaseSingleton';
@@ -47,63 +30,51 @@ export interface AtomicUpdateResult {
   success: boolean;
   newCoins?: number;
   newXp?: number;
-  error?: string;
   transactionId?: string;
+  error?: string;
 }
 
-export interface FarmingClaimResult {
-  success: boolean;
+export interface FarmingClaimResult extends AtomicUpdateResult {
   coinsEarned: number;
   xpEarned: number;
   newTotalCoins: number;
   newTotalXp: number;
-  error?: string;
 }
 
-export interface DailyClaimResult {
-  success: boolean;
+export interface DailyClaimResult extends AtomicUpdateResult {
   coinsEarned: number;
   xpEarned: number;
   newStreak: number;
   newTotalCoins: number;
   newTotalXp: number;
-  error?: string;
 }
 
 /**
- * Sanitizes update data to prevent undefined values in Firebase
+ * Sanitizes update data to prevent undefined/null values from causing errors
  */
-function sanitizeUpdateData(updateData: Partial<User>): Record<string, any> {
+function sanitizeUpdateData(data: any): Record<string, any> {
   const sanitized: Record<string, any> = {};
   
-  for (const [key, value] of Object.entries(updateData)) {
-    if (value === undefined) {
-      continue; // Skip undefined values entirely
-    }
-    
-    if (value === null) {
-      sanitized[key] = null;
-    } else if (value instanceof Date) {
-      sanitized[key] = value.toISOString();
-    } else if (typeof value === 'string') {
-      sanitized[key] = value.trim() || null;
-    } else if (typeof value === 'number' && !isNaN(value)) {
-      sanitized[key] = value;
-    } else if (typeof value === 'boolean') {
-      sanitized[key] = value;
-    } else {
-      sanitized[key] = value;
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== undefined && value !== null) {
+      if (value instanceof Date) {
+        sanitized[key] = value.toISOString();
+      } else if (typeof value === 'string') {
+        sanitized[key] = value.trim() || undefined;
+      } else {
+        sanitized[key] = value;
+      }
     }
   }
   
-  // Always add updatedAt timestamp
+  // Always add timestamp
   sanitized.updatedAt = new Date().toISOString();
   
   return sanitized;
 }
 
 /**
- * Atomically updates user coins using Firestore transactions
+ * Atomically updates user coins using Realtime Database
  * Prevents race conditions and ensures data consistency
  */
 export async function atomicCoinUpdate({
@@ -121,100 +92,64 @@ export async function atomicCoinUpdate({
     }
     
     const sanitizedUserId = userId.toString().trim();
-    const { db, realtimeDb } = await getFirebaseServices();
+    const { realtimeDb } = await getFirebaseServices();
     
     // Generate transaction ID for tracking
     const transactionId = `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
-    // Use Firestore transaction for atomic operation
-    const result = await runTransaction(db, async (transaction) => {
-      const userDocRef = doc(db, 'telegram_users', sanitizedUserId);
-      const userDoc = await transaction.get(userDocRef);
-      
-      let currentCoins = 0;
-      let currentXp = 0;
-      
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        currentCoins = userData.coins || 0;
-        currentXp = userData.xp || 0;
-      } else {
-        // User doesn't exist in Firestore, create with default values
-        const defaultUser = {
-          id: sanitizedUserId,
-          telegramId: sanitizedUserId,
-          coins: 0,
-          xp: 0,
-          level: 1,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        };
-        
-        transaction.set(userDocRef, defaultUser);
-      }
-      
-      // Calculate new values
-      const newCoins = Math.max(0, currentCoins + coinsDelta); // Prevent negative coins
-      const newXp = Math.max(0, currentXp + xpDelta); // Prevent negative XP
-      
-      // Update with atomic increment (safer than manual calculation)
-      const updateData: Record<string, any> = {
-        coins: increment(coinsDelta),
-        updatedAt: serverTimestamp(),
-        [`transactions.${transactionId}`]: {
-          reason,
-          coinsDelta,
-          xpDelta,
-          timestamp: serverTimestamp(),
-          metadata
-        }
-      };
-      
-      if (xpDelta !== 0) {
-        updateData.xp = increment(xpDelta);
-      }
-      
-      transaction.update(userDocRef, updateData);
-      
-      return { newCoins, newXp };
-    });
+    // Get current user data from Realtime Database
+    const userRef = ref(realtimeDb, `telegram_users/${sanitizedUserId}`);
+    const userSnapshot = await get(userRef);
     
-    // Also update Realtime Database for real-time UI updates
-    try {
-      const realtimeUserRef = ref(realtimeDb, `telegram_users/${sanitizedUserId}`);
-      const realtimeSnapshot = await get(realtimeUserRef);
-      
-      let realtimeCoins = 0;
-      let realtimeXp = 0;
-      
-      if (realtimeSnapshot.exists()) {
-        const realtimeData = realtimeSnapshot.val();
-        realtimeCoins = realtimeData.coins || 0;
-        realtimeXp = realtimeData.xp || 0;
-      }
-      
-      const realtimeUpdate: Record<string, any> = {
-        coins: Math.max(0, realtimeCoins + coinsDelta),
-        updatedAt: realtimeServerTimestamp()
+    let currentCoins = 0;
+    let currentXp = 0;
+    let userData: any = {};
+    
+    if (userSnapshot.exists()) {
+      userData = userSnapshot.val();
+      currentCoins = userData.coins || 0;
+      currentXp = userData.xp || 0;
+    } else {
+      // User doesn't exist, create with default values
+      userData = {
+        id: sanitizedUserId,
+        telegramId: sanitizedUserId,
+        coins: 0,
+        xp: 0,
+        level: 1,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
-      
-      if (xpDelta !== 0) {
-        realtimeUpdate.xp = Math.max(0, realtimeXp + xpDelta);
-      }
-      
-      await update(realtimeUserRef, realtimeUpdate);
-      
-    } catch (realtimeError) {
-      console.warn(`[AtomicUpdate] Realtime DB update failed for user ${sanitizedUserId}:`, realtimeError);
-      // Don't fail the entire operation if realtime update fails
     }
+    
+    // Calculate new values
+    const newCoins = Math.max(0, currentCoins + coinsDelta); // Prevent negative coins
+    const newXp = Math.max(0, currentXp + xpDelta); // Prevent negative XP
+    
+    // Prepare update data
+    const updateData: Record<string, any> = {
+      ...userData,
+      coins: newCoins,
+      xp: newXp,
+      updatedAt: new Date().toISOString(),
+      [`transactions/${transactionId}`]: {
+        reason,
+        coinsDelta,
+        xpDelta,
+        timestamp: new Date().toISOString(),
+        metadata
+      }
+    };
+    
+    // Update in Realtime Database
+    await set(userRef, updateData);
     
     console.log(`[AtomicUpdate] Atomic coin update successful for user ${sanitizedUserId}`);
     
     return {
       success: true,
-      newCoins: result.newCoins,
-      newXp: result.newXp,
+      newCoins,
+      newXp,
       transactionId
     };
     
@@ -243,17 +178,17 @@ export async function atomicFarmingClaim(
     }
     
     const sanitizedUserId = userId.toString().trim();
-    const { db, realtimeDb } = await getFirebaseServices();
+    const { realtimeDb } = await getFirebaseServices();
     
     // Validate farming eligibility first
-    const userDocRef = doc(db, 'telegram_users', sanitizedUserId);
-    const userDoc = await getDoc(userDocRef);
+    const userRef = ref(realtimeDb, `telegram_users/${sanitizedUserId}`);
+    const userSnapshot = await get(userRef);
     
-    if (!userDoc.exists()) {
+    if (!userSnapshot.exists()) {
       throw new Error('User not found');
     }
     
-    const userData = userDoc.data();
+    const userData = userSnapshot.val();
     const now = new Date();
     
     // Check farming status
@@ -261,7 +196,7 @@ export async function atomicFarmingClaim(
       throw new Error('No active farming session found');
     }
     
-    const farmingEndTime = userData.farmingEndTime.toDate ? userData.farmingEndTime.toDate() : new Date(userData.farmingEndTime);
+    const farmingEndTime = new Date(userData.farmingEndTime);
     
     if (now < farmingEndTime) {
       throw new Error('Farming session not completed yet');
@@ -289,26 +224,14 @@ export async function atomicFarmingClaim(
       throw new Error(atomicResult.error || 'Failed to update coins atomically');
     }
     
-    // Clear farming session atomically
+    // Clear farming session
     const clearFarmingUpdate = {
       farmingStartTime: null,
       farmingEndTime: null,
-      updatedAt: serverTimestamp()
+      updatedAt: new Date().toISOString()
     };
     
-    await updateDoc(userDocRef, clearFarmingUpdate);
-    
-    // Also update Realtime DB
-    try {
-      const realtimeUserRef = ref(realtimeDb, `telegram_users/${sanitizedUserId}`);
-      await update(realtimeUserRef, {
-        farmingStartTime: null,
-        farmingEndTime: null,
-        updatedAt: realtimeServerTimestamp()
-      });
-    } catch (realtimeError) {
-      console.warn('[FarmingClaim] Realtime DB farming clear failed:', realtimeError);
-    }
+    await update(userRef, clearFarmingUpdate);
     
     console.log(`[FarmingClaim] Farming claim successful for user ${sanitizedUserId}: ${coinsEarned} coins, ${xpEarned} XP`);
     
@@ -349,92 +272,85 @@ export async function atomicDailyClaim(
     }
     
     const sanitizedUserId = userId.toString().trim();
-    const { db, realtimeDb } = await getFirebaseServices();
+    const { realtimeDb } = await getFirebaseServices();
     
-    // Use transaction for atomic daily claim
-    const result = await runTransaction(db, async (transaction) => {
-      const userDocRef = doc(db, 'telegram_users', sanitizedUserId);
-      const userDoc = await transaction.get(userDocRef);
-      
-      if (!userDoc.exists()) {
-        throw new Error('User not found');
-      }
-      
-      const userData = userDoc.data();
-      const now = new Date();
-      const today = now.toDateString();
-      
-      // Check if already claimed today
-      if (userData.lastClaimDate) {
-        const lastClaimDate = userData.lastClaimDate.toDate ? userData.lastClaimDate.toDate() : new Date(userData.lastClaimDate);
-        if (lastClaimDate.toDateString() === today) {
-          throw new Error('Daily reward already claimed today');
-        }
-      }
-      
-      // Calculate streak
-      const currentStreak = userData.dailyStreak || 0;
-      let newStreak = 1;
-      
-      if (userData.lastClaimDate) {
-        const lastClaimDate = userData.lastClaimDate.toDate ? userData.lastClaimDate.toDate() : new Date(userData.lastClaimDate);
-        const yesterday = new Date(now);
-        yesterday.setDate(yesterday.getDate() - 1);
-        
-        if (lastClaimDate.toDateString() === yesterday.toDateString()) {
-          // Consecutive day
-          newStreak = currentStreak + 1;
-        }
-        // If more than 1 day gap, streak resets to 1 (already set above)
-      }
-      
-      // Calculate rewards
-      const streakBonus = Math.min(newStreak * 10, 100); // Cap at 100
-      const totalReward = baseReward + streakBonus + vipBonus;
-      const xpEarned = Math.floor(totalReward / 10);
-      
-      // Update user data atomically
-      const updateData = {
-        coins: increment(totalReward),
-        xp: increment(xpEarned),
-        dailyStreak: newStreak,
-        lastClaimDate: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      };
-      
-      transaction.update(userDocRef, updateData);
-      
-      const currentCoins = userData.coins || 0;
-      const currentXp = userData.xp || 0;
-      
-      return {
-        coinsEarned: totalReward,
-        xpEarned,
-        newStreak,
-        newTotalCoins: currentCoins + totalReward,
-        newTotalXp: currentXp + xpEarned
-      };
-    });
+    // Get current user data
+    const userRef = ref(realtimeDb, `telegram_users/${sanitizedUserId}`);
+    const userSnapshot = await get(userRef);
     
-    // Update Realtime DB
-    try {
-      const realtimeUserRef = ref(realtimeDb, `telegram_users/${sanitizedUserId}`);
-      await update(realtimeUserRef, {
-        coins: result.newTotalCoins,
-        xp: result.newTotalXp,
-        dailyStreak: result.newStreak,
-        lastClaimDate: new Date().toISOString(),
-        updatedAt: realtimeServerTimestamp()
-      });
-    } catch (realtimeError) {
-      console.warn('[DailyClaim] Realtime DB update failed:', realtimeError);
+    if (!userSnapshot.exists()) {
+      throw new Error('User not found');
     }
     
-    console.log(`[DailyClaim] Daily claim successful for user ${sanitizedUserId}: ${result.coinsEarned} coins, streak: ${result.newStreak}`);
+    const userData = userSnapshot.val();
+    const now = new Date();
+    const today = now.toDateString();
+    
+    // Check if already claimed today
+    if (userData.lastClaimDate) {
+      const lastClaimDate = new Date(userData.lastClaimDate);
+      if (lastClaimDate.toDateString() === today) {
+        throw new Error('Daily reward already claimed today');
+      }
+    }
+    
+    // Calculate streak
+    const currentStreak = userData.dailyStreak || 0;
+    let newStreak = 1;
+    
+    if (userData.lastClaimDate) {
+      const lastClaimDate = new Date(userData.lastClaimDate);
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      if (lastClaimDate.toDateString() === yesterday.toDateString()) {
+        // Consecutive day
+        newStreak = currentStreak + 1;
+      }
+      // If more than 1 day gap, streak resets to 1 (already set above)
+    }
+    
+    // Calculate rewards
+    const streakBonus = Math.min(newStreak * 10, 100); // Cap at 100
+    const totalReward = baseReward + streakBonus + vipBonus;
+    const xpEarned = Math.floor(totalReward / 10);
+    
+    // Update user data
+    const updateData = {
+      dailyStreak: newStreak,
+      lastClaimDate: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    await update(userRef, updateData);
+    
+    // Perform atomic coin update
+    const atomicResult = await atomicCoinUpdate({
+      userId: sanitizedUserId,
+      coinsDelta: totalReward,
+      xpDelta: xpEarned,
+      reason: 'daily_claim',
+      metadata: {
+        baseReward,
+        streakBonus,
+        vipBonus,
+        newStreak
+      }
+    });
+    
+    if (!atomicResult.success) {
+      throw new Error(atomicResult.error || 'Failed to update coins for daily claim');
+    }
+    
+    console.log(`[DailyClaim] Daily claim successful for user ${sanitizedUserId}: ${totalReward} coins, streak: ${newStreak}`);
     
     return {
       success: true,
-      ...result
+      coinsEarned: totalReward,
+      xpEarned,
+      newStreak,
+      newTotalCoins: atomicResult.newCoins || 0,
+      newTotalXp: atomicResult.newXp || 0
     };
     
   } catch (error) {
@@ -492,7 +408,7 @@ export async function atomicTaskClaim(
       
       await update(userTaskRef, {
         status: 'claimed',
-        claimedAt: realtimeServerTimestamp(),
+        claimedAt: new Date().toISOString(),
         reward
       });
       
@@ -534,21 +450,11 @@ export async function safeUserUpdate(
       return { success: true }; // Nothing to update
     }
     
-    const { db, realtimeDb } = await getFirebaseServices();
+    const { realtimeDb } = await getFirebaseServices();
     
-    // Update Firestore
-    const userDocRef = doc(db, 'telegram_users', sanitizedUserId);
-    await updateDoc(userDocRef, {
-      ...sanitizedUpdateData,
-      updatedAt: serverTimestamp()
-    });
-    
-    // Update Realtime DB
-    const realtimeUserRef = ref(realtimeDb, `telegram_users/${sanitizedUserId}`);
-    await update(realtimeUserRef, {
-      ...sanitizedUpdateData,
-      updatedAt: realtimeServerTimestamp()
-    });
+    // Update Realtime Database
+    const userRef = ref(realtimeDb, `telegram_users/${sanitizedUserId}`);
+    await update(userRef, sanitizedUpdateData);
     
     console.log(`[SafeUpdate] User update successful for ${sanitizedUserId}`);
     
@@ -592,11 +498,10 @@ export function subscribeToUserData(
               id: userId,
               createdAt: userData.createdAt ? new Date(userData.createdAt) : new Date(),
               updatedAt: userData.updatedAt ? new Date(userData.updatedAt) : new Date(),
-              lastClaimDate: userData.lastClaimDate ? new Date(userData.lastClaimDate) : null,
-              farmingStartTime: userData.farmingStartTime ? new Date(userData.farmingStartTime) : null,
-              farmingEndTime: userData.farmingEndTime ? new Date(userData.farmingEndTime) : null,
-              vipEndTime: userData.vipEndTime ? new Date(userData.vipEndTime) : null,
-              capturedAt: userData.capturedAt ? new Date(userData.capturedAt) : new Date()
+              lastClaimDate: userData.lastClaimDate ? new Date(userData.lastClaimDate) : undefined,
+              farmingStartTime: userData.farmingStartTime ? new Date(userData.farmingStartTime) : undefined,
+              farmingEndTime: userData.farmingEndTime ? new Date(userData.farmingEndTime) : undefined,
+              vipEndTime: userData.vipEndTime ? new Date(userData.vipEndTime) : undefined
             };
             
             console.log(`[UserSubscription] Real-time update for user ${userId}`);

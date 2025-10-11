@@ -82,7 +82,7 @@ const MainDashboard = ({ initialUser }: MainDashboardProps) => {
       const syncResult = await safeAsyncOperation(
         () => autoSyncUserOnAppLoad(),
         'User sync to Firebase',
-        { success: false, userId: null, isNewUser: false, errors: ['Sync failed'], warnings: [], firestoreSync: false, realtimeDbSync: false }
+        { success: false, userId: null, isNewUser: false, errors: ['Sync failed'], warnings: [], realtimeDbSync: false }
       );
       
       if (!syncResult.success) {
@@ -94,12 +94,11 @@ const MainDashboard = ({ initialUser }: MainDashboardProps) => {
       // Step 3: Set up real-time listeners
       const unsubscribe = subscribeToDashboardData(
         userId,
-        ({ user: userData, tasks: tasksData, userTasks: userTasksData, withdrawals: withdrawalsData }) => {
+        ({ user: userData, tasks: tasksData, userTasks: userTasksData }) => {
           console.log('[MainDashboard] Real-time update received:', {
             user: !!userData,
             tasks: tasksData.length,
-            userTasks: userTasksData.length,
-            withdrawals: withdrawalsData.length
+            userTasks: userTasksData.length
           });
           
           if (userData) {
@@ -107,7 +106,6 @@ const MainDashboard = ({ initialUser }: MainDashboardProps) => {
           }
           setTasks(tasksData);
           setUserTasks(userTasksData);
-          setWithdrawals(withdrawalsData);
           setLastUpdate(new Date());
         },
         {

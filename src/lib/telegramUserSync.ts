@@ -6,14 +6,6 @@
  */
 
 import { 
-  doc, 
-  setDoc, 
-  updateDoc, 
-  getDoc, 
-  serverTimestamp as firestoreServerTimestamp,
-  FieldValue 
-} from 'firebase/firestore';
-import { 
   ref, 
   set, 
   update, 
@@ -38,20 +30,17 @@ export interface SyncResult {
   isNewUser: boolean;
   errors: string[];
   warnings: string[];
-  firestoreSync: boolean;
   realtimeDbSync: boolean;
 }
 
 export interface SyncOptions {
-  enableFirestore: boolean;
   enableRealtimeDb: boolean;
   createIfNotExists: boolean;
   mergeData: boolean;
-  syncToPath: string; // Firestore collection / Realtime DB path
+  syncToPath: string; // Realtime DB path
 }
 
 const DEFAULT_SYNC_OPTIONS: SyncOptions = {
-  enableFirestore: true,
   enableRealtimeDb: true,
   createIfNotExists: true,
   mergeData: true,
