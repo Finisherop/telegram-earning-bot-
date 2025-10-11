@@ -14,13 +14,35 @@ export async function POST(request: NextRequest) {
 
     console.log('Creating invoice for:', { amount, description, tier, userId });
 
+    // Validate input parameters
+    if (!userId || typeof userId !== 'number' || userId <= 0) {
+      return NextResponse.json(
+        { error: 'Valid User ID is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!amount || typeof amount !== 'number' || amount <= 0) {
+      return NextResponse.json(
+        { error: 'Valid amount is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!tier || !['vip1', 'vip2', 'bronze', 'diamond'].includes(tier)) {
+      return NextResponse.json(
+        { error: 'Valid tier is required' },
+        { status: 400 }
+      );
+    }
+
     // Telegram Bot Token (add to your environment variables)
     const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
     
     if (!BOT_TOKEN) {
       console.error('TELEGRAM_BOT_TOKEN not found in environment variables');
       return NextResponse.json(
-        { error: 'Bot token not configured' },
+        { error: 'Bot token not configured. Please contact administrator.' },
         { status: 500 }
       );
     }
@@ -33,7 +55,7 @@ export async function POST(request: NextRequest) {
     // Create invoice using Telegram Bot API
     const invoiceData = {
       title: `${tierDisplayName} Subscription`,
-      description: description,
+      description: description || `Upgrade to ${tierDisplayName}`,
       payload: JSON.stringify({
         tier: tier,
         userId: userId,

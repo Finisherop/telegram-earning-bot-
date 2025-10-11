@@ -1,5 +1,9 @@
 // Payment API Handler for VIP purchases
-const BOT_TOKEN = process.env.BOT_TOKEN || '8484469509:AAHNw8rM2fzw35Lp1d_UTLjdFhobasHoOnM';
+const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+
+if (!BOT_TOKEN) {
+    throw new Error('Bot token not found in environment variables. Please set BOT_TOKEN or TELEGRAM_BOT_TOKEN.');
+}
 
 class PaymentAPI {
     constructor() {

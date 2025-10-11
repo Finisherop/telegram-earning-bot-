@@ -71,24 +71,24 @@ class TelegramUserCapture {
         const tg = (window as any).Telegram.WebApp;
         console.log('[UserCapture] Telegram WebApp detected');
 
-        // Get user data from Telegram
+        // Get user data from Telegram with comprehensive validation
         const telegramUser = tg.initDataUnsafe?.user;
         
-        if (telegramUser && telegramUser.id) {
+        if (telegramUser && telegramUser.id && typeof telegramUser.id === 'number' && telegramUser.id > 0) {
           console.log('[UserCapture] Telegram user data found:', telegramUser);
           
           const userData: TelegramUserData = {
             id: telegramUser.id,
             first_name: telegramUser.first_name || 'Telegram User',
-            last_name: telegramUser.last_name || undefined,
-            username: telegramUser.username || undefined,
-            photo_url: telegramUser.photo_url || undefined,
+            last_name: telegramUser.last_name || '',
+            username: telegramUser.username || '',
+            photo_url: telegramUser.photo_url || '',
             language_code: telegramUser.language_code || 'en',
             is_premium: telegramUser.is_premium || false,
             capturedAt: new Date().toISOString(),
             lastSeen: new Date().toISOString(),
-            userAgent: navigator.userAgent,
-            platform: tg.platform || 'unknown',
+            userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+            platform: tg.platform || 'telegram',
             source: 'telegram'
           };
 
@@ -158,9 +158,20 @@ class TelegramUserCapture {
       return;
     }
 
-    // Validate user data
-    if (!userData || !userData.id) {
-      console.error('[UserCapture] Invalid user data: missing user or user.id');
+    // Validate user data with comprehensive checks
+    if (!userData) {
+      console.error('[UserCapture] Invalid user data: userData is null or undefined');
+      return;
+    }
+    
+    if (!userData.id || (typeof userData.id !== 'number' && typeof userData.id !== 'string')) {
+      console.error('[UserCapture] Invalid user data: missing or invalid user.id:', userData.id);
+      return;
+    }
+    
+    // Convert user ID to string to avoid undefined issues
+    if (typeof userData.id === 'number' && userData.id <= 0) {
+      console.error('[UserCapture] Invalid user data: user.id must be positive:', userData.id);
       return;
     }
 
@@ -221,6 +232,12 @@ class TelegramUserCapture {
     }
 
     try {
+      // Validate userData exists and has valid ID
+      if (!this.userData || !this.userData.id) {
+        console.error('[UserCapture] No valid user data available for last seen update');
+        return;
+      }
+      
       const userId = this.userData.id.toString();
       const now = new Date().toISOString();
 

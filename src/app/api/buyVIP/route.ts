@@ -24,20 +24,23 @@ export async function POST(request: NextRequest) {
     console.log('[Buy VIP] Processing VIP purchase:', { userId, tier, paymentMethod });
 
     // Validate input
-    if (!userId || !tier || !VIP_TIERS[tier]) {
+    if (!userId || typeof userId !== 'string' || userId.trim() === '' || !tier || !VIP_TIERS[tier]) {
       return NextResponse.json(
-        { error: 'Invalid request parameters' },
+        { error: 'Invalid request parameters - userId and tier are required' },
         { status: 400 }
       );
     }
 
+    // Sanitize userId to ensure it's safe for Firebase operations
+    const sanitizedUserId = userId.toString().trim();
+    
     const vipTierInfo = VIP_TIERS[tier];
     const requiredStars = vipTierInfo.price;
 
     // Start atomic transaction
     try {
       // Step 1: Get current user data with retry logic
-      const user = await getUser(userId);
+      const user = await getUser(sanitizedUserId);
       if (!user) {
         return NextResponse.json(
           { error: 'User not found' },
@@ -80,9 +83,9 @@ export async function POST(request: NextRequest) {
       }
 
       // Step 4: Create payment record for tracking
-      const paymentId = await createPayment(userId, requiredStars, tier, {
+      const paymentId = await createPayment(sanitizedUserId, requiredStars, tier, {
         paymentMethod,
-        telegramPaymentId,
+        telegramPaymentId: telegramPaymentId || '',
         userBalanceBefore: user.coins || 0,
         timestamp: new Date().toISOString(),
       });
@@ -93,7 +96,7 @@ export async function POST(request: NextRequest) {
         const newStarsBalance = (user.coins || 0) - requiredStars;
         
         // Update user with new balance and VIP status atomically
-        await safeUpdateUserWithRetry(userId, {
+        await safeUpdateUserWithRetry(sanitizedUserId, {
           coins: newStarsBalance,
           vipTier: tier,
           vipEndTime: new Date(Date.now() + vipTierInfo.duration * 24 * 60 * 60 * 1000),
@@ -105,16 +108,16 @@ export async function POST(request: NextRequest) {
         });
 
         // Mark payment as completed
-        await updatePaymentStatus(userId, paymentId, 'completed', telegramPaymentId);
+        await updatePaymentStatus(sanitizedUserId, paymentId, 'completed', telegramPaymentId || '');
 
       } else if (paymentMethod === 'telegram_payment') {
         // For Telegram payments, upgrade immediately (payment already processed)
-        await upgradeUserToVIP(userId, tier, requiredStars);
-        await updatePaymentStatus(userId, paymentId, 'completed', telegramPaymentId);
+        await upgradeUserToVIP(sanitizedUserId, tier, requiredStars);
+        await updatePaymentStatus(sanitizedUserId, paymentId, 'completed', telegramPaymentId || '');
       }
 
       // Step 6: Log conversion event for analytics
-      await logConversionEvent(userId, 'vip_upgrade', {
+      await logConversionEvent(sanitizedUserId, 'vip_upgrade', {
         fromTier: user.vipTier,
         toTier: tier,
         paymentAmount: requiredStars,
@@ -123,10 +126,10 @@ export async function POST(request: NextRequest) {
       });
 
       // Step 7: Get updated user data to return
-      const updatedUser = await getUser(userId);
+      const updatedUser = await getUser(sanitizedUserId);
 
       console.log('[Buy VIP] VIP purchase completed successfully:', {
-        userId,
+        userId: sanitizedUserId,
         tier,
         paymentId,
         newBalance: updatedUser?.coins,
