@@ -261,75 +261,93 @@ export const initializeUser = async (userId: string): Promise<User> => {
   }
 };
 
-// Safe update function using Realtime Database
+// Safe update function using Realtime Database with comprehensive validation
 export const safeUpdateUser = async (userId: string, updateData: Partial<User>): Promise<User> => {
   if (!checkFirebaseConnection() || !realtimeDb) {
     throw new Error('Firebase not initialized');
   }
   
+  // Validate userId
+  if (!userId || typeof userId !== 'string' || userId.trim() === '') {
+    throw new Error('Valid userId is required for update operation');
+  }
+  
+  const sanitizedUserId = userId.toString().trim();
+  
   try {
-    const userRef = ref(realtimeDb, `users/${userId}`);
+    const userRef = ref(realtimeDb, `users/${sanitizedUserId}`);
     const userSnapshot = await get(userRef);
     
     if (!userSnapshot.exists()) {
-      // Create new user
+      // Create new user with safe defaults
       const defaultData: User = {
-        id: userId,
-        telegramId: userId,
-        username: undefined,
-        firstName: 'User',
-        lastName: '',
-        profilePic: undefined,
-        coins: 0,
-        xp: 0,
-        level: 1,
-        vipTier: 'free',
-        farmingMultiplier: VIP_TIERS.free.farmingMultiplier,
-        referralMultiplier: VIP_TIERS.free.referralMultiplier,
-        adsLimitPerDay: VIP_TIERS.free.adsLimitPerDay,
-        withdrawalLimit: VIP_TIERS.free.withdrawalLimit,
-        minWithdrawal: VIP_TIERS.free.minWithdrawal,
-        referralCount: 0,
-        referralEarnings: 0,
-        dailyStreak: 0,
-        farmingStartTime: undefined,
-        farmingEndTime: undefined,
-        lastClaimDate: undefined,
+        id: sanitizedUserId,
+        telegramId: sanitizedUserId,
+        username: updateData.username || '',
+        firstName: updateData.firstName || 'User',
+        lastName: updateData.lastName || '',
+        profilePic: updateData.profilePic || '',
+        coins: updateData.coins || 0,
+        xp: updateData.xp || 0,
+        level: updateData.level || 1,
+        vipTier: updateData.vipTier || 'free',
+        farmingMultiplier: updateData.farmingMultiplier || VIP_TIERS.free.farmingMultiplier,
+        referralMultiplier: updateData.referralMultiplier || VIP_TIERS.free.referralMultiplier,
+        adsLimitPerDay: updateData.adsLimitPerDay || VIP_TIERS.free.adsLimitPerDay,
+        withdrawalLimit: updateData.withdrawalLimit || VIP_TIERS.free.withdrawalLimit,
+        minWithdrawal: updateData.minWithdrawal || VIP_TIERS.free.minWithdrawal,
+        referralCount: updateData.referralCount || 0,
+        referralEarnings: updateData.referralEarnings || 0,
+        dailyStreak: updateData.dailyStreak || 0,
+        farmingStartTime: updateData.farmingStartTime || undefined,
+        farmingEndTime: updateData.farmingEndTime || undefined,
+        lastClaimDate: updateData.lastClaimDate || undefined,
+        vipEndTime: updateData.vipEndTime || undefined,
         createdAt: new Date(),
         updatedAt: new Date(),
         ...updateData
       };
       
-      await set(userRef, {
-        ...defaultData,
-        createdAt: defaultData.createdAt.toISOString(),
-        updatedAt: defaultData.updatedAt.toISOString(),
-        lastClaimDate: defaultData.lastClaimDate?.toISOString(),
-        farmingStartTime: defaultData.farmingStartTime?.toISOString(),
-        farmingEndTime: defaultData.farmingEndTime?.toISOString(),
-        vipEndTime: defaultData.vipEndTime?.toISOString(),
-      });
+      // Clean undefined values before setting
+      const cleanedData = Object.entries(defaultData).reduce((acc, [key, value]) => {
+        if (value !== undefined && value !== null) {
+          if (value instanceof Date) {
+            acc[key] = value.toISOString();
+          } else {
+            acc[key] = value;
+          }
+        }
+        return acc;
+      }, {} as any);
+      
+      await set(userRef, cleanedData);
       return defaultData;
     } else {
-      // Update existing user
+      // Update existing user - clean undefined values
       const updates: any = {
         ...updateData,
         updatedAt: new Date().toISOString()
       };
       
-      // Convert dates to ISO strings
-      if (updates.lastClaimDate) updates.lastClaimDate = updates.lastClaimDate.toISOString();
-      if (updates.farmingStartTime) updates.farmingStartTime = updates.farmingStartTime.toISOString();
-      if (updates.farmingEndTime) updates.farmingEndTime = updates.farmingEndTime.toISOString();
-      if (updates.vipEndTime) updates.vipEndTime = updates.vipEndTime.toISOString();
+      // Remove undefined values and convert dates safely
+      const cleanedUpdates = Object.entries(updates).reduce((acc, [key, value]) => {
+        if (value !== undefined && value !== null) {
+          if (value instanceof Date) {
+            acc[key] = value.toISOString();
+          } else {
+            acc[key] = value;
+          }
+        }
+        return acc;
+      }, {} as any);
       
-      await update(userRef, updates);
+      await update(userRef, cleanedUpdates);
       
       const updatedSnapshot = await get(userRef);
       const userData = updatedSnapshot.val();
       return {
         ...userData,
-        id: userId,
+        id: sanitizedUserId,
         createdAt: userData.createdAt ? new Date(userData.createdAt) : new Date(),
         updatedAt: userData.updatedAt ? new Date(userData.updatedAt) : new Date(),
         lastClaimDate: userData.lastClaimDate ? new Date(userData.lastClaimDate) : undefined,
@@ -437,19 +455,33 @@ export const updateUser = async (telegramId: string, updates: Partial<User>): Pr
     throw new Error('Firebase not initialized');
   }
   
-  const userRef = ref(realtimeDb, `users/${telegramId}`);
+  // Validate telegramId
+  if (!telegramId || typeof telegramId !== 'string' || telegramId.trim() === '') {
+    throw new Error('Valid telegramId is required for update operation');
+  }
+  
+  const sanitizedTelegramId = telegramId.toString().trim();
+  const userRef = ref(realtimeDb, `users/${sanitizedTelegramId}`);
+  
+  // Clean updates object - remove undefined values
   const updateData: any = {
     ...updates,
     updatedAt: new Date().toISOString()
   };
   
-  // Convert dates to ISO strings
-  if (updateData.lastClaimDate) updateData.lastClaimDate = updateData.lastClaimDate.toISOString();
-  if (updateData.farmingStartTime) updateData.farmingStartTime = updateData.farmingStartTime.toISOString();
-  if (updateData.farmingEndTime) updateData.farmingEndTime = updateData.farmingEndTime.toISOString();
-  if (updateData.vipEndTime) updateData.vipEndTime = updateData.vipEndTime.toISOString();
+  // Remove undefined values and convert dates safely
+  const cleanedUpdateData = Object.entries(updateData).reduce((acc, [key, value]) => {
+    if (value !== undefined && value !== null) {
+      if (value instanceof Date) {
+        acc[key] = value.toISOString();
+      } else {
+        acc[key] = value;
+      }
+    }
+    return acc;
+  }, {} as any);
   
-  await update(userRef, updateData);
+  await update(userRef, cleanedUpdateData);
 };
 
 // VIP subscription

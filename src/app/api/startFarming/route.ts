@@ -26,15 +26,18 @@ export async function POST(request: NextRequest) {
     console.log('[Start Farming] Processing farming start request:', { userId });
 
     // Validate input
-    if (!userId) {
+    if (!userId || typeof userId !== 'string' || userId.trim() === '') {
       return NextResponse.json(
-        { error: 'User ID is required' },
+        { error: 'Valid User ID is required' },
         { status: 400 }
       );
     }
 
+    // Sanitize userId to ensure it's safe for Firebase operations
+    const sanitizedUserId = userId.toString().trim();
+
     // Step 1: Get current user data and validate farming status
-    const user = await getUser(userId);
+    const user = await getUser(sanitizedUserId);
     if (!user) {
       return NextResponse.json(
         { error: 'User not found' },
@@ -93,7 +96,7 @@ export async function POST(request: NextRequest) {
     const expectedReward = Math.floor(baseReward * vipMultiplier);
 
     console.log('[Start Farming] Farming parameters:', {
-      userId,
+      userId: sanitizedUserId,
       vipTier: user.vipTier,
       vipMultiplier,
       farmingDuration: farmingDuration / (60 * 60 * 1000), // hours
@@ -102,7 +105,7 @@ export async function POST(request: NextRequest) {
 
     // Step 5: Start farming with validation (atomic operation)
     try {
-      const result = await startFarmingWithValidation(userId);
+      const result = await startFarmingWithValidation(sanitizedUserId);
       
       if (!result.success) {
         return NextResponse.json(
@@ -115,7 +118,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Step 6: Get updated user data to confirm farming started
-      const updatedUser = await getUser(userId);
+      const updatedUser = await getUser(sanitizedUserId);
       if (!updatedUser || !updatedUser.farmingStartTime || !updatedUser.farmingEndTime) {
         throw new Error('Farming start verification failed');
       }
@@ -124,7 +127,7 @@ export async function POST(request: NextRequest) {
       const farmingEndTime = new Date(updatedUser.farmingEndTime);
 
       // Step 7: Log conversion event for analytics
-      await logConversionEvent(userId, 'farming_claim', {
+      await logConversionEvent(sanitizedUserId, 'farming_claim', {
         farmingDuration,
         vipMultiplier,
         expectedReward,
@@ -133,7 +136,7 @@ export async function POST(request: NextRequest) {
       });
 
       console.log('[Start Farming] Farming started successfully:', {
-        userId,
+        userId: sanitizedUserId,
         startTime: farmingStartTime,
         endTime: farmingEndTime,
         duration: farmingDuration / (60 * 60 * 1000), // hours

@@ -6,6 +6,7 @@ import { User } from '@/types';
 import { TIER_CONFIGS } from '@/lib/constants';
 import { createTelegramStarInvoice, createVipRequest, createWithdrawalRequest } from '@/lib/firebaseService';
 import { playSound } from '@/lib/utils';
+import { getSafeNumericUserId, createSafePaymentData, withSafeUserId, logSafeUserInfo } from '@/lib/userDataUtils';
 import toast from 'react-hot-toast';
 
 interface ShopWithdrawalProps {
@@ -21,18 +22,31 @@ const ShopWithdrawal = ({ user, setUser, onClose }: ShopWithdrawalProps) => {
   // Telegram Stars payment handler
   const handleStarPayment = async (tier: 'bronze' | 'diamond') => {
     if (!user || isProcessing) return;
+    
+    logSafeUserInfo(user, 'StarPayment');
+    
+    // Create safe payment data with validation
+    const paymentDataResult = createSafePaymentData(user, tier, TIER_CONFIGS[tier].starCost);
+    
+    if (!paymentDataResult.isValid) {
+      toast.error(paymentDataResult.error || 'Invalid user data');
+      console.error('Payment validation failed:', paymentDataResult.error);
+      return;
+    }
+    
     setIsProcessing(true);
     playSound('click');
 
     const tierConfig = TIER_CONFIGS[tier];
 
     try {
-      // Create Telegram Star invoice
+      const { userId, userIdString } = paymentDataResult.data;
+      
       const invoice = await createTelegramStarInvoice(
-        parseInt(user.userId || user.telegramId),
+        userId,
         `${tierConfig.name} VIP Upgrade`,
         `Upgrade to ${tierConfig.name} and unlock premium features!`,
-        `vip_${tier}_${user.userId || user.telegramId}_${Date.now()}`,
+        `vip_${tier}_${userIdString}_${Date.now()}`,
         tierConfig.starCost
       );
 
@@ -43,8 +57,8 @@ const ShopWithdrawal = ({ user, setUser, onClose }: ShopWithdrawalProps) => {
             if (status === 'paid') {
               try {
                 const vipRequest = {
-                  userId: user.userId || user.telegramId,
-                  username: user.username,
+                  userId: userIdString,
+                  username: user.username || '',
                   tier,
                   paymentMethod: 'stars' as const,
                   amount: tierConfig.starCost,
@@ -347,34 +361,35 @@ const WithdrawalSection = ({ user }: { user: User }) => {
       toast.error('Please fill in all fields');
       return;
     }
-
-    const amount = parseInt(withdrawalAmount);
-    if (amount < minWithdrawal) {
-      toast.error(`Minimum withdrawal amount is ₹${minWithdrawal}`);
-      return;
-    }
-
-    if (amount > maxWithdrawal) {
-      toast.error(`Insufficient balance. Maximum withdrawal: ₹${maxWithdrawal}`);
-      return;
-    }
-
-    // Validate UPI ID format
-    const upiRegex = /^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$/;
-    if (!upiRegex.test(upiId)) {
-      toast.error('Please enter a valid UPI ID (e.g., user@paytm)');
-      return;
-    }
-
-    setIsProcessing(true);
+    
+    logSafeUserInfo(user, 'Withdrawal');
+    
     try {
-      await createWithdrawalRequest(user.telegramId, amount, upiId);
-      toast.success('Withdrawal request submitted successfully! Admin will review it soon.');
-      setWithdrawalAmount('');
-      setUpiId('');
+      await withSafeUserId(user, async (userId) => {
+        const amount = parseInt(withdrawalAmount);
+        if (amount < minWithdrawal) {
+          throw new Error(`Minimum withdrawal amount is ₹${minWithdrawal}`);
+        }
+
+        if (amount > maxWithdrawal) {
+          throw new Error(`Insufficient balance. Maximum withdrawal: ₹${maxWithdrawal}`);
+        }
+
+        // Validate UPI ID format
+        const upiRegex = /^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$/;
+        if (!upiRegex.test(upiId)) {
+          throw new Error('Please enter a valid UPI ID (e.g., user@paytm)');
+        }
+
+        setIsProcessing(true);
+        await createWithdrawalRequest(userId, amount, upiId);
+        toast.success('Withdrawal request submitted successfully! Admin will review it soon.');
+        setWithdrawalAmount('');
+        setUpiId('');
+      });
     } catch (error) {
       console.error('Withdrawal request error:', error);
-      toast.error('Failed to submit withdrawal request. Please try again.');
+      toast.error(error instanceof Error ? error.message : 'Failed to submit withdrawal request. Please try again.');
     } finally {
       setIsProcessing(false);
     }

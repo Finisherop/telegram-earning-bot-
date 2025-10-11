@@ -1,5 +1,11 @@
 // Webhook Handler for Telegram Bot with Firebase Integration
-const BOT_TOKEN = process.env.BOT_TOKEN || '8484469509:AAHNw8rM2fzw35Lp1d_UTLjdFhobasHoOnM';
+const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+
+if (!BOT_TOKEN) {
+    console.error('❌ CRITICAL: Bot token not found in environment variables!');
+    console.error('Please set BOT_TOKEN or TELEGRAM_BOT_TOKEN in your environment');
+    process.exit(1);
+}
 const APP_URL = process.env.APP_URL || 'https://telegram-earning-bot.vercel.app';
 
 // Firebase Admin Setup (if available)
@@ -293,13 +299,19 @@ Click the button below to start earning:
         try {
             console.log(`Creating/updating user ${user.id} with referral: ${referralCode}`);
             
+            // Validate user data before Firebase operations
+            if (!user.id || typeof user.id !== 'number' || user.id <= 0) {
+                console.error('Invalid user ID:', user.id);
+                return;
+            }
+            
             const userData = {
                 telegramId: user.id.toString(),
                 username: user.username || '',
-                firstName: user.first_name,
+                firstName: user.first_name || 'User',
                 lastName: user.last_name || '',
-                profilePic: user.photo_url || null,
-                referrerId: referralCode,
+                profilePic: user.photo_url || '',
+                referrerId: (referralCode && referralCode !== user.id.toString()) ? referralCode : '',
                 updatedAt: new Date().toISOString(),
             };
             
@@ -342,8 +354,14 @@ Click the button below to start earning:
                         }
                     }
                 } else {
-                    // Existing user - update data
-                    await userRef.update(userData);
+                    // Existing user - update data safely
+                    const updateData = {
+                        username: user.username || userData.username || '',
+                        firstName: user.first_name || userData.firstName || 'User',
+                        lastName: user.last_name || userData.lastName || '',
+                        updatedAt: new Date().toISOString(),
+                    };
+                    await userRef.update(updateData);
                 }
             } else {
                 console.log('Firebase Admin not available, user data stored locally in bot session');
