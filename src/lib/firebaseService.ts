@@ -835,7 +835,9 @@ export const createTelegramStarInvoice = async (
       },
       body: JSON.stringify({
         userId,
+        chatId: userId, // Use userId as chatId for Telegram users
         amount,
+        title,
         description,
         tier: payload.includes('bronze') ? 'vip1' : 'vip2',
       }),
