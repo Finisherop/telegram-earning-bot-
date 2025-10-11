@@ -58,7 +58,7 @@ export default function UserDataDisplay() {
             ? 'bg-blue-100 text-blue-800' 
             : 'bg-gray-100 text-gray-800'
         }`}>
-          {(userData.source || 'unknown').toUpperCase()}
+          {(userData.source?.toUpperCase() || 'UNKNOWN')}
         </span>
       </div>
 

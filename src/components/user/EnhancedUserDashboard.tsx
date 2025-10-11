@@ -349,7 +349,7 @@ const EnhancedUserDashboard = ({ user: initialUser }: EnhancedUserDashboardProps
               animate={{ scale: [1, 1.05, 1] }}
               transition={{ duration: 2, repeat: Infinity }}
             >
-              {user.vipTier.toUpperCase()}
+              {user.vipTier?.toUpperCase() || ''}
             </motion.div>
           )}
         </div>

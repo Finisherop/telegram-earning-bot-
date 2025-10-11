@@ -250,7 +250,7 @@ const AdminApprovals = () => {
                     <div>
                       <p className="text-gray-600">Status</p>
                       <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-bold ${getStatusColor(withdrawal.status)}`}>
-                        {getStatusIcon(withdrawal.status)} {withdrawal.status.toUpperCase()}
+                        {getStatusIcon(withdrawal.status)} {withdrawal.status?.toUpperCase() || ''}
                       </span>
                     </div>
                   </div>

@@ -402,7 +402,7 @@ export class TelegramService {
           tier: tier,
           userId: this.user.id,
           chatId: this.user.id, // Same as userId for direct messages
-          title: `${tier.toUpperCase()} Membership - 30 Days`,
+          title: `${tier?.toUpperCase() || ''} Membership - 30 Days`,
         })
       });
       
@@ -571,7 +571,7 @@ export class TelegramService {
     // Enhanced test mode for development/browser testing
     const testMessage = `💰 Test Payment: ${amount} Stars\n\n` +
                        `📦 ${description}\n\n` +
-                       `⭐ This will activate ${tier.toUpperCase()} benefits for 30 days\n\n` +
+                       `⭐ This will activate ${tier?.toUpperCase() || ''} benefits for 30 days\n\n` +
                        `🧪 Test mode - no actual payment required\n\n` +
                        `Continue with test activation?`;
     

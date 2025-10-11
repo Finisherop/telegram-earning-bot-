@@ -488,8 +488,8 @@ export const upgradeUserToVIP = async (
     // Send bot message
     await sendBotMessage(userId, {
       type: 'vip_upgrade',
-      title: `🎉 VIP ${tier.toUpperCase()} Activated!`,
-      message: `Congratulations! Your VIP ${tier.toUpperCase()} subscription is now active. Enjoy ${vipTier.farmingMultiplier}x farming speed and other premium benefits!`,
+      title: `🎉 VIP ${tier?.toUpperCase() || ''} Activated!`,
+      message: `Congratulations! Your VIP ${tier?.toUpperCase() || ''} subscription is now active. Enjoy ${vipTier.farmingMultiplier}x farming speed and other premium benefits!`,
       metadata: { tier, amount: paymentAmount },
     });
     
