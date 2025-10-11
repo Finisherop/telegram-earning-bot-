@@ -369,7 +369,7 @@ export async function syncTelegramUserToFirebase(
     
     if (result.isNewUser && options.createIfNotExists) {
       // Create new user
-      const referralParam = getReferralParamSafe();
+      const referralParam = getReferralParamSafe() || undefined;
       userData = createUserFromTelegramData(telegramUser, referralParam);
       console.log(`[UserSync] Creating new user ${userId} with referral: ${referralParam}`);
       
