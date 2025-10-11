@@ -1,12 +1,11 @@
 /**
- * Firebase Connection Manager for Telegram WebApp
+ * Firebase Connection Manager for Telegram WebApp (Realtime Database Only)
  * 
  * Handles Firebase initialization, reconnection, and lifecycle management
  * specifically designed for Telegram WebApp with background/resume events.
  */
 
 import { initializeApp, getApps, FirebaseApp, deleteApp } from 'firebase/app';
-import { getFirestore, Firestore, connectFirestoreEmulator, enableNetwork, disableNetwork } from 'firebase/firestore';
 import { getDatabase, Database, connectDatabaseEmulator, goOffline, goOnline } from 'firebase/database';
 import { getAuth, Auth, connectAuthEmulator } from 'firebase/auth';
 
@@ -31,7 +30,6 @@ export interface ConnectionStatus {
 
 export interface FirebaseServices {
   app: FirebaseApp;
-  db: Firestore;
   realtimeDb: Database;
   auth: Auth;
   isInitialized: boolean;
@@ -289,8 +287,7 @@ class FirebaseConnectionManager {
         app = existingApps[0];
       }
 
-      // Initialize services
-      const db = getFirestore(app);
+      // Initialize services (Realtime DB only)
       const realtimeDb = getDatabase(app);
       const auth = getAuth(app);
 
@@ -298,7 +295,6 @@ class FirebaseConnectionManager {
       if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
         try {
           console.log('[FirebaseConnectionManager] Connecting to Firebase emulators...');
-          connectFirestoreEmulator(db, 'localhost', 8080);
           connectDatabaseEmulator(realtimeDb, 'localhost', 9000);
           connectAuthEmulator(auth, 'http://localhost:9099');
         } catch (emulatorError) {
@@ -317,7 +313,6 @@ class FirebaseConnectionManager {
 
       const services: FirebaseServices = {
         app,
-        db,
         realtimeDb,
         auth,
         isInitialized: true,
@@ -401,9 +396,8 @@ class FirebaseConnectionManager {
       this.reconnectAttempts++;
 
       if (this.services) {
-        // Try to enable network for existing services
+        // Try to reconnect Realtime Database
         try {
-          await enableNetwork(this.services.db);
           goOnline(this.services.realtimeDb);
           
           this.connectionStatus.isConnected = true;
@@ -417,7 +411,7 @@ class FirebaseConnectionManager {
           this.reconnectDelay = 1000;
           
         } catch (networkError) {
-          console.warn('[FirebaseConnectionManager] Network enable failed, reinitializing...', networkError);
+          console.warn('[FirebaseConnectionManager] Network reconnect failed, reinitializing...', networkError);
           
           // Force reinitialization
           this.services = null;
@@ -454,11 +448,6 @@ class FirebaseConnectionManager {
     try {
       if (this.services) {
         console.log('[FirebaseConnectionManager] Gracefully disconnecting Firebase...');
-        
-        // Disable network to save resources
-        disableNetwork(this.services.db).catch(error => {
-          console.warn('[FirebaseConnectionManager] Error disabling Firestore network:', error);
-        });
         
         goOffline(this.services.realtimeDb);
         

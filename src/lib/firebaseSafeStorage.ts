@@ -1,4 +1,3 @@
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, set, get } from 'firebase/database';
 
 /**
@@ -81,71 +80,6 @@ export function validateUserData(userData: SafeUserData): { isValid: boolean; er
   return { isValid: true, error: null };
 }
 
-/**
- * Safely store user data in Firestore with comprehensive error handling
- */
-export async function safeFirestoreStorage(
-  db: any, 
-  userData: SafeUserData, 
-  collection: string = 'telegram_users'
-): Promise<{ success: boolean; error: string | null }> {
-  if (!db) {
-    return { success: false, error: 'Firestore not available' };
-  }
-
-  try {
-    const validation = validateUserData(userData);
-    if (!validation.isValid) {
-      return { success: false, error: validation.error };
-    }
-
-    const sanitizedData = sanitizeUserData(userData);
-    const userId = sanitizedData.id.toString();
-    const userDocRef = doc(db, collection, userId);
-    
-    // Check if user already exists
-    const existingDoc = await getDoc(userDocRef);
-    
-    if (existingDoc.exists()) {
-      // Update existing user
-      await setDoc(userDocRef, {
-        ...sanitizedData,
-        updatedAt: serverTimestamp()
-      }, { merge: true });
-      console.log(`[SafeFirestore] Updated existing user ${userId} in Firestore`);
-    } else {
-      // Create new user
-      await setDoc(userDocRef, {
-        ...sanitizedData,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-      console.log(`[SafeFirestore] Created new user ${userId} in Firestore`);
-    }
-    
-    return { success: true, error: null };
-    
-  } catch (error: any) {
-    console.error('[SafeFirestore] Storage failed:', error);
-    
-    let errorMessage = 'Unknown Firestore error';
-    
-    // Handle specific Firestore errors
-    if (error.code === 'permission-denied') {
-      errorMessage = 'Firestore permission denied - check Firebase security rules';
-    } else if (error.code === 'unavailable') {
-      errorMessage = 'Firestore temporarily unavailable';
-    } else if (error.code === 'failed-precondition') {
-      errorMessage = 'Firestore operation failed - invalid data format';
-    } else if (error.code === 'invalid-argument') {
-      errorMessage = 'Invalid data provided to Firestore';
-    } else if (error.message) {
-      errorMessage = error.message;
-    }
-    
-    return { success: false, error: errorMessage };
-  }
-}
 
 /**
  * Safely store user data in Realtime Database with comprehensive error handling
@@ -204,72 +138,37 @@ export async function safeRealtimeStorage(
 }
 
 /**
- * Store user data in both Firestore and Realtime Database safely
+ * Store user data in Realtime Database safely
  */
-export async function safeDualStorage(
-  db: any,
+export async function safeRealtimeOnlyStorage(
   realtimeDb: any,
   userData: SafeUserData
-): Promise<{ firestore: { success: boolean; error: string | null }, realtime: { success: boolean; error: string | null } }> {
+): Promise<{ success: boolean; error: string | null }> {
   
-  // Validate once before attempting storage
+  // Validate before attempting storage
   const validation = validateUserData(userData);
   if (!validation.isValid) {
-    const error = validation.error;
-    return {
-      firestore: { success: false, error },
-      realtime: { success: false, error }
-    };
+    return { success: false, error: validation.error };
   }
 
-  // Store in both databases concurrently
-  const [firestoreResult, realtimeResult] = await Promise.allSettled([
-    safeFirestoreStorage(db, userData),
-    safeRealtimeStorage(realtimeDb, userData)
-  ]);
-
-  return {
-    firestore: firestoreResult.status === 'fulfilled' 
-      ? firestoreResult.value 
-      : { success: false, error: firestoreResult.reason?.message || 'Firestore storage failed' },
-    realtime: realtimeResult.status === 'fulfilled' 
-      ? realtimeResult.value 
-      : { success: false, error: realtimeResult.reason?.message || 'Realtime storage failed' }
-  };
+  // Store in Realtime Database only
+  return await safeRealtimeStorage(realtimeDb, userData);
 }
 
 /**
  * Update only the lastSeen timestamp safely
  */
 export async function safeUpdateLastSeen(
-  db: any,
   realtimeDb: any,
   userId: string | number,
-  collection: string = 'telegram_users',
   path: string = 'telegram_users'
-): Promise<{ firestore: boolean; realtime: boolean }> {
+): Promise<{ realtime: boolean }> {
   const userIdStr = userId.toString();
   const now = new Date().toISOString();
   
-  let firestoreSuccess = false;
   let realtimeSuccess = false;
 
-  // Update Firestore
-  if (db) {
-    try {
-      const userDocRef = doc(db, collection, userIdStr);
-      await setDoc(userDocRef, {
-        lastSeen: now,
-        updatedAt: serverTimestamp()
-      }, { merge: true });
-      firestoreSuccess = true;
-      console.log(`[SafeUpdate] Last seen updated in Firestore for user ${userIdStr}`);
-    } catch (error: any) {
-      console.error(`[SafeUpdate] Failed to update last seen in Firestore for user ${userIdStr}:`, error);
-    }
-  }
-
-  // Update Realtime Database
+  // Update Realtime Database only
   if (realtimeDb) {
     try {
       const userRef = ref(realtimeDb, `${path}/${userIdStr}`);
@@ -287,26 +186,22 @@ export async function safeUpdateLastSeen(
     }
   }
 
-  return { firestore: firestoreSuccess, realtime: realtimeSuccess };
+  return { realtime: realtimeSuccess };
 }
 
 /**
- * Main wrapper function for safe Telegram user storage
+ * Main wrapper function for safe Telegram user storage (Realtime DB only)
  */
 export async function safeTelegramUserStorage(
   userData: SafeUserData,
   options: {
-    db?: any;
     realtimeDb?: any;
-    collection?: string;
     path?: string;
     enableLocalBackup?: boolean;
   } = {}
 ): Promise<{ success: boolean; errors: string[]; warnings: string[] }> {
   const {
-    db,
     realtimeDb,
-    collection = 'telegram_users',
     path = 'telegram_users',
     enableLocalBackup = true
   } = options;
@@ -316,19 +211,13 @@ export async function safeTelegramUserStorage(
   let hasSuccess = false;
 
   try {
-    // Store in Firebase services
-    const results = await safeDualStorage(db, realtimeDb, userData);
+    // Store in Realtime Database only
+    const result = await safeRealtimeOnlyStorage(realtimeDb, userData);
     
-    if (results.firestore.success) {
+    if (result.success) {
       hasSuccess = true;
-    } else if (results.firestore.error) {
-      errors.push(`Firestore: ${results.firestore.error}`);
-    }
-    
-    if (results.realtime.success) {
-      hasSuccess = true;
-    } else if (results.realtime.error) {
-      errors.push(`Realtime DB: ${results.realtime.error}`);
+    } else if (result.error) {
+      errors.push(`Realtime DB: ${result.error}`);
     }
 
     // Local storage backup

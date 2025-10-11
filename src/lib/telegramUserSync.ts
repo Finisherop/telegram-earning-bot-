@@ -1,7 +1,7 @@
 /**
- * Telegram to Firebase User Sync Service
+ * Telegram to Firebase User Sync Service (Realtime Database Only)
  * 
- * Handles syncing user data from Telegram WebApp to Firebase with proper
+ * Handles syncing user data from Telegram WebApp to Firebase Realtime Database with proper
  * sanitization, error handling, and atomic operations.
  */
 
@@ -12,7 +12,7 @@ import {
   get, 
   serverTimestamp as realtimeServerTimestamp 
 } from 'firebase/database';
-import { getFirebaseServices } from './firebaseSingleton';
+import { realtimeDb } from './firebase';
 import { 
   getTelegramUserSafe, 
   sanitizeUserForFirebase, 
@@ -151,65 +151,19 @@ function updateUserWithTelegramData(existingUser: User, telegramUser: SafeTelegr
 }
 
 /**
- * Syncs Telegram user data to Firestore
+ * Syncs user data to Realtime Database only
  */
-async function syncToFirestore(
+async function syncToRealtimeDbOnly(
   userId: string, 
   userData: User, 
   isNewUser: boolean, 
   options: SyncOptions
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { db } = await getFirebaseServices();
-    const userRef = doc(db, options.syncToPath, userId);
-    
-    // Sanitize data for Firestore
-    const sanitizedData = sanitizeFirebasePayload(userData);
-    
-    if (isNewUser) {
-      // Create new document
-      await setDoc(userRef, {
-        ...sanitizedData,
-        createdAt: firestoreServerTimestamp(),
-        updatedAt: firestoreServerTimestamp()
-      });
-    } else {
-      // Update existing document with merge
-      const updateData = {
-        ...sanitizedData,
-        updatedAt: firestoreServerTimestamp()
-      };
-      
-      if (options.mergeData) {
-        await setDoc(userRef, updateData, { merge: true });
-      } else {
-        await updateDoc(userRef, updateData);
-      }
+    if (!realtimeDb) {
+      throw new Error('Realtime Database not initialized');
     }
     
-    console.log(`[UserSync] Firestore sync successful for user ${userId}`);
-    return { success: true };
-    
-  } catch (error) {
-    console.error(`[UserSync] Firestore sync failed for user ${userId}:`, error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown Firestore error' 
-    };
-  }
-}
-
-/**
- * Syncs user data to Realtime Database
- */
-async function syncToRealtimeDb(
-  userId: string, 
-  userData: User, 
-  isNewUser: boolean, 
-  options: SyncOptions
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    const { realtimeDb } = await getFirebaseServices();
     const userRef = ref(realtimeDb, `${options.syncToPath}/${userId}`);
     
     // Sanitize data for Realtime Database
@@ -243,45 +197,21 @@ async function syncToRealtimeDb(
 }
 
 /**
- * Checks if user exists in Firebase
+ * Checks if user exists in Realtime Database only
  */
 async function checkUserExists(userId: string, options: SyncOptions): Promise<{
-  firestoreExists: boolean;
   realtimeExists: boolean;
-  firestoreUser?: User;
   realtimeUser?: User;
 }> {
   const result = {
-    firestoreExists: false,
     realtimeExists: false,
-    firestoreUser: undefined as User | undefined,
     realtimeUser: undefined as User | undefined
   };
 
   try {
-    const { db, realtimeDb } = await getFirebaseServices();
-
-    // Check Firestore
-    if (options.enableFirestore) {
-      try {
-        const firestoreDoc = await getDoc(doc(db, options.syncToPath, userId));
-        if (firestoreDoc.exists()) {
-          result.firestoreExists = true;
-          const data = firestoreDoc.data();
-          result.firestoreUser = {
-            ...data,
-            id: userId,
-            createdAt: data.createdAt?.toDate() || new Date(),
-            updatedAt: data.updatedAt?.toDate() || new Date(),
-            lastClaimDate: data.lastClaimDate ? data.lastClaimDate.toDate() : undefined,
-            farmingStartTime: data.farmingStartTime ? data.farmingStartTime.toDate() : undefined,
-            farmingEndTime: data.farmingEndTime ? data.farmingEndTime.toDate() : undefined,
-            vipEndTime: data.vipEndTime ? data.vipEndTime.toDate() : undefined
-          } as User;
-        }
-      } catch (firestoreError) {
-        console.warn(`[UserSync] Firestore check failed for user ${userId}:`, firestoreError);
-      }
+    if (!realtimeDb) {
+      console.warn('[UserSync] Realtime Database not initialized');
+      return result;
     }
 
     // Check Realtime Database
@@ -316,8 +246,8 @@ async function checkUserExists(userId: string, options: SyncOptions): Promise<{
 }
 
 /**
- * Main function to sync Telegram user to Firebase
- * Automatically captures current Telegram user and syncs to Firebase
+ * Main function to sync Telegram user to Firebase Realtime Database
+ * Automatically captures current Telegram user and syncs to Realtime Database
  */
 export async function syncTelegramUserToFirebase(
   customOptions?: Partial<SyncOptions>
@@ -329,12 +259,11 @@ export async function syncTelegramUserToFirebase(
     isNewUser: false,
     errors: [],
     warnings: [],
-    firestoreSync: false,
     realtimeDbSync: false
   };
 
   try {
-    console.log('[UserSync] Starting Telegram user sync to Firebase...');
+    console.log('[UserSync] Starting Telegram user sync to Firebase Realtime Database...');
 
     // Step 1: Capture Telegram user data safely
     const telegramUser = getTelegramUserSafe();
@@ -348,9 +277,9 @@ export async function syncTelegramUserToFirebase(
     result.userId = userId;
     console.log(`[UserSync] Processing user sync for ID: ${userId} (${telegramUser.source})`);
 
-    // Step 2: Check if user exists in Firebase
+    // Step 2: Check if user exists in Realtime Database
     const existingUserCheck = await checkUserExists(userId, options);
-    const userExists = existingUserCheck.firestoreExists || existingUserCheck.realtimeExists;
+    const userExists = existingUserCheck.realtimeExists;
     result.isNewUser = !userExists;
 
     // Step 3: Prepare user data
@@ -364,7 +293,7 @@ export async function syncTelegramUserToFirebase(
       
     } else if (userExists) {
       // Update existing user
-      const existingUser = existingUserCheck.firestoreUser || existingUserCheck.realtimeUser;
+      const existingUser = existingUserCheck.realtimeUser;
       if (!existingUser) {
         result.errors.push('User exists but data could not be retrieved');
         return result;
@@ -379,29 +308,17 @@ export async function syncTelegramUserToFirebase(
       return result;
     }
 
-    // Step 4: Sync to Firestore
-    if (options.enableFirestore) {
-      const firestoreResult = await syncToFirestore(userId, userData, result.isNewUser, options);
-      result.firestoreSync = firestoreResult.success;
-      if (firestoreResult.error) {
-        result.errors.push(`Firestore: ${firestoreResult.error}`);
-      }
-    }
-
-    // Step 5: Sync to Realtime Database
+    // Step 4: Sync to Realtime Database only
     if (options.enableRealtimeDb) {
-      const realtimeResult = await syncToRealtimeDb(userId, userData, result.isNewUser, options);
+      const realtimeResult = await syncToRealtimeDbOnly(userId, userData, result.isNewUser, options);
       result.realtimeDbSync = realtimeResult.success;
       if (realtimeResult.error) {
         result.errors.push(`Realtime DB: ${realtimeResult.error}`);
       }
     }
 
-    // Step 6: Determine overall success
-    result.success = (
-      (!options.enableFirestore || result.firestoreSync) &&
-      (!options.enableRealtimeDb || result.realtimeDbSync)
-    );
+    // Step 5: Determine overall success
+    result.success = result.realtimeDbSync;
 
     if (result.success) {
       console.log(`[UserSync] User sync completed successfully for ${userId}`);
@@ -419,7 +336,7 @@ export async function syncTelegramUserToFirebase(
 }
 
 /**
- * Syncs a specific Telegram user to Firebase
+ * Syncs a specific Telegram user to Firebase Realtime Database
  */
 export async function syncSpecificUserToFirebase(
   telegramUser: SafeTelegramUser,
@@ -432,7 +349,6 @@ export async function syncSpecificUserToFirebase(
     isNewUser: false,
     errors: [],
     warnings: [],
-    firestoreSync: false,
     realtimeDbSync: false
   };
 
@@ -448,7 +364,7 @@ export async function syncSpecificUserToFirebase(
 
     // Check if user exists
     const existingUserCheck = await checkUserExists(userId, options);
-    const userExists = existingUserCheck.firestoreExists || existingUserCheck.realtimeExists;
+    const userExists = existingUserCheck.realtimeExists;
     result.isNewUser = !userExists;
 
     // Prepare user data
@@ -457,7 +373,7 @@ export async function syncSpecificUserToFirebase(
     if (result.isNewUser && options.createIfNotExists) {
       userData = createUserFromTelegramData(telegramUser);
     } else if (userExists) {
-      const existingUser = existingUserCheck.firestoreUser || existingUserCheck.realtimeUser;
+      const existingUser = existingUserCheck.realtimeUser;
       if (!existingUser) {
         result.errors.push('User exists but data could not be retrieved');
         return result;
@@ -470,27 +386,16 @@ export async function syncSpecificUserToFirebase(
       return result;
     }
 
-    // Sync to Firebase services
-    if (options.enableFirestore) {
-      const firestoreResult = await syncToFirestore(userId, userData, result.isNewUser, options);
-      result.firestoreSync = firestoreResult.success;
-      if (firestoreResult.error) {
-        result.errors.push(`Firestore: ${firestoreResult.error}`);
-      }
-    }
-
+    // Sync to Realtime Database only
     if (options.enableRealtimeDb) {
-      const realtimeResult = await syncToRealtimeDb(userId, userData, result.isNewUser, options);
+      const realtimeResult = await syncToRealtimeDbOnly(userId, userData, result.isNewUser, options);
       result.realtimeDbSync = realtimeResult.success;
       if (realtimeResult.error) {
         result.errors.push(`Realtime DB: ${realtimeResult.error}`);
       }
     }
 
-    result.success = (
-      (!options.enableFirestore || result.firestoreSync) &&
-      (!options.enableRealtimeDb || result.realtimeDbSync)
-    );
+    result.success = result.realtimeDbSync;
 
     return result;
 
@@ -508,7 +413,6 @@ export async function autoSyncUserOnAppLoad(): Promise<SyncResult> {
   console.log('[UserSync] Auto-syncing user data on app load...');
   
   return syncTelegramUserToFirebase({
-    enableFirestore: true,
     enableRealtimeDb: true,
     createIfNotExists: true,
     mergeData: true,
@@ -523,7 +427,6 @@ export async function updateUserProfileFromTelegram(): Promise<SyncResult> {
   console.log('[UserSync] Force updating user profile from Telegram...');
   
   return syncTelegramUserToFirebase({
-    enableFirestore: true,
     enableRealtimeDb: true,
     createIfNotExists: false, // Don't create if not exists, only update
     mergeData: true,

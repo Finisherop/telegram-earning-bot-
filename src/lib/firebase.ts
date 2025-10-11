@@ -5,7 +5,7 @@ import { getAuth, Auth } from 'firebase/auth';
 // Robust Firebase configuration for deployment with fallbacks
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyA_cKKrwrqNyb0xl28IbHAnaJa3ChOdsZU',
-  // authDomain is optional for Firestore/Realtime DB only usage
+  // authDomain is optional for Realtime DB only usage
   ...(process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN && { 
     authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN 
   }),
@@ -42,7 +42,7 @@ const validateFirebaseConfig = () => {
     storageBucket: firebaseConfig.storageBucket || 'NOT SET',
   });
   
-  // Only require essential fields for Firestore/Realtime DB usage (no auth)
+  // Only require essential fields for Realtime DB usage (no auth)
   const requiredFields = ['apiKey', 'projectId', 'appId'];
   const missingFields = requiredFields.filter(field => {
     const value = firebaseConfig[field as keyof typeof firebaseConfig];
