@@ -42,34 +42,46 @@ const ShopWithdrawal = ({ user, setUser, onClose }: ShopWithdrawalProps) => {
     try {
       const { userId, userIdString } = paymentDataResult.data;
       
-      const invoice = await createTelegramStarInvoice(
-        userId,
-        tierConfig.starCost,
-        `${tierConfig.name} VIP Upgrade - Unlock premium features!`
-      );
+      // Call our secure API endpoint
+      const response = await fetch('/api/create-invoice', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: userIdString,
+          amount: tierConfig.starCost,
+          description: `${tierConfig.name} VIP Upgrade - Unlock premium features!`,
+          type: 'vip_upgrade',
+          tier: tier,
+          paymentMethod: 'stars'
+        })
+      });
+      
+      const invoiceData = await response.json();
+      
+      if (!invoiceData.success) {
+        throw new Error(invoiceData.error || 'Failed to create payment');
+      }
 
-      if (invoice) {
+      if (invoiceData.invoiceUrl) {
         // Open invoice in Telegram WebApp
         if (window.Telegram?.WebApp) {
-          window.Telegram.WebApp.openInvoice(invoice, async (status) => {
+          window.Telegram.WebApp.openInvoice(invoiceData.invoiceId, async (status) => {
             if (status === 'paid') {
               try {
-                const vipRequest = {
-                  userId: userIdString,
-                  tier: tier === 'bronze' ? 'vip1' as const : 'vip2' as const,
-                  amount: tierConfig.starCost,
-                  paymentMethod: 'stars',
-                  status: 'completed' as const,
-                  createdAt: new Date()
-                };
-
-                await createVipRequest(vipRequest);
-                activateVip(tier);
-                toast.success('🎉 VIP Activated! Payment successful!');
+                // Payment successful - the webhook will handle VIP activation
+                toast.success('🎉 Payment successful! VIP benefits will be activated shortly.');
                 playSound('success');
+                
+                // Refresh user data to get updated VIP status
+                setTimeout(() => {
+                  window.location.reload();
+                }, 2000);
+                
               } catch (error) {
                 console.error('Error processing star payment:', error);
-                toast.error('Payment successful but activation failed. Contact admin.');
+                toast.error('Payment successful but activation may be delayed. Contact support if needed.');
               }
             } else if (status === 'cancelled') {
               toast.error('Payment cancelled');
@@ -81,13 +93,13 @@ const ShopWithdrawal = ({ user, setUser, onClose }: ShopWithdrawalProps) => {
             setIsProcessing(false);
           });
         } else {
-          // Fallback for non-Telegram environment (mock invoice URL)
-          window.open(`https://t.me/invoice/${invoice}`, '_blank');
+          // Fallback for non-Telegram environment
+          window.open(invoiceData.invoiceUrl, '_blank');
           toast('Complete payment in the opened window', { icon: 'ℹ️' });
           setIsProcessing(false);
         }
       } else {
-        throw new Error('Failed to create invoice');
+        throw new Error('No invoice URL received');
       }
     } catch (error) {
       console.error('Star payment error:', error);
@@ -359,25 +371,37 @@ const WithdrawalSection = ({ user }: { user: User }) => {
     try {
       await withSafeUserId(user, async (userId) => {
         const amount = parseInt(withdrawalAmount);
-        if (amount < minWithdrawal) {
-          throw new Error(`Minimum withdrawal amount is ₹${minWithdrawal}`);
-        }
-
-        if (amount > maxWithdrawal) {
-          throw new Error(`Insufficient balance. Maximum withdrawal: ₹${maxWithdrawal}`);
-        }
-
-        // Validate UPI ID format
-        const upiRegex = /^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$/;
-        if (!upiRegex.test(upiId)) {
-          throw new Error('Please enter a valid UPI ID (e.g., user@paytm)');
-        }
-
+        
         setIsProcessing(true);
-        await createWithdrawalRequest(userId, amount, upiId);
-        toast.success('Withdrawal request submitted successfully! Admin will review it soon.');
+        
+        // Call secure withdrawal API
+        const response = await fetch('/api/withdrawals', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: userId,
+            amount: amount,
+            upiId: upiId.trim(),
+            type: 'standard'
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+          throw new Error(result.message || 'Withdrawal request failed');
+        }
+        
+        toast.success(result.message);
         setWithdrawalAmount('');
         setUpiId('');
+        
+        // Refresh user data to reflect balance changes
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
       });
     } catch (error) {
       console.error('Withdrawal request error:', error);

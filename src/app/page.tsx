@@ -2,16 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth';
-import { useTelegramUser } from '@/hooks/useTelegramUser';
 import { ADMIN_SECRET_KEY } from '@/lib/constants';
 import UserDashboard from '@/components/UserDashboard';
 import AdminDashboard from '@/components/AdminDashboard';
 import BackgroundDataLoader from '@/components/BackgroundDataLoader';
 
 export default function Home() {
-  const { user } = useAuth();
-  const { userData: telegramUser, isLoading: telegramLoading, isTelegramUser, displayName } = useTelegramUser();
   const router = useRouter();
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -52,18 +48,27 @@ export default function Home() {
     setIsLoading(false);
   }, [router]);
 
-  // Remove complex loading screen - let the app load directly
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
+        <div className="text-center text-white">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <h1 className="text-xl font-bold">Loading Telegram Mini App...</h1>
+          <p className="text-white/80 mt-2">Initializing your experience</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-light">
       {/* Background Data Loader - handles all complex loading silently */}
       <BackgroundDataLoader />
       
-      
       {isAdmin ? (
         <AdminDashboard />
       ) : (
-        <UserDashboard user={user} />
+        <UserDashboard />
       )}
     </div>
   );

@@ -4,16 +4,16 @@ import { getAuth, Auth } from 'firebase/auth';
 
 // Robust Firebase configuration for deployment with fallbacks
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyA_cKKrwrqNyb0xl28IbHAnaJa3ChOdsZU',
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyC_SO0ZnItNVoWif48MyMeznuLsA-jq52k',
   // authDomain is optional for Realtime DB only usage
   ...(process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN && { 
     authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN 
   }),
-  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || 'https://telegram-bot-2be45-default-rtdb.firebaseio.com',
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'telegram-bot-2be45',
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'telegram-bot-2be45.firebasestorage.app',
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '947875567907',
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '1:947875567907:web:ea7b37b36643872e199496',
+  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || 'https://tgfjf-5bbfe-default-rtdb.firebaseio.com',
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'tgfjf-5bbfe',
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'tgfjf-5bbfe.firebasestorage.app',
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '898327972915',
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '1:898327972915:web:8450b0cfdf69134474e746',
 };
 
 // Enhanced environment variables debugging

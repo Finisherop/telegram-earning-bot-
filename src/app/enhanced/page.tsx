@@ -10,10 +10,16 @@ import IntegrationTest from '@/components/IntegrationTest';
 import { motion } from 'framer-motion';
 
 export default function EnhancedHome() {
-  const { user, payments, conversions, messages, isLoading, lastUpdate } = useEnhancedAuth();
+  const { user, isLoading, hasError, isAuthenticated } = useEnhancedAuth();
   const router = useRouter();
   const [isAdmin, setIsAdmin] = useState(false);
   const [showTests, setShowTests] = useState(false);
+
+  // Mock data for enhanced features (replace with real data in production)
+  const payments: any[] = [];
+  const conversions: any[] = [];
+  const messages: any[] = [];
+  const lastUpdate: Date | null = new Date();
 
   useEffect(() => {
     // Check if we're in browser mode and need setup
@@ -184,7 +190,7 @@ export default function EnhancedHome() {
         {isAdmin ? (
           <AdminDashboard />
         ) : (
-          <UserDashboard user={user} />
+          <UserDashboard />
         )}
       </div>
 

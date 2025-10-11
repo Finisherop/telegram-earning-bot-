@@ -3,15 +3,16 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { User } from '@/types';
-import { updateUser, safeUpdateUser } from '@/lib/firebaseService';
 import { TelegramService } from '@/lib/telegram';
+import { updateUserData } from '@/lib/enhancedDataPersistence';
 import toast from 'react-hot-toast';
 
 interface DashboardProps {
   user: User;
+  onUserUpdate?: (user: User) => void;
 }
 
-const Dashboard = ({ user }: DashboardProps) => {
+const Dashboard = ({ user, onUserUpdate }: DashboardProps) => {
   const [farmingProgress, setFarmingProgress] = useState(0);
   const [isFarming, setIsFarming] = useState(false);
   const [canClaim, setCanClaim] = useState(false);
@@ -118,10 +119,14 @@ const Dashboard = ({ user }: DashboardProps) => {
       console.log('Starting farming for user:', user.telegramId, { startTime, endTime });
       
       // Update Firebase immediately with proper error handling
-      await safeUpdateUser(user.telegramId, {
+      const updatedUser = await updateUserData(user.telegramId, {
         farmingStartTime: startTime,
         farmingEndTime: endTime,
       });
+      
+      if (updatedUser && onUserUpdate) {
+        onUserUpdate(updatedUser);
+      }
       
       setIsFarming(true);
       setFarmingProgress(0);
@@ -155,12 +160,16 @@ const Dashboard = ({ user }: DashboardProps) => {
       const currentCoins = user.coins || 0;
       const currentXp = user.xp || 0;
       
-      await safeUpdateUser(user.telegramId, {
+      const updatedUser = await updateUserData(user.telegramId, {
         coins: currentCoins + reward,
         xp: currentXp + Math.floor(reward / 10),
         farmingStartTime: undefined,
         farmingEndTime: undefined,
       });
+      
+      if (updatedUser && onUserUpdate) {
+        onUserUpdate(updatedUser);
+      }
       
       setCanClaim(false);
       setIsFarming(false);
@@ -200,12 +209,16 @@ const Dashboard = ({ user }: DashboardProps) => {
       const currentXp = user.xp || 0;
       const currentStreak = user.dailyStreak || 0;
       
-      await safeUpdateUser(user.telegramId, {
+      const updatedUser = await updateUserData(user.telegramId, {
         coins: currentCoins + totalReward,
         xp: currentXp + Math.floor(totalReward / 10),
         dailyStreak: currentStreak + 1,
         lastClaimDate: new Date(),
       });
+      
+      if (updatedUser && onUserUpdate) {
+        onUserUpdate(updatedUser);
+      }
       
       setDailyClaimAvailable(false);
       
