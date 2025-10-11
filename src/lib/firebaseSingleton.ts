@@ -238,7 +238,7 @@ if (typeof window !== 'undefined') {
 }
 
 // Export individual services for backward compatibility
-export async function getFirestore(): Promise<Firestore> {
+export async function getFirestoreDb(): Promise<Firestore> {
   const services = await getFirebaseServices();
   return services.db;
 }

@@ -31,7 +31,7 @@ import {
   serverTimestamp as realtimeServerTimestamp,
   push 
 } from 'firebase/database';
-import { getFirebaseServices } from './firebaseSingleton';
+import { getFirebaseServices, getFirebaseServicesSync } from './firebaseSingleton';
 import { User, WithdrawalRequest } from '@/types';
 import { sanitizeUserForFirebase, getUserIdForFirebase } from './telegramUserSafe';
 
@@ -577,7 +577,13 @@ export function subscribeToUserData(
   }
   
   try {
-    const { realtimeDb } = getFirebaseServices();
+    const services = getFirebaseServicesSync();
+    if (!services) {
+      console.error('[UserSubscription] Firebase services not initialized');
+      callback(null);
+      return () => {};
+    }
+    const { realtimeDb } = services;
     const userRef = ref(realtimeDb, `telegram_users/${userId}`);
     
     const unsubscribe = onValue(userRef, (snapshot) => {

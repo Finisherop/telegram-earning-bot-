@@ -104,12 +104,10 @@ function sanitizeUserData(userData: any, userId: string): User {
   return {
     id: userId,
     telegramId: userData.telegramId || userId,
-    username: userData.username || null,
+    username: userData.username || undefined,
     firstName: userData.firstName || 'User',
-    lastName: userData.lastName || null,
-    profilePic: userData.profilePic || null,
-    languageCode: userData.languageCode || 'en',
-    isPremium: userData.isPremium || false,
+    lastName: userData.lastName || undefined,
+    profilePic: userData.profilePic || undefined,
     
     // Game data with safe defaults
     coins: userData.coins || 0,
@@ -123,24 +121,22 @@ function sanitizeUserData(userData: any, userId: string): User {
     adsLimitPerDay: userData.adsLimitPerDay || 5,
     withdrawalLimit: userData.withdrawalLimit || 1000,
     minWithdrawal: userData.minWithdrawal || 100,
-    vipEndTime: userData.vipEndTime ? safeTimestampToDate(userData.vipEndTime) : null,
+    vipEndTime: userData.vipEndTime ? safeTimestampToDate(userData.vipEndTime) : undefined,
     
     // Referral data
-    referrerId: userData.referrerId || null,
+    referrerId: userData.referrerId || undefined,
     referralCount: userData.referralCount || 0,
     referralEarnings: userData.referralEarnings || 0,
     
     // Game state
     dailyStreak: userData.dailyStreak || 0,
-    farmingStartTime: userData.farmingStartTime ? safeTimestampToDate(userData.farmingStartTime) : null,
-    farmingEndTime: userData.farmingEndTime ? safeTimestampToDate(userData.farmingEndTime) : null,
-    lastClaimDate: userData.lastClaimDate ? safeTimestampToDate(userData.lastClaimDate) : null,
+    farmingStartTime: userData.farmingStartTime ? safeTimestampToDate(userData.farmingStartTime) : undefined,
+    farmingEndTime: userData.farmingEndTime ? safeTimestampToDate(userData.farmingEndTime) : undefined,
+    lastClaimDate: userData.lastClaimDate ? safeTimestampToDate(userData.lastClaimDate) : undefined,
     
     // Metadata
-    source: userData.source || 'telegram',
     createdAt: safeTimestampToDate(userData.createdAt),
-    updatedAt: safeTimestampToDate(userData.updatedAt),
-    capturedAt: userData.capturedAt ? safeTimestampToDate(userData.capturedAt) : new Date()
+    updatedAt: safeTimestampToDate(userData.updatedAt)
   };
 }
 
@@ -280,14 +276,11 @@ export function subscribeToUserWithdrawals(
               id: doc.id,
               userId: data.userId,
               amount: data.amount || 0,
-              method: data.method || '',
-              methodDetails: data.methodDetails || {},
+              upiId: data.upiId || '',
               status: data.status || 'pending',
               requestedAt: safeTimestampToDate(data.requestedAt),
               processedAt: data.processedAt ? safeTimestampToDate(data.processedAt) : undefined,
-              adminNotes: data.adminNotes || undefined,
-              fees: data.fees || 0,
-              netAmount: data.netAmount || data.amount || 0
+              adminNotes: data.adminNotes || undefined
             };
             
             withdrawals.push(withdrawal);
@@ -361,11 +354,9 @@ export function subscribeToTasks(
                   id: taskId,
                   title: taskData.title || 'Untitled Task',
                   description: taskData.description || '',
-                  type: taskData.type || 'basic',
+                  type: taskData.type || 'link',
                   reward: taskData.reward || 0,
-                  url: taskData.url || '',
-                  category: taskData.category || 'general',
-                  requirements: taskData.requirements || {},
+                  url: taskData.url || undefined,
                   isActive: taskData.isActive || false,
                   createdAt: taskData.createdAt ? new Date(taskData.createdAt) : new Date(),
                   updatedAt: taskData.updatedAt ? new Date(taskData.updatedAt) : new Date()
@@ -447,11 +438,9 @@ export function subscribeToUserTasks(
                 id: taskId,
                 userId: userId,
                 taskId: taskId,
-                status: taskData.status || 'available',
+                status: taskData.status || 'pending',
                 completedAt: taskData.completedAt ? new Date(taskData.completedAt) : undefined,
-                claimedAt: taskData.claimedAt ? new Date(taskData.claimedAt) : undefined,
-                progress: taskData.progress || 0,
-                metadata: taskData.metadata || {}
+                claimedAt: taskData.claimedAt ? new Date(taskData.claimedAt) : undefined
               };
               
               userTasks.push(userTask);

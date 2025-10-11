@@ -107,12 +107,10 @@ function createUserFromTelegramData(telegramUser: SafeTelegramUser, referralId?:
   return {
     id: userId,
     telegramId: userId,
-    username: telegramUser.username || null,
+    username: telegramUser.username || undefined,
     firstName: telegramUser.first_name || 'User',
-    lastName: telegramUser.last_name || null,
-    profilePic: telegramUser.photo_url || null,
-    languageCode: telegramUser.language_code || 'en',
-    isPremium: telegramUser.is_premium || false,
+    lastName: telegramUser.last_name || undefined,
+    profilePic: telegramUser.photo_url || undefined,
     
     // Default game values
     coins: 0,
@@ -126,26 +124,22 @@ function createUserFromTelegramData(telegramUser: SafeTelegramUser, referralId?:
     adsLimitPerDay: VIP_TIERS.free.adsLimitPerDay,
     withdrawalLimit: VIP_TIERS.free.withdrawalLimit,
     minWithdrawal: VIP_TIERS.free.minWithdrawal,
-    vipEndTime: null,
+    vipEndTime: undefined,
     
     // Referrals
-    referrerId: referralId || null,
+    referrerId: referralId || undefined,
     referralCount: 0,
     referralEarnings: 0,
     
     // Game state
     dailyStreak: 0,
-    farmingStartTime: null,
-    farmingEndTime: null,
-    lastClaimDate: null,
+    farmingStartTime: undefined,
+    farmingEndTime: undefined,
+    lastClaimDate: undefined,
     
     // Timestamps
     createdAt: now,
-    updatedAt: now,
-    
-    // Telegram specific
-    source: telegramUser.source,
-    capturedAt: new Date(telegramUser.capturedAt)
+    updatedAt: now
   };
 }
 
@@ -159,12 +153,9 @@ function updateUserWithTelegramData(existingUser: User, telegramUser: SafeTelegr
     firstName: telegramUser.first_name || existingUser.firstName,
     lastName: telegramUser.last_name || existingUser.lastName,
     profilePic: telegramUser.photo_url || existingUser.profilePic,
-    languageCode: telegramUser.language_code || existingUser.languageCode,
-    isPremium: telegramUser.is_premium,
     
     // Update timestamps
-    updatedAt: new Date(),
-    capturedAt: new Date(telegramUser.capturedAt)
+    updatedAt: new Date()
   };
 
   return updates;
@@ -293,11 +284,10 @@ async function checkUserExists(userId: string, options: SyncOptions): Promise<{
             id: userId,
             createdAt: data.createdAt?.toDate() || new Date(),
             updatedAt: data.updatedAt?.toDate() || new Date(),
-            lastClaimDate: data.lastClaimDate?.toDate() || null,
-            farmingStartTime: data.farmingStartTime?.toDate() || null,
-            farmingEndTime: data.farmingEndTime?.toDate() || null,
-            vipEndTime: data.vipEndTime?.toDate() || null,
-            capturedAt: data.capturedAt?.toDate() || new Date()
+            lastClaimDate: data.lastClaimDate?.toDate() || undefined,
+            farmingStartTime: data.farmingStartTime?.toDate() || undefined,
+            farmingEndTime: data.farmingEndTime?.toDate() || undefined,
+            vipEndTime: data.vipEndTime?.toDate() || undefined
           } as User;
         }
       } catch (firestoreError) {
