@@ -99,7 +99,6 @@ export function createDefaultUser(userId: string, telegramData?: any): User {
     firstName: telegramData?.first_name || 'User',
     lastName: telegramData?.last_name || undefined,
     profilePic: telegramData?.photo_url || undefined,
-    
     // Game data with safe defaults
     coins: 0,
     xp: 0,

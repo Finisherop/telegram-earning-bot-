@@ -1,21 +1,4 @@
 import {
-  collection,
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  query,
-  where,
-  getDocs,
-  orderBy,
-  limit,
-  increment,
-  serverTimestamp,
-  addDoc,
-  onSnapshot,
-  deleteDoc,
-} from 'firebase/firestore';
-import {
   ref,
   set,
   get,
@@ -26,7 +9,7 @@ import {
   remove,
   serverTimestamp as realtimeServerTimestamp,
 } from 'firebase/database';
-import { db, realtimeDb } from './firebase';
+import { realtimeDb } from './firebase';
 import { 
   User, 
   Task, 
@@ -70,7 +53,7 @@ const logSuccess = (operation: string, context?: any) => {
 
 // Firebase connection check with enhanced validation
 const checkFirebaseConnection = (): boolean => {
-  if (!db || !realtimeDb) {
+  if (!realtimeDb) {
     console.warn('[Firebase Service] Services not properly initialized. Some features may not work.');
     return false;
   }
@@ -600,7 +583,7 @@ export const markMessageAsRead = async (userId: string, messageId: string): Prom
 
 // Enhanced stats with payment and conversion data
 export const getEnhancedDailyStats = async (): Promise<DailyStats> => {
-  if (!checkFirebaseConnection() || !realtimeDb || !db) {
+  if (!checkFirebaseConnection() || !realtimeDb) {
     console.warn('Cannot get daily stats: Firebase not initialized');
     return {
       totalUsers: 0,
@@ -667,11 +650,19 @@ export const getEnhancedDailyStats = async (): Promise<DailyStats> => {
       });
     }
     
-    // Get pending withdrawals from Firestore
-    const withdrawalsRef = collection(db, 'withdrawals');
-    const pendingQuery = query(withdrawalsRef, where('status', '==', 'pending'));
-    const pendingSnapshot = await getDocs(pendingQuery);
-    const pendingWithdrawals = pendingSnapshot.size;
+    // Get pending withdrawals from Realtime Database
+    const withdrawalsRef = ref(realtimeDb, 'withdrawals');
+    const withdrawalsSnapshot = await get(withdrawalsRef);
+    
+    let pendingWithdrawals = 0;
+    if (withdrawalsSnapshot.exists()) {
+      const withdrawalsData = withdrawalsSnapshot.val();
+      Object.values(withdrawalsData).forEach((withdrawal: any) => {
+        if (withdrawal && withdrawal.status === 'pending') {
+          pendingWithdrawals++;
+        }
+      });
+    }
     
     return {
       totalUsers,

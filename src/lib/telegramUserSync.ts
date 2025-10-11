@@ -6,14 +6,6 @@
  */
 
 import { 
-  doc, 
-  setDoc, 
-  updateDoc, 
-  getDoc, 
-  serverTimestamp as firestoreServerTimestamp,
-  FieldValue 
-} from 'firebase/firestore';
-import { 
   ref, 
   set, 
   update, 
@@ -38,20 +30,17 @@ export interface SyncResult {
   isNewUser: boolean;
   errors: string[];
   warnings: string[];
-  firestoreSync: boolean;
   realtimeDbSync: boolean;
 }
 
 export interface SyncOptions {
-  enableFirestore: boolean;
   enableRealtimeDb: boolean;
   createIfNotExists: boolean;
   mergeData: boolean;
-  syncToPath: string; // Firestore collection / Realtime DB path
+  syncToPath: string; // Realtime DB path
 }
 
 const DEFAULT_SYNC_OPTIONS: SyncOptions = {
-  enableFirestore: true,
   enableRealtimeDb: true,
   createIfNotExists: true,
   mergeData: true,
@@ -111,7 +100,6 @@ function createUserFromTelegramData(telegramUser: SafeTelegramUser, referralId?:
     firstName: telegramUser.first_name || 'User',
     lastName: telegramUser.last_name || undefined,
     profilePic: telegramUser.photo_url || undefined,
-    
     // Default game values
     coins: 0,
     xp: 0,
@@ -139,7 +127,9 @@ function createUserFromTelegramData(telegramUser: SafeTelegramUser, referralId?:
     
     // Timestamps
     createdAt: now,
-    updatedAt: now
+    updatedAt: now,
+    
+    // Telegram specific
   };
 }
 
@@ -153,7 +143,6 @@ function updateUserWithTelegramData(existingUser: User, telegramUser: SafeTelegr
     firstName: telegramUser.first_name || existingUser.firstName,
     lastName: telegramUser.last_name || existingUser.lastName,
     profilePic: telegramUser.photo_url || existingUser.profilePic,
-    
     // Update timestamps
     updatedAt: new Date()
   };
@@ -284,10 +273,10 @@ async function checkUserExists(userId: string, options: SyncOptions): Promise<{
             id: userId,
             createdAt: data.createdAt?.toDate() || new Date(),
             updatedAt: data.updatedAt?.toDate() || new Date(),
-            lastClaimDate: data.lastClaimDate?.toDate() || undefined,
-            farmingStartTime: data.farmingStartTime?.toDate() || undefined,
-            farmingEndTime: data.farmingEndTime?.toDate() || undefined,
-            vipEndTime: data.vipEndTime?.toDate() || undefined
+            lastClaimDate: data.lastClaimDate ? data.lastClaimDate.toDate() : undefined,
+            farmingStartTime: data.farmingStartTime ? data.farmingStartTime.toDate() : undefined,
+            farmingEndTime: data.farmingEndTime ? data.farmingEndTime.toDate() : undefined,
+            vipEndTime: data.vipEndTime ? data.vipEndTime.toDate() : undefined
           } as User;
         }
       } catch (firestoreError) {
@@ -307,10 +296,10 @@ async function checkUserExists(userId: string, options: SyncOptions): Promise<{
             id: userId,
             createdAt: data.createdAt ? new Date(data.createdAt) : new Date(),
             updatedAt: data.updatedAt ? new Date(data.updatedAt) : new Date(),
-            lastClaimDate: data.lastClaimDate ? new Date(data.lastClaimDate) : null,
-            farmingStartTime: data.farmingStartTime ? new Date(data.farmingStartTime) : null,
-            farmingEndTime: data.farmingEndTime ? new Date(data.farmingEndTime) : null,
-            vipEndTime: data.vipEndTime ? new Date(data.vipEndTime) : null,
+            lastClaimDate: data.lastClaimDate ? new Date(data.lastClaimDate) : undefined,
+            farmingStartTime: data.farmingStartTime ? new Date(data.farmingStartTime) : undefined,
+            farmingEndTime: data.farmingEndTime ? new Date(data.farmingEndTime) : undefined,
+            vipEndTime: data.vipEndTime ? new Date(data.vipEndTime) : undefined,
             capturedAt: data.capturedAt ? new Date(data.capturedAt) : new Date()
           } as User;
         }

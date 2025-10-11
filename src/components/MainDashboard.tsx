@@ -31,13 +31,6 @@ import {
   safeAsyncOperation 
 } from '@/lib/errorPrevention';
 import { TelegramService } from '@/lib/telegram';
-import { 
-  userDataPersistence, 
-  getCachedUser, 
-  updateCachedUser, 
-  optimisticallyUpdateCoins,
-  subscribeToUserCache 
-} from '@/lib/userDataPersistence';
 import toast from 'react-hot-toast';
 
 interface MainDashboardProps {
@@ -45,12 +38,8 @@ interface MainDashboardProps {
 }
 
 const MainDashboard = ({ initialUser }: MainDashboardProps) => {
-  // State management with safe defaults and cached data
-  const [user, setUser] = useState<User | null>(() => {
-    // Initialize with cached user data if available, otherwise use initialUser
-    const cached = getCachedUser();
-    return cached || initialUser || null;
-  });
+  // State management with safe defaults
+  const [user, setUser] = useState<User | null>(initialUser || null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [userTasks, setUserTasks] = useState<UserTask[]>([]);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
@@ -68,39 +57,6 @@ const MainDashboard = ({ initialUser }: MainDashboardProps) => {
   // Operation states
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
-
-  /**
-   * Enhanced user data handler with persistence
-   */
-  const handleUserDataUpdate = useCallback((userData: User, source: 'firebase' | 'optimistic' = 'firebase') => {
-    console.log(`[MainDashboard] Updating user data from ${source}:`, userData);
-    
-    if (source === 'firebase') {
-      // Merge with cached data and update both state and cache
-      const mergedUser = userDataPersistence.mergeWithFirebaseData(userData);
-      setUser(mergedUser);
-    } else {
-      // Optimistic update - update state immediately and cache
-      setUser(userData);
-      updateCachedUser(userData, 'localStorage');
-    }
-    
-    setLastUpdate(new Date());
-  }, []);
-
-  /**
-   * Subscribe to cached user data changes (for cross-tab synchronization)
-   */
-  useEffect(() => {
-    const unsubscribe = subscribeToUserCache((cacheData) => {
-      if (cacheData?.user && cacheData.source === 'firebase') {
-        console.log('[MainDashboard] Received cached user update from another tab');
-        setUser(cacheData.user);
-      }
-    });
-
-    return unsubscribe;
-  }, []);
 
   /**
    * Initialize user and set up real-time listeners
@@ -126,7 +82,7 @@ const MainDashboard = ({ initialUser }: MainDashboardProps) => {
       const syncResult = await safeAsyncOperation(
         () => autoSyncUserOnAppLoad(),
         'User sync to Firebase',
-        { success: false, userId: null, isNewUser: false, errors: ['Sync failed'], warnings: [], firestoreSync: false, realtimeDbSync: false }
+        { success: false, userId: null, isNewUser: false, errors: ['Sync failed'], warnings: [], realtimeDbSync: false }
       );
       
       if (!syncResult.success) {
@@ -135,24 +91,22 @@ const MainDashboard = ({ initialUser }: MainDashboardProps) => {
         console.log(`[MainDashboard] User sync successful for ${userId} (new user: ${syncResult.isNewUser})`);
       }
       
-      // Step 3: Set up real-time listeners with enhanced data handling
+      // Step 3: Set up real-time listeners
       const unsubscribe = subscribeToDashboardData(
         userId,
-        ({ user: userData, tasks: tasksData, userTasks: userTasksData, withdrawals: withdrawalsData }) => {
+        ({ user: userData, tasks: tasksData, userTasks: userTasksData }) => {
           console.log('[MainDashboard] Real-time update received:', {
             user: !!userData,
             tasks: tasksData.length,
-            userTasks: userTasksData.length,
-            withdrawals: withdrawalsData.length
+            userTasks: userTasksData.length
           });
           
           if (userData) {
-            // Use enhanced user data handler with persistence
-            handleUserDataUpdate(userData, 'firebase');
+            setUser(userData);
           }
           setTasks(tasksData);
           setUserTasks(userTasksData);
-          setWithdrawals(withdrawalsData);
+          setLastUpdate(new Date());
         },
         {
           onError: (error) => {
@@ -359,7 +313,7 @@ const MainDashboard = ({ initialUser }: MainDashboardProps) => {
   }, [user, dailyClaimAvailable, isProcessing]);
 
   /**
-   * Claim task rewards with atomic operations and optimistic updates
+   * Claim task rewards with atomic operations
    */
   const claimTaskReward = useCallback(async (taskId: string, reward: number) => {
     if (isProcessing || !user) {
@@ -370,15 +324,6 @@ const MainDashboard = ({ initialUser }: MainDashboardProps) => {
     const telegram = TelegramService.getInstance();
     telegram.hapticFeedback('heavy');
     
-    // Optimistic update - immediately update UI
-    const optimisticUser = {
-      ...user,
-      coins: user.coins + reward,
-      updatedAt: new Date()
-    };
-    handleUserDataUpdate(optimisticUser, 'optimistic');
-    optimisticallyUpdateCoins(optimisticUser.coins);
-    
     try {
       console.log(`[MainDashboard] Claiming task ${taskId} reward: ${reward} coins`);
       
@@ -387,21 +332,12 @@ const MainDashboard = ({ initialUser }: MainDashboardProps) => {
       if (result.success) {
         toast.success(`🎉 Task completed! +${reward} coins earned!`);
         console.log(`[MainDashboard] Task claim successful: ${reward} coins`);
-        
-        // Real Firebase data will come through real-time listener
-        // and will be merged with optimistic update in persistence manager
       } else {
-        // Revert optimistic update on failure
-        handleUserDataUpdate(user, 'firebase');
         throw new Error(result.error || 'Failed to claim task reward');
       }
       
     } catch (error) {
       console.error('[MainDashboard] Task claim failed:', error);
-      
-      // Revert optimistic update on error
-      handleUserDataUpdate(user, 'firebase');
-      
       const errorMessage = FirebaseErrorHandler.getErrorMessage(error);
       toast.error(`❌ ${errorMessage}`);
     } finally {

@@ -1,254 +1,177 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { 
-  collection,
-  addDoc,
-  doc,
-  getDoc,
-  updateDoc,
-  serverTimestamp,
-  runTransaction
-} from 'firebase/firestore';
+  ref,
+  get,
+  set,
+  update,
+  push
+} from 'firebase/database';
 import { getFirebaseServices } from '@/lib/firebaseSingleton';
 import { User } from '@/types';
 
 export interface CreateWithdrawalRequest {
   userId: string;
   amount: number;
-  method: 'upi' | 'paypal' | 'bank' | 'crypto';
-  methodDetails: {
-    upiId?: string;
-    paypalEmail?: string;
-    bankAccount?: string;
-    cryptoAddress?: string;
-    cryptoType?: string;
-  };
+  upiId: string;
 }
 
-export interface WithdrawalRequestData {
-  id: string;
-  userId: string;
-  amount: number;
-  method: string;
-  methodDetails: any;
-  status: 'pending' | 'approved' | 'rejected' | 'paid' | 'cancelled';
-  requestedAt: Date;
-  processedAt?: Date;
-  adminNotes?: string;
-  userBalance: number;
-  fees?: number;
-  netAmount?: number;
+interface WithdrawalResponse {
+  success: boolean;
+  withdrawalId?: string;
+  message?: string;
+  error?: string;
 }
 
 /**
  * Validates withdrawal request data
  */
-function validateWithdrawalRequest(request: CreateWithdrawalRequest): string | null {
-  if (!request.userId || typeof request.userId !== 'string' || request.userId.trim() === '') {
-    return 'Valid user ID is required';
+function validateWithdrawalData(data: any): CreateWithdrawalRequest {
+  const { userId, amount, upiId } = data;
+
+  if (!userId || typeof userId !== 'string') {
+    throw new Error('Valid userId is required');
   }
-  
-  if (!request.amount || typeof request.amount !== 'number' || request.amount <= 0) {
-    return 'Valid positive amount is required';
+
+  if (!amount || typeof amount !== 'number' || amount <= 0) {
+    throw new Error('Valid amount greater than 0 is required');
   }
-  
-  if (!request.method || !['upi', 'paypal', 'bank', 'crypto'].includes(request.method)) {
-    return 'Valid withdrawal method is required';
+
+  if (!upiId || typeof upiId !== 'string') {
+    throw new Error('Valid UPI ID is required');
   }
-  
-  // Validate method-specific details
-  switch (request.method) {
-    case 'upi':
-      if (!request.methodDetails.upiId || typeof request.methodDetails.upiId !== 'string') {
-        return 'UPI ID is required for UPI withdrawals';
-      }
-      break;
-    case 'paypal':
-      if (!request.methodDetails.paypalEmail || typeof request.methodDetails.paypalEmail !== 'string') {
-        return 'PayPal email is required for PayPal withdrawals';
-      }
-      break;
-    case 'bank':
-      if (!request.methodDetails.bankAccount || typeof request.methodDetails.bankAccount !== 'string') {
-        return 'Bank account details are required for bank withdrawals';
-      }
-      break;
-    case 'crypto':
-      if (!request.methodDetails.cryptoAddress || !request.methodDetails.cryptoType) {
-        return 'Crypto address and type are required for crypto withdrawals';
-      }
-      break;
+
+  // Basic UPI ID validation
+  const upiRegex = /^[\w.\-_]{2,256}@[a-zA-Z]{2,64}$/;
+  if (!upiRegex.test(upiId)) {
+    throw new Error('Invalid UPI ID format');
   }
-  
-  return null;
+
+  return {
+    userId: userId.toString().trim(),
+    amount: Math.floor(amount), // Ensure whole numbers
+    upiId: upiId.trim()
+  };
 }
 
 /**
- * Calculate withdrawal fees based on method and amount
- */
-function calculateWithdrawalFees(method: string, amount: number): number {
-  switch (method) {
-    case 'upi':
-      return Math.max(5, amount * 0.02); // 2% or minimum ₹5
-    case 'paypal':
-      return Math.max(10, amount * 0.03); // 3% or minimum ₹10
-    case 'bank':
-      return Math.max(15, amount * 0.025); // 2.5% or minimum ₹15
-    case 'crypto':
-      return Math.max(20, amount * 0.015); // 1.5% or minimum ₹20
-    default:
-      return amount * 0.05; // 5% for unknown methods
-  }
-}
-
-/**
- * POST /api/withdrawals/create
- * Creates a new withdrawal request
+ * Creates a withdrawal request
  */
 export async function POST(request: NextRequest) {
   try {
-    const body: CreateWithdrawalRequest = await request.json();
-    
-    console.log('[Withdrawals] Processing withdrawal request:', {
-      userId: body.userId,
-      amount: body.amount,
-      method: body.method
-    });
+    console.log('[WithdrawalAPI] Processing withdrawal request creation');
 
-    // Validate request data
-    const validationError = validateWithdrawalRequest(body);
-    if (validationError) {
-      return NextResponse.json(
-        { error: validationError, code: 'VALIDATION_ERROR' },
-        { status: 400 }
-      );
-    }
+    const body = await request.json();
+    const { userId, amount, upiId } = validateWithdrawalData(body);
 
-    const { userId, amount, method, methodDetails } = body;
+    console.log(`[WithdrawalAPI] Creating withdrawal for user ${userId}: ${amount} coins to ${upiId}`);
+
     const sanitizedUserId = userId.toString().trim();
     
-    const { db } = await getFirebaseServices();
+    const { realtimeDb } = await getFirebaseServices();
 
-    // Use transaction to ensure atomic withdrawal creation and balance check
-    const result = await runTransaction(db, async (transaction) => {
-      // Get current user data
-      const userDocRef = doc(db, 'telegram_users', sanitizedUserId);
-      const userDoc = await transaction.get(userDocRef);
-      
-      if (!userDoc.exists()) {
-        throw new Error('User not found');
-      }
-      
-      const userData = userDoc.data() as User;
-      const currentBalance = userData.coins || 0;
-      
-      // Check minimum withdrawal amount
-      const minWithdrawal = userData.minWithdrawal || 100;
-      if (amount < minWithdrawal) {
-        throw new Error(`Minimum withdrawal amount is ${minWithdrawal} coins`);
-      }
-      
-      // Check withdrawal limit
-      const withdrawalLimit = userData.withdrawalLimit || 1000;
-      if (amount > withdrawalLimit) {
-        throw new Error(`Maximum withdrawal amount is ${withdrawalLimit} coins`);
-      }
-      
-      // Check if user has sufficient balance
-      const fees = calculateWithdrawalFees(method, amount);
-      const totalRequired = amount + fees;
-      
-      if (currentBalance < totalRequired) {
-        throw new Error(`Insufficient balance. Required: ${totalRequired} coins (including ${fees} fees), Available: ${currentBalance} coins`);
-      }
-      
-      // Check for pending withdrawals (limit to 3 pending per user)
-      // Note: This would require a separate query, so we'll skip for now
-      // and implement it as a business rule in admin panel
-      
-      // Create withdrawal request document
-      const withdrawalData = {
-        userId: sanitizedUserId,
-        amount: amount,
-        method: method,
-        methodDetails: methodDetails,
-        status: 'pending',
-        requestedAt: serverTimestamp(),
-        userBalance: currentBalance,
-        fees: fees,
-        netAmount: amount, // User receives this amount
-        totalDeducted: totalRequired, // Amount deducted from user balance
-        userInfo: {
-          username: userData.username,
-          firstName: userData.firstName,
-          vipTier: userData.vipTier
-        }
-      };
-      
-      // Add to withdrawals collection
-      const withdrawalsRef = collection(db, 'withdrawals');
-      const withdrawalDocRef = doc(withdrawalsRef); // Generate new doc ID
-      transaction.set(withdrawalDocRef, withdrawalData);
-      
-      // Deduct amount + fees from user balance immediately
-      transaction.update(userDocRef, {
-        coins: currentBalance - totalRequired,
-        updatedAt: serverTimestamp(),
-        lastWithdrawalRequest: serverTimestamp()
-      });
-      
-      return {
-        withdrawalId: withdrawalDocRef.id,
-        newBalance: currentBalance - totalRequired,
-        fees,
-        netAmount: amount,
-        totalDeducted: totalRequired
-      };
-    });
+    // Get current user data
+    const userRef = ref(realtimeDb, `telegram_users/${sanitizedUserId}`);
+    const userSnapshot = await get(userRef);
+    
+    if (!userSnapshot.exists()) {
+      throw new Error('User not found');
+    }
+    
+    const userData = userSnapshot.val() as User;
+    const currentBalance = userData.coins || 0;
+    
+    // Check minimum withdrawal amount
+    const minWithdrawal = userData.minWithdrawal || 100;
+    if (amount < minWithdrawal) {
+      throw new Error(`Minimum withdrawal amount is ${minWithdrawal} coins`);
+    }
+    
+    // Check withdrawal limit
+    const withdrawalLimit = userData.withdrawalLimit || 1000;
+    if (amount > withdrawalLimit) {
+      throw new Error(`Maximum withdrawal amount is ${withdrawalLimit} coins`);
+    }
+    
+    // Check if user has sufficient balance
+    if (currentBalance < amount) {
+      throw new Error(`Insufficient balance. Current balance: ${currentBalance} coins`);
+    }
 
-    console.log('[Withdrawals] Withdrawal request created successfully:', {
+    // Check daily withdrawal limit (basic implementation)
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const userWithdrawalsRef = ref(realtimeDb, `userWithdrawals/${sanitizedUserId}/${today}`);
+    const todayWithdrawalsSnapshot = await get(userWithdrawalsRef);
+    
+    let todayTotal = 0;
+    if (todayWithdrawalsSnapshot.exists()) {
+      const todayWithdrawals = todayWithdrawalsSnapshot.val();
+      todayTotal = Object.values(todayWithdrawals as Record<string, any>)
+        .reduce((sum: number, withdrawal: any) => sum + (withdrawal.amount || 0), 0);
+    }
+    
+    const dailyLimit = userData.withdrawalLimit || 1000;
+    if (todayTotal + amount > dailyLimit) {
+      throw new Error(`Daily withdrawal limit exceeded. Today's total: ${todayTotal}, Daily limit: ${dailyLimit}`);
+    }
+
+    // Create withdrawal request
+    const withdrawalsRef = ref(realtimeDb, 'withdrawals');
+    const newWithdrawalRef = push(withdrawalsRef);
+    const withdrawalId = newWithdrawalRef.key!;
+
+    const withdrawalData = {
+      id: withdrawalId,
       userId: sanitizedUserId,
-      withdrawalId: result.withdrawalId,
       amount,
-      fees: result.fees
+      upiId,
+      status: 'pending',
+      requestedAt: new Date().toISOString(),
+      processedAt: null,
+      adminNotes: null
+    };
+
+    // Save withdrawal request
+    await set(newWithdrawalRef, withdrawalData);
+
+    // Update user's balance (deduct the amount)
+    await update(userRef, {
+      coins: currentBalance - amount,
+      updatedAt: new Date().toISOString()
     });
 
-    return NextResponse.json({
+    // Add to user's withdrawal history
+    const userWithdrawalRef = ref(realtimeDb, `userWithdrawals/${sanitizedUserId}/${today}/${withdrawalId}`);
+    await set(userWithdrawalRef, {
+      withdrawalId,
+      amount,
+      timestamp: new Date().toISOString()
+    });
+
+    console.log(`[WithdrawalAPI] Withdrawal request created successfully: ${withdrawalId}`);
+
+    return NextResponse.json<WithdrawalResponse>({
       success: true,
-      message: 'Withdrawal request submitted successfully',
-      withdrawalId: result.withdrawalId,
-      details: {
-        amount: amount,
-        fees: result.fees,
-        netAmount: result.netAmount,
-        totalDeducted: result.totalDeducted,
-        newBalance: result.newBalance,
-        estimatedProcessingTime: '24-48 hours'
-      }
+      withdrawalId,
+      message: `Withdrawal request created successfully for ${amount} coins`
     });
 
   } catch (error) {
-    console.error('[Withdrawals] Withdrawal request failed:', error);
-    
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    const errorCode = errorMessage.includes('Insufficient balance') ? 'INSUFFICIENT_BALANCE'
-      : errorMessage.includes('not found') ? 'USER_NOT_FOUND'
-      : errorMessage.includes('Minimum withdrawal') ? 'AMOUNT_TOO_LOW'
-      : errorMessage.includes('Maximum withdrawal') ? 'AMOUNT_TOO_HIGH'
-      : 'WITHDRAWAL_FAILED';
+    console.error('[WithdrawalAPI] Withdrawal request creation failed:', error);
 
-    return NextResponse.json(
-      { 
-        error: errorMessage,
-        code: errorCode
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+
+    return NextResponse.json<WithdrawalResponse>(
+      {
+        success: false,
+        error: errorMessage
       },
-      { status: errorCode === 'USER_NOT_FOUND' ? 404 : 400 }
+      { status: 400 }
     );
   }
 }
 
 /**
- * GET /api/withdrawals/create?userId=xxx
- * Gets withdrawal eligibility and user info
+ * Gets withdrawal requests for a user
  */
 export async function GET(request: NextRequest) {
   try {
@@ -257,98 +180,65 @@ export async function GET(request: NextRequest) {
 
     if (!userId) {
       return NextResponse.json(
-        { error: 'User ID is required', code: 'MISSING_USER_ID' },
+        { success: false, error: 'User ID is required' },
         { status: 400 }
       );
     }
 
+    console.log(`[WithdrawalAPI] Getting withdrawal requests for user ${userId}`);
+
     const sanitizedUserId = userId.toString().trim();
-    const { db } = await getFirebaseServices();
-
-    // Get user data
-    const userDocRef = doc(db, 'telegram_users', sanitizedUserId);
-    const userDoc = await getDoc(userDocRef);
-
-    if (!userDoc.exists()) {
+    const { realtimeDb } = await getFirebaseServices();
+    
+    // Get user data to verify user exists
+    const userRef = ref(realtimeDb, `telegram_users/${sanitizedUserId}`);
+    const userSnapshot = await get(userRef);
+    
+    if (!userSnapshot.exists()) {
       return NextResponse.json(
-        { error: 'User not found', code: 'USER_NOT_FOUND' },
+        { success: false, error: 'User not found' },
         { status: 404 }
       );
     }
+    
+    // Get all withdrawals and filter by user
+    const withdrawalsRef = ref(realtimeDb, 'withdrawals');
+    const withdrawalsSnapshot = await get(withdrawalsRef);
+    
+    const userWithdrawals: any[] = [];
+    
+    if (withdrawalsSnapshot.exists()) {
+      const allWithdrawals = withdrawalsSnapshot.val();
+      Object.entries(allWithdrawals).forEach(([id, data]: [string, any]) => {
+        if (data && data.userId === sanitizedUserId) {
+          userWithdrawals.push({
+            ...data,
+            id,
+            requestedAt: data.requestedAt ? new Date(data.requestedAt) : new Date(),
+            processedAt: data.processedAt ? new Date(data.processedAt) : null
+          });
+        }
+      });
+    }
 
-    const userData = userDoc.data() as User;
-    const currentBalance = userData.coins || 0;
-    const minWithdrawal = userData.minWithdrawal || 100;
-    const withdrawalLimit = userData.withdrawalLimit || 1000;
-
-    // Calculate available withdrawal amounts for different methods
-    const withdrawalMethods = [
-      {
-        method: 'upi',
-        name: 'UPI (India)',
-        fees: calculateWithdrawalFees('upi', minWithdrawal),
-        feePercentage: '2%',
-        minAmount: minWithdrawal,
-        processingTime: '24-48 hours'
-      },
-      {
-        method: 'paypal',
-        name: 'PayPal',
-        fees: calculateWithdrawalFees('paypal', minWithdrawal),
-        feePercentage: '3%',
-        minAmount: minWithdrawal,
-        processingTime: '48-72 hours'
-      },
-      {
-        method: 'bank',
-        name: 'Bank Transfer',
-        fees: calculateWithdrawalFees('bank', minWithdrawal),
-        feePercentage: '2.5%',
-        minAmount: minWithdrawal,
-        processingTime: '3-5 business days'
-      },
-      {
-        method: 'crypto',
-        name: 'Cryptocurrency',
-        fees: calculateWithdrawalFees('crypto', minWithdrawal),
-        feePercentage: '1.5%',
-        minAmount: minWithdrawal,
-        processingTime: '12-24 hours'
-      }
-    ];
-
-    const eligibility = {
-      canWithdraw: currentBalance >= minWithdrawal,
-      balance: currentBalance,
-      minWithdrawal: minWithdrawal,
-      maxWithdrawal: Math.min(withdrawalLimit, currentBalance),
-      vipTier: userData.vipTier || 'free'
-    };
+    // Sort by requested date (newest first)
+    userWithdrawals.sort((a, b) => 
+      new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime()
+    );
 
     return NextResponse.json({
       success: true,
-      user: {
-        id: sanitizedUserId,
-        username: userData.username,
-        firstName: userData.firstName,
-        vipTier: userData.vipTier
-      },
-      eligibility,
-      methods: withdrawalMethods,
-      notes: [
-        'Withdrawal fees are deducted from your account balance',
-        'Processing times may vary based on method and external factors',
-        'VIP users get reduced fees and higher withdrawal limits',
-        'Maximum 3 pending withdrawal requests allowed per user'
-      ]
+      withdrawals: userWithdrawals,
+      count: userWithdrawals.length
     });
 
   } catch (error) {
-    console.error('[Withdrawals] Eligibility check failed:', error);
+    console.error('[WithdrawalAPI] Failed to get withdrawal requests:', error);
+
     return NextResponse.json(
-      { 
-        error: 'Failed to check withdrawal eligibility',
-        code: 'ELIGIBILITY_CHECK_FAILED'
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to get withdrawal requests'
       },
       { status: 500 }
     );

@@ -44,31 +44,23 @@ const ShopWithdrawal = ({ user, setUser, onClose }: ShopWithdrawalProps) => {
       
       const invoice = await createTelegramStarInvoice(
         userId,
-        `${tierConfig.name} VIP Upgrade`,
-        `Upgrade to ${tierConfig.name} and unlock premium features!`,
-        `vip_${tier}_${userIdString}_${Date.now()}`,
-        tierConfig.starCost
+        tierConfig.starCost,
+        `${tierConfig.name} VIP Upgrade - Unlock premium features!`
       );
 
       if (invoice) {
         // Open invoice in Telegram WebApp
         if (window.Telegram?.WebApp) {
-          window.Telegram.WebApp.openInvoice(invoice.invoice_link, async (status) => {
+          window.Telegram.WebApp.openInvoice(invoice, async (status) => {
             if (status === 'paid') {
               try {
                 const vipRequest = {
                   userId: userIdString,
-                  username: user.username || '',
-                  tier,
-                  paymentMethod: 'stars' as const,
+                  tier: tier === 'bronze' ? 'vip1' as const : 'vip2' as const,
                   amount: tierConfig.starCost,
-                  status: 'approved' as const, // Auto-approve star payments
-                  requestedAt: Date.now(),
-                  processedAt: Date.now(),
-                  adminNotes: 'Auto-approved Telegram Stars payment',
-                  paymentDetails: {
-                    invoiceId: invoice.invoice_link
-                  }
+                  paymentMethod: 'stars',
+                  status: 'completed' as const,
+                  createdAt: new Date()
                 };
 
                 await createVipRequest(vipRequest);
@@ -89,8 +81,8 @@ const ShopWithdrawal = ({ user, setUser, onClose }: ShopWithdrawalProps) => {
             setIsProcessing(false);
           });
         } else {
-          // Fallback for non-Telegram environment
-          window.open(invoice.invoice_link, '_blank');
+          // Fallback for non-Telegram environment (mock invoice URL)
+          window.open(`https://t.me/invoice/${invoice}`, '_blank');
           toast('Complete payment in the opened window', { icon: 'ℹ️' });
           setIsProcessing(false);
         }
