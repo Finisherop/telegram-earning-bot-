@@ -138,7 +138,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: `Successfully upgraded to ${tier.toUpperCase()}!`,
+        message: `Successfully upgraded to ${tier?.toUpperCase() || ''}!`,
         paymentId,
         user: {
           vipTier: updatedUser?.vipTier,

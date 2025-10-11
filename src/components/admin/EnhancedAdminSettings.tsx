@@ -115,7 +115,7 @@ const EnhancedAdminSettings = () => {
     setUpgradeLoading(true);
     try {
       await upgradeUserToVIP(searchedUser.telegramId, tier);
-      toast.success(`✅ User upgraded to ${tier.toUpperCase()} successfully!`);
+      toast.success(`✅ User upgraded to ${tier?.toUpperCase() || ''} successfully!`);
       
       // Refresh user data
       const updatedUser = await getUser(searchedUser.telegramId);
@@ -240,7 +240,7 @@ const EnhancedAdminSettings = () => {
                   </div>
                   <div className="text-sm text-gray-600">
                     Current Tier: <span className="font-bold text-accent">
-                      {searchedUser.vipTier.toUpperCase()}
+                      {searchedUser.vipTier?.toUpperCase() || ''}
                     </span>
                   </div>
                 </div>

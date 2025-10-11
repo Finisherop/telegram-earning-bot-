@@ -332,7 +332,7 @@ const EnhancedDashboard = ({ user: initialUser, onUserUpdate }: EnhancedDashboar
               animate={{ scale: [1, 1.05, 1] }}
               transition={{ duration: 2, repeat: Infinity }}
             >
-              {user.vipTier.toUpperCase()}
+              {user.vipTier?.toUpperCase() || ''}
             </motion.div>
           )}
         </div>
@@ -439,7 +439,7 @@ const EnhancedDashboard = ({ user: initialUser, onUserUpdate }: EnhancedDashboar
                   </span>
                   <span className="font-bold text-green-600">
                     {conversion.coinsEarned && `+${conversion.coinsEarned}`}
-                    {conversion.toTier && `→ ${conversion.toTier.toUpperCase()}`}
+                    {conversion.toTier && `→ ${conversion.toTier?.toUpperCase() || ''}`}
                   </span>
                 </div>
               ))
@@ -463,7 +463,7 @@ const EnhancedDashboard = ({ user: initialUser, onUserUpdate }: EnhancedDashboar
               recentPayments.map((payment) => (
                 <div key={payment.id} className="flex justify-between items-center text-sm">
                   <span className="text-gray-600">
-                    {payment.tier.toUpperCase()} - {payment.amount} ⭐
+                    {payment.tier?.toUpperCase() || ''} - {payment.amount} ⭐
                   </span>
                   <span className="text-green-600 font-bold">✅</span>
                 </div>

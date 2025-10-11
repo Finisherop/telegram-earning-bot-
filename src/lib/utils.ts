@@ -71,7 +71,7 @@ export const isValidUPI = (upiId: string): boolean => {
 };
 
 export const generateReferralCode = (userId: string): string => {
-  return btoa(userId).replace(/[^a-zA-Z0-9]/g, '').substring(0, 8).toUpperCase();
+  return btoa(userId).replace(/[^a-zA-Z0-9]/g, '').substring(0, 8)?.toUpperCase() || '';
 };
 
 export const calculateLevel = (xp: number): number => {

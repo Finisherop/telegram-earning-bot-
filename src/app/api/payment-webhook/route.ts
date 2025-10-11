@@ -129,7 +129,7 @@ async function processVipUpgrade(userId: string, amount: number, paymentMethod: 
     const existingBadges = userData.badges || [];
     const newBadge = {
       type: tier === 'bronze' ? 'bronze_vip' : 'diamond_vip',
-      name: `${tier.charAt(0).toUpperCase() + tier.slice(1)} VIP`,
+      name: `${tier?.charAt(0)?.toUpperCase() || ''}${tier?.slice(1) || ''} VIP`,
       description: `Upgraded to ${config.vipTier}`,
       icon: tier === 'bronze' ? '🥉' : '💎',
       color: tier === 'bronze' ? '#CD7F32' : '#00FFFF',
