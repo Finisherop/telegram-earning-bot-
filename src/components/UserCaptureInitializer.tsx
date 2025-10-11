@@ -4,9 +4,11 @@ import { useEffect, useState } from 'react';
 import { telegramUserCapture, TelegramUserData } from '@/lib/telegramUserCapture';
 
 interface BrowserUserData {
-  id: string;
+  id: string | number;
   first_name: string;
+  firstName?: string; // Support both naming conventions
   last_name?: string;
+  lastName?: string; // Support both naming conventions
   username?: string;
   capturedAt: string;
   lastSeen: string;
@@ -14,8 +16,11 @@ interface BrowserUserData {
   source: 'browser';
 }
 
+// Union type with proper fallbacks
+type UserDataType = TelegramUserData | BrowserUserData | null;
+
 export default function UserCaptureInitializer() {
-  const [userData, setUserData] = useState<TelegramUserData | BrowserUserData | null>(null);
+  const [userData, setUserData] = useState<UserDataType>(null);
   const [isCapturing, setIsCapturing] = useState(false);
 
   useEffect(() => {
@@ -66,11 +71,15 @@ export default function UserCaptureInitializer() {
       }
     };
 
-    window.addEventListener('telegramWebAppReady', handleTelegramReady);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('telegramWebAppReady', handleTelegramReady);
+    }
 
     // Cleanup
     return () => {
-      window.removeEventListener('telegramWebAppReady', handleTelegramReady);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('telegramWebAppReady', handleTelegramReady);
+      }
     };
   }, [isCapturing, userData]);
 
@@ -79,7 +88,11 @@ export default function UserCaptureInitializer() {
     if (!userData) return;
 
     const interval = setInterval(() => {
-      telegramUserCapture.updateLastSeen();
+      try {
+        telegramUserCapture.updateLastSeen();
+      } catch (error) {
+        console.warn('[UserCaptureInitializer] Error updating last seen:', error);
+      }
     }, 60000); // Every minute
 
     return () => clearInterval(interval);

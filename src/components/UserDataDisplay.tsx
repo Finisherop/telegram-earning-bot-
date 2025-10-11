@@ -1,6 +1,7 @@
 'use client';
 
 import { useTelegramUser } from '@/hooks/useTelegramUser';
+import { convertTelegramFieldNames } from '@/lib/telegramUserMapper';
 
 export default function UserDataDisplay() {
   const { 
@@ -43,6 +44,9 @@ export default function UserDataDisplay() {
     );
   }
 
+  // Convert field names for safe access
+  const safeUserData = convertTelegramFieldNames(userData);
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6 mb-6">
       <div className="flex items-center justify-between mb-4">
@@ -54,7 +58,7 @@ export default function UserDataDisplay() {
             ? 'bg-blue-100 text-blue-800' 
             : 'bg-gray-100 text-gray-800'
         }`}>
-          {userData.source.toUpperCase()}
+          {(userData.source || 'unknown').toUpperCase()}
         </span>
       </div>
 
@@ -62,14 +66,14 @@ export default function UserDataDisplay() {
         <div className="space-y-3">
           <div>
             <label className="text-sm font-medium text-gray-500">User ID</label>
-            <p className="text-gray-900 font-mono text-sm">{userData.id}</p>
+            <p className="text-gray-900 font-mono text-sm">{userData.id || 'N/A'}</p>
           </div>
           
           <div>
             <label className="text-sm font-medium text-gray-500">Name</label>
             <p className="text-gray-900">
-              {userData.first_name}
-              {userData.last_name && ` ${userData.last_name}`}
+              {safeUserData.firstName || userData.first_name || 'N/A'}
+              {(safeUserData.lastName || userData.last_name) && ` ${safeUserData.lastName || userData.last_name}`}
             </p>
           </div>
 
@@ -80,10 +84,10 @@ export default function UserDataDisplay() {
             </div>
           )}
 
-          {isTelegramUser && (userData as any).language_code && (
+          {isTelegramUser && (safeUserData.languageCode || (userData as any).language_code) && (
             <div>
               <label className="text-sm font-medium text-gray-500">Language</label>
-              <p className="text-gray-900">{(userData as any).language_code}</p>
+              <p className="text-gray-900">{safeUserData.languageCode || (userData as any).language_code}</p>
             </div>
           )}
         </div>
@@ -92,22 +96,22 @@ export default function UserDataDisplay() {
           <div>
             <label className="text-sm font-medium text-gray-500">Captured At</label>
             <p className="text-gray-900 text-sm">
-              {new Date(userData.capturedAt).toLocaleString()}
+              {userData.capturedAt ? new Date(userData.capturedAt).toLocaleString() : 'N/A'}
             </p>
           </div>
 
           <div>
             <label className="text-sm font-medium text-gray-500">Last Seen</label>
             <p className="text-gray-900 text-sm">
-              {new Date(userData.lastSeen).toLocaleString()}
+              {userData.lastSeen ? new Date(userData.lastSeen).toLocaleString() : 'N/A'}
             </p>
           </div>
 
-          {isTelegramUser && (userData as any).is_premium !== undefined && (
+          {isTelegramUser && (safeUserData.isPremium !== undefined || (userData as any).is_premium !== undefined) && (
             <div>
               <label className="text-sm font-medium text-gray-500">Telegram Premium</label>
               <p className="text-gray-900">
-                {(userData as any).is_premium ? '✅ Yes' : '❌ No'}
+                {(safeUserData.isPremium || (userData as any).is_premium) ? '✅ Yes' : '❌ No'}
               </p>
             </div>
           )}
@@ -121,13 +125,17 @@ export default function UserDataDisplay() {
         </div>
       </div>
 
-      {isTelegramUser && (userData as any).photo_url && (
+      {isTelegramUser && (safeUserData.photoUrl || (userData as any).photo_url) && (
         <div className="mt-4 pt-4 border-t border-gray-200">
           <label className="text-sm font-medium text-gray-500 block mb-2">Profile Picture</label>
           <img 
-            src={(userData as any).photo_url} 
+            src={safeUserData.photoUrl || (userData as any).photo_url} 
             alt="Profile" 
             className="w-16 h-16 rounded-full border-2 border-gray-200"
+            onError={(e) => {
+              // Hide image if it fails to load
+              (e.target as HTMLImageElement).style.display = 'none';
+            }}
           />
         </div>
       )}

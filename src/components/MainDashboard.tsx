@@ -11,6 +11,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { User } from '@/types';
 import { getTelegramUserSafe } from '@/lib/telegramUserSafe';
+import { mapTelegramUserToUser, createSafeUser } from '@/lib/telegramUserMapper';
 import EnhancedUserDashboard from './user/EnhancedUserDashboard';
 import { 
   firebaseRealtimeManager,
@@ -60,29 +61,8 @@ const MainDashboard = ({ initialUser }: MainDashboardProps) => {
           setUser(userData);
           setIsInitialized(true);
         } else {
-          // Create initial user data if not exists
-          const defaultUser: User = {
-            id: userId,
-            telegramId: userId,
-            firstName: telegramUser.first_name || 'User',
-            lastName: telegramUser.last_name || '',
-            username: telegramUser.username || '',
-            photoUrl: telegramUser.photo_url || '',
-            coins: 0,
-            xp: 0,
-            level: 1,
-            vipTier: 'free',
-            farmingMultiplier: 1,
-            referralMultiplier: 1,
-            adsLimitPerDay: 5,
-            withdrawalLimit: 1000,
-            minWithdrawal: 100,
-            referralCount: 0,
-            referralEarnings: 0,
-            dailyStreak: 0,
-            createdAt: new Date(),
-            updatedAt: new Date()
-          };
+          // Create initial user data if not exists using safe mapper
+          const defaultUser = createSafeUser(telegramUser);
           
           // Initialize user in Firebase
           firebaseRealtimeManager.updateUser(userId, defaultUser).catch(err => {

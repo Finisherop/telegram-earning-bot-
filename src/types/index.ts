@@ -6,6 +6,7 @@ export interface User {
   firstName?: string;
   lastName?: string;
   profilePic?: string;
+  photoUrl?: string; // Added for Telegram API compatibility
   coins: number;
   xp: number;
   level: number;
@@ -30,6 +31,8 @@ export interface User {
   lastClaimDate?: Date;
   farmingStartTime?: Date;
   farmingEndTime?: Date;
+  languageCode?: string; // Added for Telegram API compatibility
+  isPremium?: boolean; // Added for Telegram API compatibility
   badges?: Array<{
     type: string;
     name: string;

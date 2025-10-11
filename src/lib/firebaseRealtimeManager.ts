@@ -27,6 +27,7 @@ import {
 import { realtimeDb } from './firebase';
 import { User, AdminSettings, Task, UserTask } from '@/types';
 import { DEFAULT_SETTINGS } from './constants';
+import { sanitizeUserDataForFirebase, validateAndCompleteUserData } from './telegramUserMapper';
 
 // Types for listeners and callbacks
 type ListenerCallback<T> = (data: T | null) => void;
@@ -447,7 +448,7 @@ class FirebaseRealtimeManager {
   }
 
   /**
-   * User data subscription with real-time sync
+   * User data subscription with real-time sync and safe field mapping
    */
   public subscribeToUser(userId: string, callback: ListenerCallback<User>): UnsubscribeFunction {
     const path = `telegram_users/${userId}`;
@@ -455,17 +456,38 @@ class FirebaseRealtimeManager {
     
     return this.subscribeToPath<any>(path, (data) => {
       if (data) {
-        const user: User = {
-          ...data,
-          id: userId,
-          createdAt: data.createdAt ? new Date(data.createdAt) : new Date(),
-          updatedAt: data.updatedAt ? new Date(data.updatedAt) : new Date(),
-          lastClaimDate: data.lastClaimDate ? new Date(data.lastClaimDate) : undefined,
-          farmingStartTime: data.farmingStartTime ? new Date(data.farmingStartTime) : undefined,
-          farmingEndTime: data.farmingEndTime ? new Date(data.farmingEndTime) : undefined,
-          vipEndTime: data.vipEndTime ? new Date(data.vipEndTime) : undefined
-        };
-        callback(user);
+        try {
+          // Safely convert Firebase data to User object with proper field mapping
+          const user: User = validateAndCompleteUserData({
+            ...data,
+            id: userId,
+            telegramId: userId,
+            // Handle date conversions safely
+            createdAt: data.createdAt ? new Date(data.createdAt) : new Date(),
+            updatedAt: data.updatedAt ? new Date(data.updatedAt) : new Date(),
+            lastClaimDate: data.lastClaimDate ? new Date(data.lastClaimDate) : undefined,
+            farmingStartTime: data.farmingStartTime ? new Date(data.farmingStartTime) : undefined,
+            farmingEndTime: data.farmingEndTime ? new Date(data.farmingEndTime) : undefined,
+            vipEndTime: data.vipEndTime ? new Date(data.vipEndTime) : undefined,
+            // Ensure safe defaults for required fields
+            coins: data.coins ?? 0,
+            xp: data.xp ?? 0,
+            level: data.level ?? 1,
+            vipTier: data.vipTier || 'free',
+            farmingMultiplier: data.farmingMultiplier ?? 1,
+            referralMultiplier: data.referralMultiplier ?? 1,
+            adsLimitPerDay: data.adsLimitPerDay ?? 5,
+            withdrawalLimit: data.withdrawalLimit ?? 1000,
+            minWithdrawal: data.minWithdrawal ?? 100,
+            referralCount: data.referralCount ?? 0,
+            referralEarnings: data.referralEarnings ?? 0,
+            dailyStreak: data.dailyStreak ?? 0
+          });
+          callback(user);
+        } catch (error) {
+          console.error('[Firebase Realtime Manager] Error processing user data:', error);
+          callback(null);
+        }
       } else {
         callback(null);
       }
@@ -567,21 +589,8 @@ class FirebaseRealtimeManager {
    * Update user data with sanitization and retry
    */
   public async updateUser(userId: string, userData: Partial<User>): Promise<void> {
-    const safeUserData = {
-      firstName: userData.firstName || '',
-      lastName: userData.lastName || '',
-      username: userData.username || '',
-      photoUrl: userData.photoUrl || '',
-      coins: userData.coins ?? 0,
-      xp: userData.xp ?? 0,
-      level: userData.level ?? 1,
-      vipTier: userData.vipTier || 'free',
-      dailyStreak: userData.dailyStreak ?? 0,
-      farmingMultiplier: userData.farmingMultiplier ?? 1,
-      referralMultiplier: userData.referralMultiplier ?? 1,
-      updatedAt: new Date().toISOString(),
-      ...userData
-    };
+    // Use the sanitization function from telegramUserMapper
+    const safeUserData = sanitizeUserDataForFirebase(userData);
 
     const path = `telegram_users/${userId}`;
     await this.safeUpdate(path, safeUserData);
