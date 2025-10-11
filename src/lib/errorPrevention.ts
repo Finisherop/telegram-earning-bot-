@@ -95,13 +95,10 @@ export function createDefaultUser(userId: string, telegramData?: any): User {
   return {
     id: userId,
     telegramId: userId,
-    username: telegramData?.username || null,
+    username: telegramData?.username || undefined,
     firstName: telegramData?.first_name || 'User',
-    lastName: telegramData?.last_name || null,
-    profilePic: telegramData?.photo_url || null,
-    languageCode: telegramData?.language_code || 'en',
-    isPremium: telegramData?.is_premium || false,
-    
+    lastName: telegramData?.last_name || undefined,
+    profilePic: telegramData?.photo_url || undefined,
     // Game data with safe defaults
     coins: 0,
     xp: 0,
@@ -114,24 +111,22 @@ export function createDefaultUser(userId: string, telegramData?: any): User {
     adsLimitPerDay: 5,
     withdrawalLimit: 1000,
     minWithdrawal: 100,
-    vipEndTime: null,
+    vipEndTime: undefined,
     
     // Referral data
-    referrerId: null,
+    referrerId: undefined,
     referralCount: 0,
     referralEarnings: 0,
     
     // Game state
     dailyStreak: 0,
-    farmingStartTime: null,
-    farmingEndTime: null,
-    lastClaimDate: null,
+    farmingStartTime: undefined,
+    farmingEndTime: undefined,
+    lastClaimDate: undefined,
     
     // Metadata
-    source: 'telegram',
     createdAt: now,
-    updatedAt: now,
-    capturedAt: now
+    updatedAt: now
   };
 }
 
@@ -160,9 +155,6 @@ export function sanitizeUserData(userData: Partial<User>, userId: string): User 
     minWithdrawal: userData.minWithdrawal ?? 100,
     vipTier: userData.vipTier ?? 'free',
     firstName: userData.firstName || 'User',
-    languageCode: userData.languageCode || 'en',
-    isPremium: userData.isPremium ?? false,
-    source: userData.source ?? 'telegram',
     updatedAt: new Date() // Always update timestamp
   };
 }

@@ -238,17 +238,17 @@ if (typeof window !== 'undefined') {
 }
 
 // Export individual services for backward compatibility
-export async function getFirestore(): Promise<Firestore> {
+export async function getFirestoreInstance(): Promise<Firestore> {
   const services = await getFirebaseServices();
   return services.db;
 }
 
-export async function getRealtimeDatabase(): Promise<Database> {
+export async function getRealtimeDatabaseInstance(): Promise<Database> {
   const services = await getFirebaseServices();
   return services.realtimeDb;
 }
 
-export async function getFirebaseAuth(): Promise<Auth> {
+export async function getFirebaseAuthInstance(): Promise<Auth> {
   const services = await getFirebaseServices();
   return services.auth;
 }

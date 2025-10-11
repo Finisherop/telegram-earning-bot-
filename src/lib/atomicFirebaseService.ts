@@ -576,48 +576,61 @@ export function subscribeToUserData(
     return () => {};
   }
   
-  try {
-    const { realtimeDb } = getFirebaseServices();
-    const userRef = ref(realtimeDb, `telegram_users/${userId}`);
-    
-    const unsubscribe = onValue(userRef, (snapshot) => {
-      try {
-        if (snapshot.exists()) {
-          const userData = snapshot.val();
-          const user: User = {
-            ...userData,
-            id: userId,
-            createdAt: userData.createdAt ? new Date(userData.createdAt) : new Date(),
-            updatedAt: userData.updatedAt ? new Date(userData.updatedAt) : new Date(),
-            lastClaimDate: userData.lastClaimDate ? new Date(userData.lastClaimDate) : null,
-            farmingStartTime: userData.farmingStartTime ? new Date(userData.farmingStartTime) : null,
-            farmingEndTime: userData.farmingEndTime ? new Date(userData.farmingEndTime) : null,
-            vipEndTime: userData.vipEndTime ? new Date(userData.vipEndTime) : null,
-            capturedAt: userData.capturedAt ? new Date(userData.capturedAt) : new Date()
-          };
-          
-          console.log(`[UserSubscription] Real-time update for user ${userId}`);
-          callback(user);
-        } else {
-          console.log(`[UserSubscription] No data found for user ${userId}`);
+  let unsubscribeFn: () => void = () => {};
+  
+  const createListener = async () => {
+    try {
+      const { realtimeDb } = await getFirebaseServices();
+      const userRef = ref(realtimeDb, `telegram_users/${userId}`);
+      
+      const unsubscribe = onValue(userRef, (snapshot) => {
+        try {
+          if (snapshot.exists()) {
+            const userData = snapshot.val();
+            const user: User = {
+              ...userData,
+              id: userId,
+              createdAt: userData.createdAt ? new Date(userData.createdAt) : new Date(),
+              updatedAt: userData.updatedAt ? new Date(userData.updatedAt) : new Date(),
+              lastClaimDate: userData.lastClaimDate ? new Date(userData.lastClaimDate) : null,
+              farmingStartTime: userData.farmingStartTime ? new Date(userData.farmingStartTime) : null,
+              farmingEndTime: userData.farmingEndTime ? new Date(userData.farmingEndTime) : null,
+              vipEndTime: userData.vipEndTime ? new Date(userData.vipEndTime) : null,
+              capturedAt: userData.capturedAt ? new Date(userData.capturedAt) : new Date()
+            };
+            
+            console.log(`[UserSubscription] Real-time update for user ${userId}`);
+            callback(user);
+          } else {
+            console.log(`[UserSubscription] No data found for user ${userId}`);
+            callback(null);
+          }
+        } catch (callbackError) {
+          console.error(`[UserSubscription] Callback error for user ${userId}:`, callbackError);
           callback(null);
         }
-      } catch (callbackError) {
-        console.error(`[UserSubscription] Callback error for user ${userId}:`, callbackError);
+      }, (error) => {
+        console.error(`[UserSubscription] Subscription error for user ${userId}:`, error);
         callback(null);
-      }
-    }, (error) => {
-      console.error(`[UserSubscription] Subscription error for user ${userId}:`, error);
+      });
+      
+      unsubscribeFn = () => {
+        console.log(`[UserSubscription] Unsubscribing from user ${userId}`);
+        off(userRef, 'value', unsubscribe);
+      };
+      
+    } catch (error) {
+      console.error(`[UserSubscription] Failed to setup subscription for user ${userId}:`, error);
       callback(null);
-    });
-    
-    return () => {
-      off(userRef, 'value', unsubscribe);
-    };
-    
-  } catch (error) {
-    console.error(`[UserSubscription] Failed to create subscription for user ${userId}:`, error);
+    }
+  };
+  
+  createListener().catch((error) => {
+    console.error(`[UserSubscription] Async setup failed for user ${userId}:`, error);
     callback(null);
-    return () => {};
-  }
+  });
+  
+  return () => {
+    unsubscribeFn();
+  };
 }
