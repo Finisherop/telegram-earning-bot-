@@ -23,40 +23,63 @@ const tabs = [
 const UserDashboard = ({ user }: UserDashboardProps) => {
   const [activeTab, setActiveTab] = useState('dashboard');
 
-  // Show loading state if user is not loaded yet
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary to-secondary">
-        <div className="text-center text-white p-8">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-          <h1 className="text-xl font-bold">Loading...</h1>
-        </div>
-      </div>
-    );
-  }
+  // Create a safe user object with defaults to prevent undefined errors
+  const safeUser: User = user || {
+    id: 'loading',
+    telegramId: 'loading',
+    username: 'loading',
+    firstName: 'Loading...',
+    lastName: '',
+    coins: 0,
+    xp: 0,
+    level: 1,
+    vipTier: 'free',
+    farmingMultiplier: 1.0,
+    referralMultiplier: 1.0,
+    adsLimitPerDay: 5,
+    withdrawalLimit: 1,
+    minWithdrawal: 200,
+    referralCount: 0,
+    referralEarnings: 0,
+    dailyStreak: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  const isLoading = !user;
 
   const renderTabContent = () => {
     switch (activeTab) {
       case 'dashboard':
         return (
           <div>
-            <UserDataDisplay />
-            <EnhancedDashboard user={user} />
+            {!isLoading && <UserDataDisplay />}
+            <EnhancedDashboard user={safeUser} />
           </div>
         );
       case 'task':
-        return <Task user={user} />;
+        return <Task user={safeUser} />;
       case 'referral':
-        return <Referral user={user} />;
+        return <Referral user={safeUser} />;
       case 'shop':
-        return <ShopWithdrawal user={user} />;
+        return <ShopWithdrawal user={safeUser} />;
       default:
-        return <EnhancedDashboard user={user} />;
+        return <EnhancedDashboard user={safeUser} />;
     }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-20">
+      {/* Loading overlay - shows while data loads in background */}
+      {isLoading && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-primary/90 text-white p-3 text-center">
+          <div className="flex items-center justify-center space-x-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            <span className="text-sm">Loading user data...</span>
+          </div>
+        </div>
+      )}
+      
       {/* Main Content */}
       <div className="relative z-10">
         <AnimatePresence mode="wait">

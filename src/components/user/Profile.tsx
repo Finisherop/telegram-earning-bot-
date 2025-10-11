@@ -138,11 +138,11 @@ const Profile = ({ user }: ProfileProps) => {
         >
           <div className="text-3xl mb-2">💰</div>
           <div className="text-2xl font-bold text-gray-800">
-            {user.coins.toLocaleString()}
+            {(user.coins || 0).toLocaleString()}
           </div>
           <p className="text-gray-600 text-sm">Total Coins</p>
           <p className="text-xs text-gray-500 mt-1">
-            ≈ ₹{Math.floor(user.coins / 100)}
+            ≈ ₹{Math.floor((user.coins || 0) / 100)}
           </p>
         </motion.div>
 
@@ -264,7 +264,7 @@ const Profile = ({ user }: ProfileProps) => {
           <div className="flex justify-between items-center py-2 border-b border-gray-100">
             <span className="text-gray-600">Total XP</span>
             <span className="font-semibold text-gray-800">
-              {user.xp.toLocaleString()}
+              {(user.xp || 0).toLocaleString()}
             </span>
           </div>
           

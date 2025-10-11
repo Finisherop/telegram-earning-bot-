@@ -236,7 +236,7 @@ const EnhancedAdminSettings = () => {
                 </div>
                 <div className="text-right">
                   <div className="text-2xl font-bold text-primary">
-                    💰 {searchedUser.coins.toLocaleString()}
+                    💰 {(searchedUser.coins || 0).toLocaleString()}
                   </div>
                   <div className="text-sm text-gray-600">
                     Current Tier: <span className="font-bold text-accent">
