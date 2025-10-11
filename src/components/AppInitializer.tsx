@@ -89,7 +89,7 @@ const AppInitializer = ({ children }: AppInitializerProps) => {
       const services = await getFirebaseServices();
       
       if (!services.isInitialized) {
-        throw new Error(services.connectionStatus?.error?.message || 'Firebase initialization failed');
+        throw new Error(services.initializationError?.message || 'Firebase initialization failed');
       }
       
       console.log('[AppInitializer] Firebase services initialized successfully');

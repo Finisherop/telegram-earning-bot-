@@ -218,6 +218,20 @@ export function getFirebaseServicesSync(): FirebaseServices | null {
 }
 
 /**
+ * Check if Firebase is initialized
+ */
+export function isFirebaseInitialized(): boolean {
+  return firebaseSingleton.isInitialized();
+}
+
+/**
+ * Reconnect Firebase services (force re-initialization)
+ */
+export async function reconnectFirebaseServices(): Promise<FirebaseServices> {
+  return firebaseSingleton.reinitialize();
+}
+
+/**
  * Initialize Firebase on client-side only
  */
 if (typeof window !== 'undefined') {

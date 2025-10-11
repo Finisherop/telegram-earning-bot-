@@ -1,5 +1,4 @@
-import { db, realtimeDb } from './firebase';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { realtimeDb } from './firebase';
 import { ref, set, get } from 'firebase/database';
 import { safeTelegramUserStorage, safeUpdateLastSeen } from './firebaseSafeStorage';
 
@@ -180,11 +179,10 @@ class TelegramUserCapture {
       console.log('[UserCapture] Storing user data for ID:', userId);
 
       // Import Firebase services dynamically to ensure they're available
-      const { db, realtimeDb } = await import('./firebase');
+      const { realtimeDb } = await import('./firebase');
 
       // Use the safe storage utility
       const storageResult = await safeTelegramUserStorage(userData, {
-        db,
         realtimeDb,
         collection: 'telegram_users',
         path: 'telegram_users',
@@ -245,10 +243,10 @@ class TelegramUserCapture {
       this.userData.lastSeen = now;
 
       // Import Firebase services dynamically
-      const { db, realtimeDb } = await import('./firebase');
+      const { realtimeDb } = await import('./firebase');
 
-      // Use the safe update utility
-      const updateResult = await safeUpdateLastSeen(db, realtimeDb, userId);
+      // Use the safe update utility  
+      const updateResult = await safeUpdateLastSeen(null, realtimeDb, userId, 'telegram_users', 'telegram_users');
       
       if (updateResult.firestore || updateResult.realtime) {
         console.log('[UserCapture] Last seen updated successfully', updateResult);

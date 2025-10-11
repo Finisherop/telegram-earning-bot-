@@ -134,9 +134,9 @@ export const subscribeToTasks = (callback: (tasks: Task[]) => void): (() => void
  * Real-time admin settings subscription
  */
 export const subscribeToAdminSettings = (callback: (settings: AdminSettings) => void): (() => void) => {
-  checkFirebaseConnection();
+  const db = getRealtimeDb();
   
-  const settingsRef = ref(realtimeDb, 'admin_settings');
+  const settingsRef = ref(db, 'admin_settings');
   
   const unsubscribe = onValue(settingsRef, (snapshot) => {
     try {
@@ -177,9 +177,9 @@ export const subscribeToAdminSettings = (callback: (settings: AdminSettings) => 
  * Real-time user tasks subscription
  */
 export const subscribeToUserTasks = (userId: string, callback: (userTasks: UserTask[]) => void): (() => void) => {
-  checkFirebaseConnection();
+  const db = getRealtimeDb();
   
-  const userTasksRef = ref(realtimeDb, `userTasks/${userId}`);
+  const userTasksRef = ref(db, `userTasks/${userId}`);
   
   const unsubscribe = onValue(userTasksRef, (snapshot) => {
     try {
@@ -235,10 +235,10 @@ export const cleanupListeners = () => {
  * Initialize or get user data
  */
 export const initializeUser = async (userId: string): Promise<User> => {
-  checkFirebaseConnection();
+  const db = getRealtimeDb();
   
   try {
-    const userRef = ref(realtimeDb, `telegram_users/${userId}`);
+    const userRef = ref(db, `telegram_users/${userId}`);
     const snapshot = await get(userRef);
     
     if (snapshot.exists()) {
@@ -294,7 +294,7 @@ export const initializeUser = async (userId: string): Promise<User> => {
  * Safe user update with validation
  */
 export const safeUpdateUser = async (userId: string, updateData: Partial<User>): Promise<User> => {
-  checkFirebaseConnection();
+  const db = getRealtimeDb();
   
   try {
     const sanitizedUserId = userId.toString().trim();
@@ -303,7 +303,7 @@ export const safeUpdateUser = async (userId: string, updateData: Partial<User>):
       throw new Error('Valid user ID is required');
     }
 
-    const userRef = ref(realtimeDb, `telegram_users/${sanitizedUserId}`);
+    const userRef = ref(db, `telegram_users/${sanitizedUserId}`);
     
     // Prepare sanitized update data
     const sanitizedData: Record<string, any> = {};
@@ -352,7 +352,7 @@ export const safeUpdateUser = async (userId: string, updateData: Partial<User>):
  * Create a new user
  */
 export const createUser = async (userData: Partial<User>): Promise<void> => {
-  checkFirebaseConnection();
+  const db = getRealtimeDb();
   
   try {
     if (!userData.id && !userData.telegramId) {
@@ -360,7 +360,7 @@ export const createUser = async (userData: Partial<User>): Promise<void> => {
     }
     
     const userId = userData.id || userData.telegramId!;
-    const userRef = ref(realtimeDb, `telegram_users/${userId}`);
+    const userRef = ref(db, `telegram_users/${userId}`);
     
     const now = new Date().toISOString();
     const newUser = {
@@ -395,11 +395,11 @@ export const createUser = async (userData: Partial<User>): Promise<void> => {
  * Get user by Telegram ID
  */
 export const getUser = async (telegramId: string): Promise<User | null> => {
-  checkFirebaseConnection();
+  const db = getRealtimeDb();
   
   try {
     const sanitizedTelegramId = telegramId.toString().trim();
-    const userRef = ref(realtimeDb, `telegram_users/${sanitizedTelegramId}`);
+    const userRef = ref(db, `telegram_users/${sanitizedTelegramId}`);
     const snapshot = await get(userRef);
     
     if (snapshot.exists()) {
@@ -427,11 +427,11 @@ export const getUser = async (telegramId: string): Promise<User | null> => {
  * Update user data
  */
 export const updateUser = async (telegramId: string, updates: Partial<User>): Promise<void> => {
-  checkFirebaseConnection();
+  const db = getRealtimeDb();
   
   try {
     const sanitizedTelegramId = telegramId.toString().trim();
-    const userRef = ref(realtimeDb, `telegram_users/${sanitizedTelegramId}`);
+    const userRef = ref(db, `telegram_users/${sanitizedTelegramId}`);
     
     // Sanitize updates
     const sanitizedUpdates: Record<string, any> = {};
@@ -461,10 +461,10 @@ export const activateSubscription = async (
   tier: 'vip1' | 'vip2',
   durationDays: number = 30
 ): Promise<void> => {
-  checkFirebaseConnection();
+  const db = getRealtimeDb();
   
   try {
-    const userRef = ref(realtimeDb, `telegram_users/${userId}`);
+    const userRef = ref(db, `telegram_users/${userId}`);
     const vipConfig = VIP_TIERS[tier];
     
     if (!vipConfig) {
@@ -496,10 +496,10 @@ export const activateSubscription = async (
  * Get all tasks
  */
 export const getTasks = async (): Promise<Task[]> => {
-  checkFirebaseConnection();
+  const db = getRealtimeDb();
   
   try {
-    const tasksRef = ref(realtimeDb, 'tasks');
+    const tasksRef = ref(db, 'tasks');
     const snapshot = await get(tasksRef);
     
     const tasks: Task[] = [];
@@ -534,10 +534,10 @@ export const getTasks = async (): Promise<Task[]> => {
  * Create a new task
  */
 export const createTask = async (taskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> => {
-  checkFirebaseConnection();
+  const db = getRealtimeDb();
   
   try {
-    const tasksRef = ref(realtimeDb, 'tasks');
+    const tasksRef = ref(db, 'tasks');
     const newTaskRef = push(tasksRef);
     
     const now = new Date().toISOString();
@@ -559,10 +559,10 @@ export const createTask = async (taskData: Omit<Task, 'id' | 'createdAt' | 'upda
  * Get user tasks
  */
 export const getUserTasks = async (userId: string): Promise<UserTask[]> => {
-  checkFirebaseConnection();
+  const db = getRealtimeDb();
   
   try {
-    const userTasksRef = ref(realtimeDb, `userTasks/${userId}`);
+    const userTasksRef = ref(db, `userTasks/${userId}`);
     const snapshot = await get(userTasksRef);
     
     const userTasks: UserTask[] = [];
@@ -594,10 +594,10 @@ export const getUserTasks = async (userId: string): Promise<UserTask[]> => {
  * Mark task as completed
  */
 export const completeTask = async (userId: string, taskId: string): Promise<void> => {
-  checkFirebaseConnection();
+  const db = getRealtimeDb();
   
   try {
-    const userTaskRef = ref(realtimeDb, `userTasks/${userId}/${taskId}`);
+    const userTaskRef = ref(db, `userTasks/${userId}/${taskId}`);
     await update(userTaskRef, {
       status: 'completed',
       completedAt: new Date().toISOString()
@@ -612,11 +612,11 @@ export const completeTask = async (userId: string, taskId: string): Promise<void
  * Claim task reward
  */
 export const claimTask = async (userId: string, taskId: string, reward: number): Promise<void> => {
-  checkFirebaseConnection();
+  const db = getRealtimeDb();
   
   try {
-    const userRef = ref(realtimeDb, `telegram_users/${userId}`);
-    const userTaskRef = ref(realtimeDb, `userTasks/${userId}/${taskId}`);
+    const userRef = ref(db, `telegram_users/${userId}`);
+    const userTaskRef = ref(db, `userTasks/${userId}/${taskId}`);
     
     // Get current user data
     const userSnapshot = await get(userRef);
@@ -654,10 +654,10 @@ export const createWithdrawalRequest = async (
   amount: number,
   upiId: string
 ): Promise<string> => {
-  checkFirebaseConnection();
+  const db = getRealtimeDb();
   
   try {
-    const withdrawalsRef = ref(realtimeDb, 'withdrawals');
+    const withdrawalsRef = ref(db, 'withdrawals');
     const newWithdrawalRef = push(withdrawalsRef);
     
     const withdrawal: Omit<WithdrawalRequest, 'id'> = {
@@ -684,10 +684,10 @@ export const createWithdrawalRequest = async (
  * Get withdrawal requests
  */
 export const getWithdrawalRequests = async (): Promise<WithdrawalRequest[]> => {
-  checkFirebaseConnection();
+  const db = getRealtimeDb();
   
   try {
-    const withdrawalsRef = ref(realtimeDb, 'withdrawals');
+    const withdrawalsRef = ref(db, 'withdrawals');
     const snapshot = await get(withdrawalsRef);
     
     const withdrawals: WithdrawalRequest[] = [];
@@ -725,10 +725,10 @@ export const updateWithdrawalStatus = async (
   status: 'pending' | 'approved' | 'rejected' | 'paid',
   adminNotes?: string
 ): Promise<void> => {
-  checkFirebaseConnection();
+  const db = getRealtimeDb();
   
   try {
-    const withdrawalRef = ref(realtimeDb, `withdrawals/${withdrawalId}`);
+    const withdrawalRef = ref(db, `withdrawals/${withdrawalId}`);
     await update(withdrawalRef, {
       status,
       processedAt: new Date().toISOString(),
@@ -744,10 +744,10 @@ export const updateWithdrawalStatus = async (
  * Get admin settings
  */
 export const getAdminSettings = async (): Promise<AdminSettings> => {
-  checkFirebaseConnection();
+  const db = getRealtimeDb();
   
   try {
-    const settingsRef = ref(realtimeDb, 'admin_settings');
+    const settingsRef = ref(db, 'admin_settings');
     const snapshot = await get(settingsRef);
     
     if (snapshot.exists()) {
@@ -770,10 +770,10 @@ export const getAdminSettings = async (): Promise<AdminSettings> => {
  * Update admin settings
  */
 export const updateAdminSettings = async (settings: Partial<AdminSettings>): Promise<void> => {
-  checkFirebaseConnection();
+  const db = getRealtimeDb();
   
   try {
-    const settingsRef = ref(realtimeDb, 'admin_settings');
+    const settingsRef = ref(db, 'admin_settings');
     await update(settingsRef, {
       ...settings,
       updatedAt: new Date().toISOString()
@@ -788,10 +788,10 @@ export const updateAdminSettings = async (settings: Partial<AdminSettings>): Pro
  * Get daily stats
  */
 export const getDailyStats = async (): Promise<DailyStats> => {
-  checkFirebaseConnection();
+  const db = getRealtimeDb();
   
   try {
-    const usersRef = ref(realtimeDb, 'telegram_users');
+    const usersRef = ref(db, 'telegram_users');
     const snapshot = await get(usersRef);
     
     let totalUsers = 0;
@@ -821,21 +821,23 @@ export const getDailyStats = async (): Promise<DailyStats> => {
     
     return {
       totalUsers,
-      activeUsers,
-      totalCoins,
-      totalWithdrawals,
+      activeVipUsers: activeUsers, // Rename to match interface
+      totalCoinsDistributed: totalCoins,
+      totalInrGenerated: 0,
       pendingWithdrawals: 0, // Would need to query withdrawals collection
-      date: new Date()
+      totalPayments: 0,
+      totalConversions: 0
     };
   } catch (error) {
     console.error('[Firebase] Error getting daily stats:', error);
     return {
       totalUsers: 0,
-      activeUsers: 0,
-      totalCoins: 0,
-      totalWithdrawals: 0,
+      activeVipUsers: 0,
+      totalCoinsDistributed: 0,
+      totalInrGenerated: 0,
       pendingWithdrawals: 0,
-      date: new Date()
+      totalPayments: 0,
+      totalConversions: 0
     };
   }
 };
@@ -854,10 +856,10 @@ interface VipRequest {
  * Create VIP request
  */
 export const createVipRequest = async (vipRequest: VipRequest): Promise<void> => {
-  checkFirebaseConnection();
+  const db = getRealtimeDb();
   
   try {
-    const vipRequestsRef = ref(realtimeDb, 'vipRequests');
+    const vipRequestsRef = ref(db, 'vipRequests');
     const newVipRequestRef = push(vipRequestsRef);
     
     await set(newVipRequestRef, {
