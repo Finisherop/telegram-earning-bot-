@@ -97,11 +97,14 @@ const ShopWithdrawal = ({ user, setUser, onClose }: ShopWithdrawalProps) => {
 
     const tierConfig = TIER_CONFIGS[tier];
     const vipExpiry = Date.now() + (tierConfig.duration * 24 * 60 * 60 * 1000);
+    
+    // Map new tier system to old tier system
+    const mappedVipTier: 'free' | 'vip1' | 'vip2' = tier === 'bronze' ? 'vip1' : 'vip2';
 
     const updatedUser = {
       ...user,
       // Set all VIP tier fields
-      vipTier: tier,
+      vipTier: mappedVipTier,
       tier,
       vip_tier: tier,
       vip_expiry: vipExpiry,
