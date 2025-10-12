@@ -79,7 +79,7 @@ export const subscribeToUserWithExtendedData = (
     return () => {};
   }
   
-  const userRef = ref(realtimeDb, `users/${userId}`);
+  const userRef = ref(realtimeDb, `telegram_users/${userId}`);
   const paymentsRef = ref(realtimeDb, `payments/${userId}`);
   const conversionsRef = ref(realtimeDb, `conversions/${userId}`);
   const messagesRef = ref(realtimeDb, `messages/${userId}`);
@@ -233,7 +233,7 @@ export const safeUpdateUserWithRetry = async (
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const userRef = ref(realtimeDb, `users/${userId}`);
+      const userRef = ref(realtimeDb, `telegram_users/${userId}`);
       
       // Get current user data with retry logic
       const userSnapshot = await get(userRef);
@@ -334,7 +334,7 @@ export const startFarmingWithValidation = async (userId: string): Promise<{ succ
   }
   
   try {
-    const userRef = ref(realtimeDb, `users/${userId}`);
+    const userRef = ref(realtimeDb, `telegram_users/${userId}`);
     const userSnapshot = await get(userRef);
     
     if (!userSnapshot.exists()) {
@@ -598,7 +598,7 @@ export const getEnhancedDailyStats = async (): Promise<DailyStats> => {
   
   try {
     // Get users data
-    const usersRef = ref(realtimeDb, 'users');
+    const usersRef = ref(realtimeDb, 'telegram_users');
     const usersSnapshot = await get(usersRef);
     
     let totalUsers = 0;
