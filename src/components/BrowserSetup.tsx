@@ -32,7 +32,7 @@ const BrowserSetup = () => {
     try {
       // Validate form
       if (!formData.firstName.trim()) {
-        alert('Please enter your first name');
+        console.warn('[BrowserSetup] First name required');
         return;
       }
 
@@ -54,7 +54,7 @@ const BrowserSetup = () => {
       
     } catch (error) {
       console.error('Setup error:', error);
-      alert('Setup failed. Please try again.');
+      console.error('[BrowserSetup] Setup failed:', error);
     } finally {
       setIsSubmitting(false);
     }

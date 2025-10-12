@@ -280,7 +280,7 @@ const AdminApprovals = () => {
                       
                       <motion.button
                         onClick={() => {
-                          const reason = prompt('Reason for rejection (optional):');
+                          const reason = ''; // Silent rejection without prompt
                           if (reason !== null) {
                             handleReject(withdrawal.id, reason || 'Rejected by admin');
                           }

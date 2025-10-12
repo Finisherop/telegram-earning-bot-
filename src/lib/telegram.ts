@@ -307,7 +307,7 @@ export class TelegramService {
     if (typeof window !== "undefined" && (window as any).Telegram?.WebApp) {
       (window as any).Telegram.WebApp.showAlert(message);
     } else {
-      alert(message);
+      console.warn('[Telegram] Message silenced:', message);
     }
 
     // Run callback (if provided)
@@ -318,7 +318,8 @@ export class TelegramService {
     if (this.webApp) {
       this.webApp.showConfirm(message, callback);
     } else {
-      const confirmed = confirm(message);
+      console.warn('[Telegram] Confirmation silenced:', message);
+      const confirmed = false; // Always return false for safety
       callback(confirmed);
     }
   }

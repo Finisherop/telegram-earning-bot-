@@ -21,10 +21,11 @@ import { safeSet, safeUpdate, safeGet, sanitizeUserId, buildUserPath, buildTaskP
 import { User, Task, UserTask, WithdrawalRequest, AdminSettings, DailyStats } from '@/types';
 import { VIP_TIERS, DEFAULT_SETTINGS } from './constants';
 
-// Firebase service error handling - returns realtimeDb or throws
-const getRealtimeDb = (): Database => {
+// Firebase service error handling - returns realtimeDb or null (no throws for user stability)
+const getRealtimeDb = (): Database | null => {
   if (!realtimeDb) {
-    throw new Error('Firebase Realtime Database not initialized. Check your Firebase configuration.');
+    console.warn('[Firebase] Realtime Database not initialized, running in offline mode');
+    return null;
   }
   return realtimeDb;
 };
@@ -37,6 +38,13 @@ const listeners = new Map<string, () => void>();
  */
 export const subscribeToUser = (userId: string, callback: (user: User | null) => void): (() => void) => {
   const db = getRealtimeDb();
+  
+  if (!db) {
+    // Return empty unsubscribe function if database not available
+    console.warn('[Firebase] Database not available for user subscription, running in offline mode');
+    callback(null);
+    return () => {};
+  }
   
   const userRef = ref(db, `telegram_users/${userId}`);
   
@@ -84,6 +92,12 @@ export const subscribeToUser = (userId: string, callback: (user: User | null) =>
  */
 export const subscribeToTasks = (callback: (tasks: Task[]) => void): (() => void) => {
   const db = getRealtimeDb();
+  
+  if (!db) {
+    console.warn('[Firebase] Database not available for tasks subscription, running in offline mode');
+    callback([]);
+    return () => {};
+  }
   
   const tasksRef = ref(db, 'tasks');
   
@@ -137,6 +151,12 @@ export const subscribeToTasks = (callback: (tasks: Task[]) => void): (() => void
 export const subscribeToAdminSettings = (callback: (settings: AdminSettings) => void): (() => void) => {
   const db = getRealtimeDb();
   
+  if (!db) {
+    console.warn('[Firebase] Database not available for admin settings subscription, using defaults');
+    callback(DEFAULT_SETTINGS);
+    return () => {};
+  }
+  
   const settingsRef = ref(db, 'admin_settings');
   
   const unsubscribe = onValue(settingsRef, (snapshot) => {
@@ -179,6 +199,12 @@ export const subscribeToAdminSettings = (callback: (settings: AdminSettings) => 
  */
 export const subscribeToUserTasks = (userId: string, callback: (userTasks: UserTask[]) => void): (() => void) => {
   const db = getRealtimeDb();
+  
+  if (!db) {
+    console.warn('[Firebase] Database not available for user tasks subscription, running in offline mode');
+    callback([]);
+    return () => {};
+  }
   
   const userTasksRef = ref(db, `userTasks/${userId}`);
   
@@ -237,6 +263,34 @@ export const cleanupListeners = () => {
  */
 export const initializeUser = async (userId: string): Promise<User> => {
   const db = getRealtimeDb();
+  
+  if (!db) {
+    // Return a default user object when offline
+    console.warn('[Firebase] Database not available, creating offline user');
+    const now = new Date();
+    return {
+      id: userId,
+      telegramId: userId,
+      firstName: 'User',
+      lastName: '',
+      username: '',
+      profilePic: '',
+      coins: 0,
+      xp: 0,
+      level: 1,
+      vipTier: 'free',
+      farmingMultiplier: 1,
+      referralMultiplier: 1,
+      adsLimitPerDay: 5,
+      withdrawalLimit: 1000,
+      minWithdrawal: 100,
+      referralCount: 0,
+      referralEarnings: 0,
+      dailyStreak: 0,
+      createdAt: now,
+      updatedAt: now
+    } as User;
+  }
   
   try {
     const userRef = ref(db, `telegram_users/${userId}`);
@@ -305,6 +359,35 @@ export const initializeUser = async (userId: string): Promise<User> => {
  */
 export const safeUpdateUser = async (userId: string, updateData: Partial<User>): Promise<User> => {
   const db = getRealtimeDb();
+  
+  if (!db) {
+    // Return current user with updates applied locally when offline
+    console.warn('[Firebase] Database not available, applying updates locally');
+    const now = new Date();
+    return {
+      id: userId,
+      telegramId: userId,
+      firstName: 'User',
+      lastName: '',
+      username: '',
+      profilePic: '',
+      coins: 0,
+      xp: 0,
+      level: 1,
+      vipTier: 'free',
+      farmingMultiplier: 1,
+      referralMultiplier: 1,
+      adsLimitPerDay: 5,
+      withdrawalLimit: 1000,
+      minWithdrawal: 100,
+      referralCount: 0,
+      referralEarnings: 0,
+      dailyStreak: 0,
+      createdAt: now,
+      updatedAt: now,
+      ...updateData
+    } as User;
+  }
   
   try {
     const sanitizedUserId = userId.toString().trim();
@@ -379,6 +462,11 @@ export const safeUpdateUser = async (userId: string, updateData: Partial<User>):
 export const createUser = async (userData: Partial<User>): Promise<void> => {
   const db = getRealtimeDb();
   
+  if (!db) {
+    console.warn('[Firebase] Database not available, user creation skipped');
+    return;
+  }
+  
   try {
     if (!userData.id && !userData.telegramId) {
       throw new Error('User ID or Telegram ID is required');
@@ -426,6 +514,11 @@ export const createUser = async (userData: Partial<User>): Promise<void> => {
 export const getUser = async (telegramId: string): Promise<User | null> => {
   const db = getRealtimeDb();
   
+  if (!db) {
+    console.warn('[Firebase] Database not available for getUser');
+    return null;
+  }
+  
   try {
     const sanitizedTelegramId = telegramId.toString().trim();
     const userRef = ref(db, `telegram_users/${sanitizedTelegramId}`);
@@ -457,6 +550,11 @@ export const getUser = async (telegramId: string): Promise<User | null> => {
  */
 export const updateUser = async (telegramId: string, updates: Partial<User>): Promise<void> => {
   const db = getRealtimeDb();
+  
+  if (!db) {
+    console.warn('[Firebase] Database not available for updateUser');
+    return;
+  }
   
   try {
     const sanitizedTelegramId = telegramId.toString().trim();
@@ -495,6 +593,11 @@ export const activateSubscription = async (
   durationDays: number = 30
 ): Promise<void> => {
   const db = getRealtimeDb();
+  
+  if (!db) {
+    console.warn('[Firebase] Database not available for activateSubscription');
+    return;
+  }
   
   try {
     const userRef = ref(db, `telegram_users/${userId}`);
@@ -536,6 +639,11 @@ export const activateSubscription = async (
 export const getTasks = async (): Promise<Task[]> => {
   const db = getRealtimeDb();
   
+  if (!db) {
+    console.warn('[Firebase] Database not available for getTasks');
+    return [];
+  }
+  
   try {
     const tasksRef = ref(db, 'tasks');
     const snapshot = await get(tasksRef);
@@ -574,6 +682,11 @@ export const getTasks = async (): Promise<Task[]> => {
 export const createTask = async (taskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> => {
   const db = getRealtimeDb();
   
+  if (!db) {
+    console.warn('[Firebase] Database not available for createTask');
+    return;
+  }
+  
   try {
     const tasksRef = ref(db, 'tasks');
     const newTaskRef = push(tasksRef);
@@ -598,6 +711,11 @@ export const createTask = async (taskData: Omit<Task, 'id' | 'createdAt' | 'upda
  */
 export const getUserTasks = async (userId: string): Promise<UserTask[]> => {
   const db = getRealtimeDb();
+  
+  if (!db) {
+    console.warn('[Firebase] Database not available for getUserTasks');
+    return [];
+  }
   
   try {
     const userTasksRef = ref(db, `userTasks/${userId}`);
@@ -634,6 +752,11 @@ export const getUserTasks = async (userId: string): Promise<UserTask[]> => {
 export const completeTask = async (userId: string, taskId: string): Promise<void> => {
   const db = getRealtimeDb();
   
+  if (!db) {
+    console.warn('[Firebase] Database not available for completeTask');
+    return;
+  }
+  
   try {
     const userTaskPath = buildUserTaskPath(userId, taskId);
     if (!userTaskPath) {
@@ -655,6 +778,11 @@ export const completeTask = async (userId: string, taskId: string): Promise<void
  */
 export const claimTask = async (userId: string, taskId: string, reward: number): Promise<void> => {
   const db = getRealtimeDb();
+  
+  if (!db) {
+    console.warn('[Firebase] Database not available for claimTask');
+    return;
+  }
   
   try {
     const userRef = ref(db, `telegram_users/${userId}`);
@@ -707,6 +835,11 @@ export const createWithdrawalRequest = async (
 ): Promise<string> => {
   const db = getRealtimeDb();
   
+  if (!db) {
+    console.warn('[Firebase] Database not available for createWithdrawalRequest');
+    throw new Error('Service temporarily unavailable');
+  }
+  
   try {
     const withdrawalsRef = ref(db, 'withdrawals');
     const newWithdrawalRef = push(withdrawalsRef);
@@ -736,6 +869,11 @@ export const createWithdrawalRequest = async (
  */
 export const getWithdrawalRequests = async (): Promise<WithdrawalRequest[]> => {
   const db = getRealtimeDb();
+  
+  if (!db) {
+    console.warn('[Firebase] Database not available for getWithdrawalRequests');
+    return [];
+  }
   
   try {
     const withdrawalsRef = ref(db, 'withdrawals');
@@ -778,6 +916,11 @@ export const updateWithdrawalStatus = async (
 ): Promise<void> => {
   const db = getRealtimeDb();
   
+  if (!db) {
+    console.warn('[Firebase] Database not available for updateWithdrawalStatus');
+    return;
+  }
+  
   try {
     const withdrawalRef = ref(db, `withdrawals/${withdrawalId}`);
     await update(withdrawalRef, {
@@ -796,6 +939,11 @@ export const updateWithdrawalStatus = async (
  */
 export const getAdminSettings = async (): Promise<AdminSettings> => {
   const db = getRealtimeDb();
+  
+  if (!db) {
+    console.warn('[Firebase] Database not available for getAdminSettings');
+    return DEFAULT_SETTINGS;
+  }
   
   try {
     const settingsRef = ref(db, 'admin_settings');
@@ -823,6 +971,11 @@ export const getAdminSettings = async (): Promise<AdminSettings> => {
 export const updateAdminSettings = async (settings: Partial<AdminSettings>): Promise<void> => {
   const db = getRealtimeDb();
   
+  if (!db) {
+    console.warn('[Firebase] Database not available for updateAdminSettings');
+    return;
+  }
+  
   try {
     const settingsRef = ref(db, 'admin_settings');
     await update(settingsRef, {
@@ -840,6 +993,19 @@ export const updateAdminSettings = async (settings: Partial<AdminSettings>): Pro
  */
 export const getDailyStats = async (): Promise<DailyStats> => {
   const db = getRealtimeDb();
+  
+  if (!db) {
+    console.warn('[Firebase] Database not available for getDailyStats');
+    return {
+      totalUsers: 0,
+      activeVipUsers: 0,
+      totalCoinsDistributed: 0,
+      totalInrGenerated: 0,
+      pendingWithdrawals: 0,
+      totalPayments: 0,
+      totalConversions: 0
+    };
+  }
   
   try {
     const usersRef = ref(db, 'telegram_users');
@@ -908,6 +1074,11 @@ interface VipRequest {
  */
 export const createVipRequest = async (vipRequest: VipRequest): Promise<void> => {
   const db = getRealtimeDb();
+  
+  if (!db) {
+    console.warn('[Firebase] Database not available for createVipRequest');
+    return;
+  }
   
   try {
     const vipRequestsRef = ref(db, 'vipRequests');
