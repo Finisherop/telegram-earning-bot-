@@ -102,7 +102,7 @@ const UserDashboard = () => {
     
     // Subscribe to user data using hybrid system
     console.log('[UserDashboard] Setting up hybrid data subscription for:', telegramId);
-    const unsubscribeUser = hybridDataManager.subscribeToUserData(telegramId, (userData) => {
+    const unsubscribeUser = hybridDataManager.subscribeToUserData(telegramId, (userData: any) => {
       console.log('[UserDashboard] 🔄 Hybrid user data received:', userData);
       if (userData) {
         // Ensure telegramId is always set
