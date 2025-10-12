@@ -19,7 +19,13 @@ interface EnhancedDashboardProps {
 }
 
 const EnhancedDashboard = ({ user: initialUser, onUserUpdate }: EnhancedDashboardProps) => {
-  const [user, setUser] = useState<User>(initialUser);
+  // Ensure user has telegramId field
+  const safeUser = {
+    ...initialUser,
+    telegramId: initialUser.telegramId || initialUser.id || 'unknown'
+  };
+  
+  const [user, setUser] = useState<User>(safeUser);
   const [payments, setPayments] = useState<PaymentData[]>([]);
   const [conversions, setConversions] = useState<ConversionData[]>([]);
   const [messages, setMessages] = useState<BotMessage[]>([]);
@@ -47,6 +53,9 @@ const EnhancedDashboard = ({ user: initialUser, onUserUpdate }: EnhancedDashboar
         });
 
         if (userData) {
+          // Ensure telegramId is always set in real-time updates
+          userData.telegramId = userData.telegramId || userData.id || user.telegramId;
+          console.log('[Enhanced Dashboard] Real-time user data updated:', userData);
           setUser(userData);
           setLastUpdate(new Date());
         }
@@ -231,6 +240,13 @@ const EnhancedDashboard = ({ user: initialUser, onUserUpdate }: EnhancedDashboar
   const claimDaily = useCallback(async () => {
     if (isDailyClaimLoading || !dailyClaimAvailable) {
       toast.error('Daily reward already claimed today!');
+      return;
+    }
+
+    // Check if user has valid telegramId
+    if (!user.telegramId || user.telegramId === 'unknown') {
+      console.error('[Enhanced Dashboard] Invalid user telegramId:', user.telegramId);
+      toast.error('User ID not available. Please refresh the app.');
       return;
     }
 

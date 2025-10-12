@@ -101,6 +101,12 @@ const UserDashboard = () => {
     
     // Subscribe to user data
     const unsubscribeUser = subscribeToUser(telegramId, (userData) => {
+      console.log('[UserDashboard] User data received from Firebase:', userData);
+      if (userData) {
+        // Ensure telegramId is always set
+        userData.telegramId = userData.telegramId || userData.id || telegramId;
+        console.log('[UserDashboard] User data after telegramId fix:', userData);
+      }
       setUser(userData);
       setIsLoading(false);
     });
