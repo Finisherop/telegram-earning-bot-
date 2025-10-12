@@ -14,8 +14,9 @@
  * 7. Optimize for real-time sync and fast write performance
  */
 
-import { ref, get, set, update } from 'firebase/database';
+import { ref, get } from 'firebase/database';
 import { realtimeDb } from './firebase';
+import { safeSet, safeUpdate, safeGet, sanitizeUserId, buildUserPath, extractUserId, FirebaseLogger } from './firebaseGlobal';
 
 // Types for Telegram WebApp
 interface TelegramUser {
@@ -132,12 +133,17 @@ function getFirebaseDatabase() {
  */
 async function checkUserExists(db: any, userId: number): Promise<boolean> {
   try {
-    const userRef = ref(db, `users/${userId}`);
-    const snapshot = await get(userRef);
-    return snapshot.exists();
+    const userPath = buildUserPath(userId);
+    if (!userPath) {
+      FirebaseLogger.error('CheckUserExists', 'Invalid user ID', userId);
+      return false;
+    }
+    
+    const userData = await safeGet(userPath);
+    return userData !== null;
   } catch (error) {
-    console.error("Error writing data to Firebase");
-    throw error;
+    FirebaseLogger.error('CheckUserExists', userPath || 'unknown', error);
+    return false;
   }
 }
 
@@ -166,8 +172,12 @@ async function createNewUser(db: any, telegramUser: TelegramUser): Promise<void>
       lastSeen: now
     };
 
-    const userRef = ref(db, `users/${telegramUser.id}`);
-    await set(userRef, newUserData);
+    const userPath = buildUserPath(telegramUser.id);
+    if (!userPath) {
+      throw new Error('Invalid user ID for creating new user');
+    }
+    
+    await safeSet(userPath, newUserData);
     
     console.log("New user created successfully");
   } catch (error) {
@@ -194,8 +204,12 @@ async function updateExistingUser(db: any, telegramUser: TelegramUser): Promise<
       lastSeen: now
     };
 
-    const userRef = ref(db, `users/${telegramUser.id}`);
-    await update(userRef, updateData);
+    const userPath = buildUserPath(telegramUser.id);
+    if (!userPath) {
+      throw new Error('Invalid user ID for updating user');
+    }
+    
+    await safeUpdate(userPath, updateData);
     
     console.log("User found and updated");
   } catch (error) {
@@ -284,8 +298,12 @@ export async function writeTelegramUserWithData(additionalData?: Partial<Firebas
         ...additionalData // Merge additional data
       };
 
-      const userRef = ref(db, `users/${user.id}`);
-      await update(userRef, updateData);
+      const userPath = buildUserPath(user.id);
+      if (!userPath) {
+        throw new Error('Invalid user ID for safe update');
+      }
+      
+      await safeUpdate(userPath, updateData);
       
       console.log("User found and updated");
     } else {
@@ -310,8 +328,12 @@ export async function writeTelegramUserWithData(additionalData?: Partial<Firebas
         ...additionalData // Merge additional data
       };
 
-      const userRef = ref(db, `users/${user.id}`);
-      await set(userRef, newUserData);
+      const userPath = buildUserPath(user.id);
+      if (!userPath) {
+        throw new Error('Invalid user ID for safe create');
+      }
+      
+      await safeSet(userPath, newUserData);
       
       console.log("New user created successfully");
     }
@@ -353,8 +375,12 @@ export async function updateTelegramUserData(updates: Partial<FirebaseUserData>)
       lastSeen: now
     };
 
-    const userRef = ref(db, `users/${user.id}`);
-    await update(userRef, updateData);
+    const userPath = buildUserPath(user.id);
+    if (!userPath) {
+      throw new Error('Invalid user ID for update last seen');
+    }
+    
+    await safeUpdate(userPath, updateData);
     
     console.log("User found and updated");
     return true;

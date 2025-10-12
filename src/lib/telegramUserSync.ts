@@ -7,12 +7,11 @@
 
 import { 
   ref, 
-  set, 
-  update, 
   get, 
   serverTimestamp as realtimeServerTimestamp 
 } from 'firebase/database';
 import { realtimeDb } from './firebase';
+import { safeSet, safeUpdate, safeGet, sanitizeUserId, buildUserPath, extractUserId, FirebaseLogger } from './firebaseGlobal';
 import { 
   getTelegramUserSafe, 
   sanitizeUserForFirebase, 
@@ -220,7 +219,11 @@ async function syncToRealtimeDbOnly(
       };
       
       console.log('[Firebase] Creating new user with data:', Object.keys(newUserData));
-      await set(userRef, newUserData);
+      const userPath = buildUserPath(userId);
+      if (!userPath) {
+        throw new Error('Invalid user ID for creating user');
+      }
+      await safeSet(userPath, newUserData);
     } else {
       // Update existing data with server timestamp
       const updateData = {
@@ -229,7 +232,11 @@ async function syncToRealtimeDbOnly(
       };
       
       console.log('[Firebase] Updating existing user with data:', Object.keys(updateData));
-      await update(userRef, updateData);
+      const userPath = buildUserPath(userId);
+      if (!userPath) {
+        throw new Error('Invalid user ID for updating user');
+      }
+      await safeUpdate(userPath, updateData);
     }
     
     console.log(`[UserSync] ✅ Realtime DB sync successful for user ${userId} (${isNewUser ? 'new' : 'update'})`);

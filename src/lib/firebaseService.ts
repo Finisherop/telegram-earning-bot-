@@ -1,8 +1,6 @@
 import {
   ref,
-  set,
   get,
-  update,
   onValue,
   off,
   push,
@@ -17,6 +15,7 @@ import {
   Database
 } from 'firebase/database';
 import { realtimeDb } from './firebase';
+import { safeSet, safeUpdate, safeGet, sanitizeUserId, buildUserPath, buildTaskPath, buildUserTaskPath, extractUserId, FirebaseLogger, safeListen } from './firebaseGlobal';
 import { User, Task, UserTask, WithdrawalRequest, AdminSettings, DailyStats } from '@/types';
 import { VIP_TIERS, DEFAULT_SETTINGS } from './constants';
 
@@ -280,7 +279,11 @@ export const initializeUser = async (userId: string): Promise<User> => {
       };
       
       console.log('[Firebase] Creating new user with safe defaults:', userId);
-      await set(userRef, newUser);
+      const userPath = buildUserPath(userId);
+      if (!userPath) {
+        throw new Error('Invalid user ID for creating user');
+      }
+      await safeSet(userPath, newUser);
       
       // Return user object with proper Date objects
       return {
@@ -336,7 +339,11 @@ export const safeUpdateUser = async (userId: string, updateData: Partial<User>):
       sanitizedData.updatedAt = new Date().toISOString();
       
       console.log(`[Firebase] Updating user ${sanitizedUserId} with:`, Object.keys(sanitizedData));
-      await update(userRef, sanitizedData);
+      const userPath = buildUserPath(sanitizedUserId);
+      if (!userPath) {
+        throw new Error('Invalid user ID for updating user');
+      }
+      await safeUpdate(userPath, sanitizedData);
     } else {
       console.warn(`[Firebase] No valid data to update for user ${sanitizedUserId}`);
     }
@@ -399,7 +406,11 @@ export const createUser = async (userData: Partial<User>): Promise<void> => {
       updatedAt: now
     };
     
-    await set(userRef, newUser);
+    const userPath = buildUserPath(userId);
+    if (!userPath) {
+      throw new Error('Invalid user ID for creating user');
+    }
+    await safeSet(userPath, newUser);
     console.log('[Firebase] User created successfully:', userId);
   } catch (error) {
     console.error('[Firebase] Error creating user:', error);
@@ -462,7 +473,11 @@ export const updateUser = async (telegramId: string, updates: Partial<User>): Pr
     });
     
     sanitizedUpdates.updatedAt = new Date().toISOString();
-    await update(userRef, sanitizedUpdates);
+    const userPath = buildUserPath(sanitizedTelegramId);
+    if (!userPath) {
+      throw new Error('Invalid user ID for updating user');
+    }
+    await safeUpdate(userPath, sanitizedUpdates);
   } catch (error) {
     console.error('[Firebase] Error updating user:', error);
     throw error;
@@ -490,7 +505,12 @@ export const activateSubscription = async (
     const now = new Date();
     const vipEndTime = new Date(now.getTime() + (durationDays * 24 * 60 * 60 * 1000));
     
-    await update(userRef, {
+    const userPath = buildUserPath(userId);
+    if (!userPath) {
+      throw new Error('Invalid user ID for VIP activation');
+    }
+    
+    await safeUpdate(userPath, {
       vipTier: tier,
       vipEndTime: vipEndTime.toISOString(),
       farmingMultiplier: vipConfig.farmingMultiplier,
@@ -563,7 +583,7 @@ export const createTask = async (taskData: Omit<Task, 'id' | 'createdAt' | 'upda
       updatedAt: now
     };
     
-    await set(newTaskRef, task);
+    await safeSet(`tasks/${newTaskRef.key}`, task);
     console.log('[Firebase] Task created successfully');
   } catch (error) {
     console.error('[Firebase] Error creating task:', error);
@@ -613,8 +633,12 @@ export const completeTask = async (userId: string, taskId: string): Promise<void
   const db = getRealtimeDb();
   
   try {
-    const userTaskRef = ref(db, `userTasks/${userId}/${taskId}`);
-    await update(userTaskRef, {
+    const userTaskPath = buildUserTaskPath(userId, taskId);
+    if (!userTaskPath) {
+      throw new Error('Invalid user ID or task ID for completing task');
+    }
+    
+    await safeUpdate(userTaskPath, {
       status: 'completed',
       completedAt: new Date().toISOString()
     });
