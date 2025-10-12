@@ -12,6 +12,7 @@ import {
   getUserTasks,
   getWithdrawalRequests
 } from '@/lib/firebaseService';
+import { hybridDataManager } from '@/lib/hybridDataManager.js';
 import EnhancedDashboard from './user/EnhancedDashboard';
 import Task from './user/Task';
 import Referral from './user/Referral';
@@ -99,13 +100,18 @@ const UserDashboard = () => {
 
     setIsLoading(true);
     
-    // Subscribe to user data
-    const unsubscribeUser = subscribeToUser(telegramId, (userData) => {
-      console.log('[UserDashboard] User data received from Firebase:', userData);
+    // Subscribe to user data using hybrid system
+    console.log('[UserDashboard] Setting up hybrid data subscription for:', telegramId);
+    const unsubscribeUser = hybridDataManager.subscribeToUserData(telegramId, (userData) => {
+      console.log('[UserDashboard] 🔄 Hybrid user data received:', userData);
       if (userData) {
         // Ensure telegramId is always set
         userData.telegramId = userData.telegramId || userData.id || telegramId;
-        console.log('[UserDashboard] User data after telegramId fix:', userData);
+        console.log('[UserDashboard] ✅ User data processed:', {
+          telegramId: userData.telegramId,
+          coins: userData.coins,
+          source: userData.source
+        });
       }
       setUser(userData);
       setIsLoading(false);
@@ -127,13 +133,19 @@ const UserDashboard = () => {
     };
   }, [telegramId]);
 
-  // Handle user updates with optimistic UI
+  // Handle user updates with hybrid system
   const handleUserUpdate = useCallback(async (updateData: Partial<User>) => {
     if (!telegramId) return;
     
-    // Update user data
-    await safeUpdateUser(telegramId, updateData);
-  }, [telegramId]);
+    console.log('[UserDashboard] 💾 Updating user data:', updateData);
+    
+    // Update using hybrid system (LocalStorage + Firebase)
+    if (user) {
+      const updatedUser = { ...user, ...updateData };
+      const success = await hybridDataManager.saveUserData(telegramId, updatedUser);
+      console.log('[UserDashboard] User update result:', success ? '✅' : '❌');
+    }
+  }, [telegramId, user]);
 
   // Show skeleton loader while data is loading
   if (isLoading || !user) {

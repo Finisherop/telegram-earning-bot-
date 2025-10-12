@@ -10,6 +10,7 @@ import {
   logConversionEvent,
   markMessageAsRead
 } from '@/lib/enhancedFirebaseService';
+import { hybridDataManager } from '@/lib/hybridDataManager.js';
 import { TelegramService } from '@/lib/telegram';
 import toast from 'react-hot-toast';
 
@@ -283,8 +284,22 @@ const EnhancedDashboard = ({ user: initialUser, onUserUpdate }: EnhancedDashboar
       
       console.log('[Enhanced Dashboard] Updating user with data:', updateData);
       
-      const updatedUser = await safeUpdateUserWithRetry(user.telegramId, updateData);
-      console.log('[Enhanced Dashboard] User updated successfully:', updatedUser);
+      // Use hybrid system for better reliability
+      console.log('[Enhanced Dashboard] 💾 Saving to hybrid system...');
+      const hybridSuccess = await hybridDataManager.saveUserData(user.telegramId, {
+        ...user,
+        ...updateData
+      });
+      
+      // Also try Firebase for real-time sync
+      try {
+        const updatedUser = await safeUpdateUserWithRetry(user.telegramId, updateData);
+        console.log('[Enhanced Dashboard] ✅ Firebase update successful:', updatedUser);
+      } catch (firebaseError) {
+        console.warn('[Enhanced Dashboard] Firebase update failed, using hybrid backup:', firebaseError);
+      }
+      
+      console.log('[Enhanced Dashboard] Hybrid save result:', hybridSuccess ? '✅' : '❌');
       
       // Log conversion event
       await logConversionEvent(user.telegramId, 'daily_claim', {
