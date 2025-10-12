@@ -1,7 +1,7 @@
 'use client';
 
 import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+import { getDatabase, ref, get, set, update } from 'firebase/database';
 
 // Firebase configuration
 const firebaseConfig = {
@@ -16,22 +16,22 @@ const firebaseConfig = {
 
 // Initialize Firebase only once on client side
 let app = null;
-let db = null;
+let database = null;
 
 function initializeFirebaseClient() {
   if (typeof window === 'undefined') {
     console.log('[Firebase Client] Skipping initialization on server side');
-    return { app: null, db: null };
+    return { app: null, database: null };
   }
 
   try {
     // Validate required configuration
-    const required = ['apiKey', 'projectId', 'appId'];
+    const required = ['apiKey', 'databaseURL', 'projectId', 'appId'];
     const missing = required.filter(key => !firebaseConfig[key]);
     
     if (missing.length > 0) {
       console.error('[Firebase Client] Configuration missing:', missing.join(', '));
-      return { app: null, db: null };
+      return { app: null, database: null };
     }
 
     // Initialize Firebase app (only once)
@@ -40,51 +40,51 @@ function initializeFirebaseClient() {
       console.log('[Firebase Client] ✅ Firebase App initialized successfully');
     }
     
-    // Initialize Firestore
-    if (!db && app) {
-      db = getFirestore(app);
-      console.log('[Firebase Client] ✅ Firestore initialized successfully');
-      console.log('[Firebase Client] 🔥 Firebase is ready for use!');
+    // Initialize Realtime Database
+    if (!database && app) {
+      database = getDatabase(app);
+      console.log('[Firebase Client] ✅ Realtime Database initialized successfully');
+      console.log('[Firebase Client] 🔥 Firebase Realtime Database is ready for use!');
     }
     
-    return { app, db };
+    return { app, database };
   } catch (error) {
     console.error('[Firebase Client] Initialization failed:', error);
-    return { app: null, db: null };
+    return { app: null, database: null };
   }
 }
 
 // Initialize immediately if on client side
-const { app: firebaseApp, db: firestore } = initializeFirebaseClient();
+const { app: firebaseApp, database: realtimeDb } = initializeFirebaseClient();
 
-// Example function to read Telegram user's document from Firestore
-export async function getTelegramUserDoc(userId) {
-  if (!firestore || !userId) {
-    console.warn('[Firebase Client] Firestore not available or no userId provided');
+// Example function to read Telegram user's data from Realtime Database
+export async function getTelegramUserData(userId) {
+  if (!realtimeDb || !userId) {
+    console.warn('[Firebase Client] Realtime Database not available or no userId provided');
     return null;
   }
 
   try {
-    const userDocRef = doc(firestore, 'telegram_users', String(userId));
-    const userDoc = await getDoc(userDocRef);
+    const userRef = ref(realtimeDb, `telegram_users/${userId}`);
+    const snapshot = await get(userRef);
     
-    if (userDoc.exists()) {
-      console.log('[Firebase Client] User document found:', userDoc.data());
-      return userDoc.data();
+    if (snapshot.exists()) {
+      console.log('[Firebase Client] User data found:', snapshot.val());
+      return snapshot.val();
     } else {
-      console.log('[Firebase Client] No user document found for userId:', userId);
+      console.log('[Firebase Client] No user data found for userId:', userId);
       return null;
     }
   } catch (error) {
-    console.error('[Firebase Client] Error reading user document:', error);
+    console.error('[Firebase Client] Error reading user data:', error);
     return null;
   }
 }
 
-// Example function to create/update Telegram user's document in Firestore
-export async function setTelegramUserDoc(userId, userData) {
-  if (!firestore || !userId || !userData) {
-    console.warn('[Firebase Client] Firestore not available or missing data');
+// Example function to create/update Telegram user's data in Realtime Database
+export async function setTelegramUserData(userId, userData) {
+  if (!realtimeDb || !userId || !userData) {
+    console.warn('[Firebase Client] Realtime Database not available or missing data');
     return false;
   }
 
@@ -108,17 +108,17 @@ export async function setTelegramUserDoc(userId, userData) {
       }
     });
 
-    const userDocRef = doc(firestore, 'telegram_users', String(userId));
-    await setDoc(userDocRef, sanitizedData, { merge: true });
+    const userRef = ref(realtimeDb, `telegram_users/${userId}`);
+    await set(userRef, sanitizedData);
     
-    console.log('[Firebase Client] User document updated successfully:', sanitizedData);
+    console.log('[Firebase Client] User data updated successfully:', sanitizedData);
     return true;
   } catch (error) {
-    console.error('[Firebase Client] Error updating user document:', error);
+    console.error('[Firebase Client] Error updating user data:', error);
     return false;
   }
 }
 
 // Export Firebase instances
-export { firebaseApp, firestore };
+export { firebaseApp, realtimeDb };
 export default firebaseApp;

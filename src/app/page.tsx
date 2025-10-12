@@ -8,7 +8,7 @@ import AdminDashboard from '@/components/AdminDashboard';
 import BackgroundDataLoader from '@/components/BackgroundDataLoader';
 import FirebaseSafetyValidator from '@/components/FirebaseSafetyValidator';
 import { useTelegramWebApp } from '@/hooks/useTelegramWebApp.js';
-import { getTelegramUserDoc, setTelegramUserDoc } from '@/lib/firebaseClient.js';
+import { getTelegramUserData, setTelegramUserData } from '@/lib/firebaseClient.js';
 
 export default function Home() {
   const router = useRouter();
@@ -23,11 +23,11 @@ export default function Home() {
       console.log('[Telegram WebApp] ✅ WebApp instance ready:', tg);
       console.log('[Integration] 🎉 Both Telegram and Firebase are ready!');
       
-      // Example: Save user to Firestore
+      // Example: Save user to Realtime Database
       if (user && user.id) {
-        setTelegramUserDoc(user.id, user).then(success => {
+        setTelegramUserData(user.id, user).then(success => {
           if (success) {
-            console.log('[Firebase] ✅ Telegram user saved to Firestore successfully');
+            console.log('[Firebase] ✅ Telegram user saved to Realtime Database successfully');
           }
         });
       }
