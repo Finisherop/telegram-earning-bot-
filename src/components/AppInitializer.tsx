@@ -249,7 +249,7 @@ const AppInitializer = ({ children }: AppInitializerProps) => {
    */
   useEffect(() => {
     initializeApp();
-  }, []);
+  }, [initializeApp]);
 
   /**
    * Monitor connection status and Telegram WebApp lifecycle
@@ -333,7 +333,7 @@ const AppInitializer = ({ children }: AppInitializerProps) => {
         setTimeout(retryInitialization, 2000 * (retryCount + 1)); // Exponential backoff
       }
     }
-  }, [state.error, retryCount]);
+  }, [state.error, retryCount, retryInitialization]);
 
   // Loading state
   if (state.isLoading) {

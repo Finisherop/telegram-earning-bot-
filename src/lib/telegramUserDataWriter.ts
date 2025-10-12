@@ -132,8 +132,8 @@ function getFirebaseDatabase() {
  * Check if user exists in Firebase Realtime Database
  */
 async function checkUserExists(db: any, userId: number): Promise<boolean> {
+  const userPath = buildUserPath(userId);
   try {
-    const userPath = buildUserPath(userId);
     if (!userPath) {
       FirebaseLogger.error('CheckUserExists', 'Invalid user ID', userId);
       return false;

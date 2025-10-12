@@ -115,13 +115,15 @@ async function ensureUserExists(uid: string, userData?: any): Promise<void> {
             `${userData.first_name} ${userData.last_name || ''}`.trim() : 
             undefined,
           photoURL: userData?.photo_url,
-          disabled: false,
-          customClaims: {
-            provider: 'telegram',
-            telegramId: uid.replace('tg_', ''),
-            isPremium: userData?.is_premium || false,
-            createdAt: Date.now()
-          }
+          disabled: false
+        });
+        
+        // Set custom claims separately
+        await auth.setCustomUserClaims(uid, {
+          provider: 'telegram',
+          telegramId: uid.replace('tg_', ''),
+          isPremium: userData?.is_premium || false,
+          createdAt: Date.now()
         });
         
         console.log(`[TelegramAuth] Created new user in Firebase Auth: ${userRecord.uid}`);

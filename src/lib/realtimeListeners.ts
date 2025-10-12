@@ -507,7 +507,7 @@ export function subscribeToDashboardData(
   };
 }
 
-export default {
+const realtimeListeners = {
   subscribeToUser,
   subscribeToUserWithdrawals,
   subscribeToTasks,
@@ -515,3 +515,5 @@ export default {
   subscribeToDashboardData,
   listenerManager
 };
+
+export default realtimeListeners;

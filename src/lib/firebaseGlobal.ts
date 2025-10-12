@@ -64,7 +64,7 @@ export function removeUndefined<T extends Record<string, any>>(obj: T): Partial<
     const value = obj[key];
     
     if (value !== undefined) {
-      if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+      if (value && typeof value === 'object' && !Array.isArray(value) && Object.prototype.toString.call(value) !== '[object Date]' && value.constructor === Object) {
         // Recursively clean nested objects
         const cleanedNested = removeUndefined(value);
         if (Object.keys(cleanedNested).length > 0) {

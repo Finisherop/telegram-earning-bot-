@@ -1,10 +1,12 @@
 import {
   ref,
   get,
+  set,
   onValue,
   off,
   push,
   remove,
+  update,
   query,
   orderByChild,
   orderByKey,
@@ -935,7 +937,7 @@ export const createTelegramStarInvoice = async (
   return `invoice_${Date.now()}_${userId}`;
 };
 
-export default {
+const firebaseService = {
   subscribeToUser,
   subscribeToTasks,
   subscribeToAdminSettings,
@@ -961,3 +963,5 @@ export default {
   createVipRequest,
   createTelegramStarInvoice
 };
+
+export default firebaseService;
