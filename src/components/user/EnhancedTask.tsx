@@ -14,6 +14,7 @@ import {
   safeUpdateUserWithRetry
 } from '@/lib/enhancedFirebaseService';
 import { TelegramService } from '@/lib/telegram';
+import { validateUserForOperation, getUserValidationError } from '@/lib/userValidation';
 import toast from 'react-hot-toast';
 
 interface EnhancedTaskProps {
@@ -59,6 +60,13 @@ const EnhancedTask = ({ user }: EnhancedTaskProps) => {
     const telegram = TelegramService.getInstance();
     const status = getTaskStatus(task.id);
     
+    // Enhanced validation for user data using utility function
+    if (!validateUserForOperation(user, 'enhanced task action')) {
+      const errorMessage = getUserValidationError(user);
+      toast.error(`❌ ${errorMessage}`);
+      return;
+    }
+    
     if (status === 'claimed') {
       toast.error('Task already claimed!');
       return;
@@ -86,7 +94,8 @@ const EnhancedTask = ({ user }: EnhancedTaskProps) => {
               toast.success('✅ Task completed! You can now claim your reward.');
             } catch (error) {
               console.error('[Enhanced Task] Complete task error:', error);
-              toast.error('❌ Failed to complete task. Please try again.');
+              const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+              toast.error(`❌ Failed to complete task: ${errorMessage}`);
             }
           }, 2000);
         } else {
@@ -102,7 +111,8 @@ const EnhancedTask = ({ user }: EnhancedTaskProps) => {
         }
       } catch (error) {
         console.error('[Enhanced Task] Task action error:', error);
-        toast.error('❌ Failed to complete task. Please try again.');
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        toast.error(`❌ Failed to complete task: ${errorMessage}`);
       }
     } else if (status === 'completed') {
       // Claim the task reward
@@ -117,6 +127,8 @@ const EnhancedTask = ({ user }: EnhancedTaskProps) => {
         
         const vipMultiplier = user.vipTier !== 'free' ? 1.5 : 1;
         const finalReward = Math.floor(task.reward * vipMultiplier);
+        
+        console.log(`[Enhanced Task] Claiming task ${task.id} for user ${user.telegramId} with reward ${finalReward}`);
         
         // Claim task and update user coins atomically
         await claimTask(user.telegramId, task.id, finalReward);
@@ -135,7 +147,21 @@ const EnhancedTask = ({ user }: EnhancedTaskProps) => {
         console.log('[Enhanced Task] Task reward claimed successfully:', { taskId: task.id, reward: finalReward });
       } catch (error) {
         console.error('[Enhanced Task] Claim task error:', error);
-        toast.error('❌ Failed to claim reward. Please try again.');
+        
+        // Provide more specific error messages
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        
+        if (errorMessage.includes('Invalid user ID')) {
+          toast.error('❌ User ID is invalid. Please refresh the app.');
+        } else if (errorMessage.includes('User not found')) {
+          toast.error('❌ User profile not found. Please refresh the app.');
+        } else if (errorMessage.includes('Task has already been claimed')) {
+          toast.error('❌ This task has already been claimed.');
+        } else if (errorMessage.includes('Database service unavailable')) {
+          toast.error('❌ Service temporarily unavailable. Please try again.');
+        } else {
+          toast.error(`❌ Failed to claim reward: ${errorMessage}`);
+        }
       } finally {
         setClaimingTasks(prev => {
           const newSet = new Set(prev);

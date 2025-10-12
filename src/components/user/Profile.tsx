@@ -27,6 +27,12 @@ const Profile = ({ user }: ProfileProps) => {
 
   useEffect(() => {
     const loadWithdrawalStats = async () => {
+      // Validate user ID before making requests
+      if (!user || !user.telegramId || user.telegramId.trim() === '' || user.telegramId === 'undefined' || user.telegramId === 'null') {
+        console.warn('Profile: Invalid user ID, skipping withdrawal stats load:', user?.telegramId);
+        return;
+      }
+
       try {
         const withdrawals = await getWithdrawalRequests();
         const userWithdrawals = withdrawals.filter(w => w.userId === user.telegramId);
@@ -45,7 +51,7 @@ const Profile = ({ user }: ProfileProps) => {
     };
 
     loadWithdrawalStats();
-  }, [user.telegramId]);
+  }, [user?.telegramId]);
 
   const getVIPBadge = () => {
     if (user.vipTier === 'free') return null;
@@ -76,6 +82,12 @@ const Profile = ({ user }: ProfileProps) => {
     const telegram = TelegramService.getInstance();
     telegram.hapticFeedback('medium');
     
+    // Validate user ID before copying
+    if (!user || !user.telegramId || user.telegramId.trim() === '' || user.telegramId === 'undefined' || user.telegramId === 'null') {
+      telegram.showAlert('User ID not available');
+      return;
+    }
+    
     try {
       await navigator.clipboard.writeText(user.telegramId);
       telegram.showAlert('User ID copied to clipboard!');
@@ -83,6 +95,27 @@ const Profile = ({ user }: ProfileProps) => {
       telegram.showAlert('Failed to copy User ID');
     }
   };
+
+  // Show error message if user data is invalid
+  if (!user || !user.telegramId || user.telegramId.trim() === '' || user.telegramId === 'undefined' || user.telegramId === 'null') {
+    return (
+      <div className="p-4 space-y-6">
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center">
+          <div className="text-4xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold text-red-800 mb-2">Profile Data Unavailable</h2>
+          <p className="text-red-600 mb-4">
+            Your user profile data is not available. This might be due to a connection issue.
+          </p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+          >
+            Refresh App
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 space-y-6">
@@ -120,7 +153,7 @@ const Profile = ({ user }: ProfileProps) => {
               className="text-white/90 text-sm hover:text-white transition-colors mt-1"
               whileTap={{ scale: 0.95 }}
             >
-              ID: {user.telegramId} 📋
+              ID: {user?.telegramId || 'Not available'} 📋
             </motion.button>
           </div>
         </div>
