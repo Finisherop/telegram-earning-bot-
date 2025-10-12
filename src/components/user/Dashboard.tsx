@@ -33,12 +33,12 @@ const Dashboard = ({ user }: DashboardProps) => {
           <div className="space-y-2">
             <div className="flex justify-between">
               <span className="text-gray-600">User ID:</span>
-              <span className="font-medium">{user.userId}</span>
+              <span className="font-medium">{user.id}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Name:</span>
               <span className="font-medium">
-                {user.firstName} {user.lastName}
+                {user.first_name} {user.last_name}
               </span>
             </div>
             {user.username && (
@@ -51,19 +51,17 @@ const Dashboard = ({ user }: DashboardProps) => {
           <div className="space-y-2">
             <div className="flex justify-between">
               <span className="text-gray-600">Language:</span>
-              <span className="font-medium">{user.languageCode.toUpperCase()}</span>
+              <span className="font-medium">{user.language_code?.toUpperCase()}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Premium:</span>
-              <span className={`font-medium ${user.isPremium ? 'text-yellow-600' : 'text-gray-500'}`}>
-                {user.isPremium ? 'Yes' : 'No'}
+              <span className={`font-medium ${user.is_premium ? 'text-yellow-600' : 'text-gray-500'}`}>
+                {user.is_premium ? 'Yes' : 'No'}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-600">Member Since:</span>
-              <span className="font-medium">
-                {new Date(user.createdAt).toLocaleDateString()}
-              </span>
+              <span className="text-gray-600">Status:</span>
+              <span className="font-medium text-green-600">Active</span>
             </div>
           </div>
         </div>
@@ -80,9 +78,9 @@ const Dashboard = ({ user }: DashboardProps) => {
         <div className="space-y-4">
           <div className="flex justify-between items-center p-4 bg-green-50 rounded-lg">
             <div>
-              <h3 className="font-medium text-green-800">Last Seen</h3>
+              <h3 className="font-medium text-green-800">Status</h3>
               <p className="text-sm text-green-600">
-                {new Date(user.lastSeen).toLocaleString()}
+                Online Now
               </p>
             </div>
             <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>

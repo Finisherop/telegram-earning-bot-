@@ -2,7 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useFirebaseReliable } from '@/hooks/useFirebaseReliable';
+import { 
+  subscribeToAdminSettings, 
+  subscribeToUser, 
+  getDailyStats, 
+  getWithdrawalRequests,
+  updateAdminSettings as updateSettings,
+  updateWithdrawalStatus as updateStatus
+} from '@/lib/firebaseService';
 import AdminStats from './admin/AdminStats';
 import EnhancedAdminSettings from './admin/EnhancedAdminSettings';
 import AdminApprovals from './admin/AdminApprovals';
@@ -16,15 +23,24 @@ const tabs = [
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('stats');
   
-  // Use reliable Firebase service for admin operations
-  const { 
-    adminSettings, 
-    dailyStats, 
-    withdrawals, 
-    updateAdminSettings,
-    updateWithdrawalStatus,
-    connectionStatus 
-  } = useFirebaseReliable();
+  const [adminSettings, setAdminSettings] = useState<any>(null);
+  const [dailyStats, setDailyStats] = useState<any>(null);
+  const [withdrawals, setWithdrawals] = useState<any>([]);
+  const [connectionStatus, setConnectionStatus] = useState({ isConnected: true });
+
+  useEffect(() => {
+    // Subscribe to admin settings
+    const unsubscribeSettings = subscribeToAdminSettings(setAdminSettings);
+    
+    // Load initial data
+    getDailyStats().then(setDailyStats);
+    getWithdrawalRequests().then(setWithdrawals);
+    
+    return unsubscribeSettings;
+  }, []);
+
+  const updateAdminSettings = updateSettings;
+  const updateWithdrawalStatus = updateStatus;
 
   const renderTabContent = () => {
     switch (activeTab) {

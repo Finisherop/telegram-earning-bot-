@@ -109,7 +109,7 @@ export function setupSilentErrorHandling(): void {
   console.error = (...args: any[]) => {
     // Check if it's a Firebase error
     const message = args[0]?.toString() || '';
-    if (message.includes('Firebase') || message.includes('WebSocket') || message.includes('HttpStream')) {
+    if (message.includes('Firebase') || message.includes('HttpStream')) {
       silentLogger.error('Firebase error silenced', ...args);
       return;
     }
@@ -122,7 +122,7 @@ export function setupSilentErrorHandling(): void {
 
   console.warn = (...args: any[]) => {
     const message = args[0]?.toString() || '';
-    if (message.includes('Firebase') || message.includes('WebSocket') || message.includes('HttpStream')) {
+    if (message.includes('Firebase') || message.includes('HttpStream')) {
       silentLogger.warn('Firebase warning silenced', ...args);
       return;
     }

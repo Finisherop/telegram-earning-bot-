@@ -46,7 +46,7 @@ const AppInitializer = ({ children }: AppInitializerProps) => {
 
           // Set up periodic last seen updates
           const interval = setInterval(() => {
-            updateLastSeen(userData.userId);
+            updateLastSeen(userData.id);
           }, 30000); // Every 30 seconds
 
           // Cleanup interval on unmount

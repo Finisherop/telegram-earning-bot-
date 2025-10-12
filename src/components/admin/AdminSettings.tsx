@@ -5,8 +5,8 @@ import { motion } from 'framer-motion';
 import { AdminSettings as AdminSettingsType } from '@/types';
 import { 
   subscribeToAdminSettings,
-  updateAdminSettingsSafe 
-} from '@/lib/firebaseRealtimeManager';
+  updateAdminSettings
+} from '@/lib/firebaseService';
 import toast from 'react-hot-toast';
 
 const AdminSettings = () => {
@@ -36,7 +36,7 @@ const AdminSettings = () => {
     setSaving(true);
     try {
       // Use the enhanced Firebase manager for instant sync
-      await updateAdminSettingsSafe(settings);
+      await updateAdminSettings(settings);
       toast.success('⚡ Settings updated and synced to all users instantly!', {
         duration: 3000,
         icon: '🚀'

@@ -27,30 +27,7 @@ export default function SilentErrorInitializer() {
 
     setupSilentHandling();
 
-    // Also initialize the Telegram-optimized Firebase
-    const initTelegramFirebase = async () => {
-      try {
-        const { telegramFirebase } = await import('@/lib/firebaseTelegramOptimized');
-        await telegramFirebase.getServices();
-        console.log('[TelegramFirebase] Initialized successfully');
-      } catch (error) {
-        console.warn('[TelegramFirebase] Initialization failed, running in offline mode');
-      }
-    };
-
-    initTelegramFirebase();
-
-    // Initialize offline data manager
-    const initOfflineManager = async () => {
-      try {
-        const { offlineDataManager } = await import('@/lib/offlineDataManager');
-        console.log('[OfflineManager] Initialized successfully');
-      } catch (error) {
-        console.warn('[OfflineManager] Initialization failed');
-      }
-    };
-
-    initOfflineManager();
+    console.log('[SilentError] Initialization completed');
   }, []);
 
   return null; // This component doesn't render anything

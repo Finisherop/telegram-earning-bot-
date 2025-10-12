@@ -1108,6 +1108,26 @@ export const createTelegramStarInvoice = async (
   return `invoice_${Date.now()}_${userId}`;
 };
 
+// Auto-cleanup on page unload and visibility change
+if (typeof window !== 'undefined') {
+  // Clean up listeners when page is unloaded
+  window.addEventListener('beforeunload', () => {
+    cleanupListeners();
+  });
+
+  // Clean up listeners when page becomes hidden (tab switch, minimize, etc.)
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      cleanupListeners();
+    }
+  });
+
+  // Clean up listeners on page focus loss
+  window.addEventListener('blur', () => {
+    cleanupListeners();
+  });
+}
+
 const firebaseService = {
   subscribeToUser,
   subscribeToTasks,

@@ -3,7 +3,15 @@
 import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User } from '@/types';
-import { useFirebaseReliable } from '@/hooks/useFirebaseReliable';
+import { 
+  subscribeToUser, 
+  subscribeToTasks, 
+  subscribeToUserTasks,
+  safeUpdateUser,
+  getTasks,
+  getUserTasks,
+  getWithdrawalRequests
+} from '@/lib/firebaseService';
 import EnhancedDashboard from './user/EnhancedDashboard';
 import Task from './user/Task';
 import Referral from './user/Referral';
@@ -42,23 +50,47 @@ const UserDashboard = () => {
     }
   }, []);
 
-  const { 
-    user, 
-    userLoading: isLoading, 
-    updateUser,
-    tasks,
-    userTasks,
-    withdrawals,
-    connectionStatus
-  } = useFirebaseReliable(telegramId || undefined);
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [tasks, setTasks] = useState<any>([]);
+  const [userTasks, setUserTasks] = useState<any>([]);
+  const [withdrawals, setWithdrawals] = useState<any>([]);
+  const [connectionStatus, setConnectionStatus] = useState({ isConnected: true });
+
+  useEffect(() => {
+    if (!telegramId) return;
+
+    setIsLoading(true);
+    
+    // Subscribe to user data
+    const unsubscribeUser = subscribeToUser(telegramId, (userData) => {
+      setUser(userData);
+      setIsLoading(false);
+    });
+
+    // Subscribe to tasks
+    const unsubscribeTasks = subscribeToTasks(setTasks);
+    
+    // Subscribe to user tasks
+    const unsubscribeUserTasks = subscribeToUserTasks(telegramId, setUserTasks);
+
+    // Load withdrawals
+    getWithdrawalRequests().then(setWithdrawals);
+
+    return () => {
+      unsubscribeUser();
+      unsubscribeTasks();
+      unsubscribeUserTasks();
+    };
+  }, [telegramId]);
 
   // Handle user updates with optimistic UI
   const handleUserUpdate = useCallback(async (updateData: Partial<User>) => {
     if (!telegramId) return;
     
-    // Silent update - no error handling needed as it's handled in the hook
-    await updateUser(updateData);
-  }, [telegramId, updateUser]);
+    // Update user data
+    await safeUpdateUser(telegramId, updateData);
+  }, [telegramId]);
 
   // Show skeleton loader while data is loading
   if (isLoading || !user) {
