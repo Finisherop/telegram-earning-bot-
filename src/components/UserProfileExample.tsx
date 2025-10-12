@@ -1,165 +1,66 @@
 /**
- * Example Integration: User Profile Component with Firebase Writer
+ * Simple User Profile Example Component
  * 
- * This is a complete example showing how to integrate the Telegram User Data Writer
- * into a typical React component. Copy this pattern for your own components.
+ * Shows basic user profile information.
  */
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { 
-  writeTelegramUserToFirebase, 
-  updateTelegramUserData 
-} from '@/lib/telegramUserDataWriter';
+import React from 'react';
+import { getTelegramUser } from '@/lib/telegramUser';
 
-interface UserProfileProps {
-  // Optional props - the component handles Telegram user detection automatically
-  className?: string;
-}
+const UserProfileExample = () => {
+  const [user, setUser] = React.useState<any>(null);
 
-export default function UserProfileExample({ className = '' }: UserProfileProps) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
-  const [coins, setCoins] = useState(0);
-
-  // Auto-sync user data when component mounts
-  useEffect(() => {
-    const syncUserData = async () => {
-      const success = await writeTelegramUserToFirebase();
-      if (success) {
-        setLastSyncTime(new Date());
-      }
-    };
-
-    syncUserData();
+  React.useEffect(() => {
+    const telegramUser = getTelegramUser();
+    setUser(telegramUser);
   }, []);
 
-  // Example: Handle earning coins
-  const handleEarnCoins = async (amount: number) => {
-    setIsLoading(true);
-    
-    try {
-      // Update local state
-      const newCoins = coins + amount;
-      setCoins(newCoins);
-      
-      // Update in Firebase
-      const success = await updateTelegramUserData({
-        coins: newCoins
-      });
-      
-      if (success) {
-        setLastSyncTime(new Date());
-        console.log(`User earned ${amount} coins! Total: ${newCoins}`);
-      } else {
-        // Revert local state if Firebase update failed
-        setCoins(coins);
-        console.error('Failed to update coins in Firebase');
-      }
-    } catch (error) {
-      console.error('Error updating coins:', error);
-      setCoins(coins); // Revert on error
-    }
-    
-    setIsLoading(false);
-  };
-
-  // Example: Handle user data refresh
-  const handleRefreshData = async () => {
-    setIsLoading(true);
-    
-    const success = await writeTelegramUserToFirebase();
-    if (success) {
-      setLastSyncTime(new Date());
-    }
-    
-    setIsLoading(false);
-  };
+  if (!user) {
+    return (
+      <div className="p-6 bg-gray-50 rounded-lg">
+        <h3 className="text-lg font-semibold text-gray-800 mb-2">User Profile</h3>
+        <p className="text-gray-600">No user data available</p>
+      </div>
+    );
+  }
 
   return (
-    <div className={`bg-white rounded-lg shadow-md p-6 ${className}`}>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold text-gray-800">
-          User Profile
-        </h2>
-        {lastSyncTime && (
-          <span className="text-sm text-gray-500">
-            Last sync: {lastSyncTime.toLocaleTimeString()}
-          </span>
-        )}
-      </div>
-
-      {/* User Stats */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="bg-blue-50 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-blue-600">
-            {coins}
-          </div>
-          <div className="text-sm text-blue-800">
-            Coins
-          </div>
-        </div>
-        
-        <div className="bg-green-50 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-green-600">
-            {lastSyncTime ? '✅' : '⏳'}
-          </div>
-          <div className="text-sm text-green-800">
-            Sync Status
+    <div className="p-6 bg-white rounded-lg shadow-md">
+      <h3 className="text-lg font-semibold text-gray-800 mb-4">User Profile</h3>
+      <div className="space-y-2">
+        <div className="flex items-center space-x-3">
+          {user.photo_url ? (
+            <img
+              src={user.photo_url}
+              alt={user.first_name}
+              className="w-12 h-12 rounded-full object-cover"
+            />
+          ) : (
+            <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center">
+              <span className="text-white font-bold text-lg">
+                {user.first_name?.charAt(0)?.toUpperCase() || 'U'}
+              </span>
+            </div>
+          )}
+          <div>
+            <h4 className="font-medium text-gray-800">
+              {user.first_name} {user.last_name}
+            </h4>
+            {user.username && (
+              <p className="text-sm text-gray-600">@{user.username}</p>
+            )}
           </div>
         </div>
-      </div>
-
-      {/* Action Buttons */}
-      <div className="space-y-3">
-        <button
-          onClick={() => handleEarnCoins(10)}
-          disabled={isLoading}
-          className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {isLoading ? '⏳ Processing...' : '🪙 Earn 10 Coins'}
-        </button>
-        
-        <button
-          onClick={() => handleEarnCoins(50)}
-          disabled={isLoading}
-          className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {isLoading ? '⏳ Processing...' : '💰 Earn 50 Coins'}
-        </button>
-        
-        <button
-          onClick={handleRefreshData}
-          disabled={isLoading}
-          className="w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {isLoading ? '⏳ Syncing...' : '🔄 Refresh User Data'}
-        </button>
-      </div>
-
-      {/* Status Messages */}
-      <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-        <h4 className="font-semibold text-gray-800 mb-2">Integration Status:</h4>
-        <ul className="text-sm text-gray-700 space-y-1">
-          <li>✅ Telegram user detection: Active</li>
-          <li>✅ Firebase connection: Ready</li>
-          <li>✅ Auto-sync on mount: Enabled</li>
-          <li>✅ Real-time updates: Working</li>
-        </ul>
-      </div>
-
-      {/* Instructions */}
-      <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-        <h4 className="font-semibold text-blue-800 mb-2">How this works:</h4>
-        <ul className="text-sm text-blue-700 space-y-1">
-          <li>1. Component auto-detects Telegram user on mount</li>
-          <li>2. Creates new user in Firebase if doesn't exist</li>
-          <li>3. Updates existing user data when actions are performed</li>
-          <li>4. All operations include error handling and loading states</li>
-          <li>5. Check browser console for detailed logging</li>
-        </ul>
+        <div className="mt-4 space-y-1 text-sm text-gray-600">
+          <p><strong>ID:</strong> {user.id}</p>
+          <p><strong>Language:</strong> {user.language_code}</p>
+          <p><strong>Premium:</strong> {user.is_premium ? 'Yes' : 'No'}</p>
+        </div>
       </div>
     </div>
   );
-}
+};
+
+export default UserProfileExample;

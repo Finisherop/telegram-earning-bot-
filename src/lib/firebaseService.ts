@@ -17,7 +17,7 @@ import {
   Database
 } from 'firebase/database';
 import { realtimeDb } from './firebase';
-import { safeSet, safeUpdate, safeGet, sanitizeUserId, buildUserPath, buildTaskPath, buildUserTaskPath, extractUserId, FirebaseLogger, safeListen } from './firebaseGlobal';
+import { safeSet, safeUpdate, safeGet, sanitizeUserId, buildUserPath, buildTaskPath, buildUserTaskPath, extractUserId, FirebaseLogger, safeListen } from './firebaseUtils';
 import { User, Task, UserTask, WithdrawalRequest, AdminSettings, DailyStats } from '@/types';
 import { VIP_TIERS, DEFAULT_SETTINGS } from './constants';
 

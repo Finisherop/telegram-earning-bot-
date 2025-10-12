@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { realtimeDb } from '@/lib/firebase';
 import { ref, get, push } from 'firebase/database';
-import { safeSet, safeUpdate, safeGet, sanitizeUserId, buildUserPath, extractUserId, FirebaseLogger } from '@/lib/firebaseGlobal';
+import { safeSet, safeUpdate, safeGet, sanitizeUserId, buildUserPath, extractUserId, FirebaseLogger } from '@/lib/firebaseUtils';
 
 /**
  * Payment Webhook Handler

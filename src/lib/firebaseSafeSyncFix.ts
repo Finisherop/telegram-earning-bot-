@@ -11,7 +11,7 @@
 import { User } from '@/types';
 import { ref, set, update, get, onValue, off } from 'firebase/database';
 import { realtimeDb } from './firebase';
-import { getTelegramUserSafe, getUserIdForFirebase } from './telegramUserSafe';
+import { getTelegramUser, sanitizeUserData } from './telegramUser';
 import { VIP_TIERS } from './constants';
 
 // Global map to track active listeners
@@ -23,7 +23,7 @@ const activeListeners = new Map<string, () => void>();
  */
 export function createCompletelyFirebaseSafeUser(telegramUser?: any, referralId?: string): User {
   const now = new Date();
-  const userId = telegramUser ? getUserIdForFirebase(telegramUser) || 'user_default' : 'user_default';
+  const userId = telegramUser ? telegramUser.id.toString() : 'user_default';
   
   // Create user with ALL required fields explicitly defined
   const safeUser: User = {
@@ -270,8 +270,8 @@ export async function initializeUserSafely(): Promise<{
         console.log('[Safe User Init] Starting safe user initialization...');
         
         // Get Telegram user safely
-        const telegramUser = getTelegramUserSafe();
-        const userId = getUserIdForFirebase(telegramUser);
+        const telegramUser = getTelegramUser();
+        const userId = telegramUser ? telegramUser.id.toString() : null;
         
         if (!userId) {
           console.error('[Safe User Init] Unable to get valid user ID');

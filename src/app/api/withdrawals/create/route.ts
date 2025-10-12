@@ -5,7 +5,7 @@ import {
   push
 } from 'firebase/database';
 import { getFirebaseServices } from '@/lib/firebaseSingleton';
-import { safeSet, safeUpdate, safeGet, sanitizeUserId, buildUserPath, extractUserId, FirebaseLogger } from '@/lib/firebaseGlobal';
+import { safeSet, safeUpdate, safeGet, sanitizeUserId, buildUserPath, extractUserId, FirebaseLogger } from '@/lib/firebaseUtils';
 import { User } from '@/types';
 
 export interface CreateWithdrawalRequest {

@@ -7,13 +7,13 @@
 
 import { User } from '@/types';
 import { TelegramUser } from './telegram';
-import { SafeTelegramUser } from './telegramUserSafe';
+import { UserData } from './telegramUser';
 
 /**
  * Maps Telegram API user data to our User interface format
  * Handles field name conversion and provides safe defaults for undefined values
  */
-export function mapTelegramUserToUser(telegramUser: TelegramUser | SafeTelegramUser | any): Partial<User> {
+export function mapTelegramUserToUser(telegramUser: TelegramUser | UserData | any): Partial<User> {
   // Ensure we have valid input
   if (!telegramUser) {
     return createDefaultUserData();

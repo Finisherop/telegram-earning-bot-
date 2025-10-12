@@ -1,5 +1,5 @@
 import { ref, get } from 'firebase/database';
-import { safeSet, safeUpdate, safeGet, sanitizeUserId, buildUserPath, extractUserId, FirebaseLogger } from './firebaseGlobal';
+import { safeSet, safeUpdate, safeGet, sanitizeUserId, buildUserPath, extractUserId, FirebaseLogger } from './firebaseUtils';
 
 /**
  * Safe Firebase storage utilities for Telegram user data

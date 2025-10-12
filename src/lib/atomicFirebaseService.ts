@@ -16,7 +16,7 @@ import {
 } from 'firebase/database';
 import { getFirebaseServices } from './firebaseSingleton';
 import { User, WithdrawalRequest } from '@/types';
-import { sanitizeUserForFirebase, getUserIdForFirebase } from './telegramUserSafe';
+// Removed dependency on deleted telegramUserSafe module
 
 export interface AtomicCoinUpdate {
   userId: string;

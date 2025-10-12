@@ -1,26 +1,20 @@
 'use client';
 
 import { useTelegramUser } from '@/hooks/useTelegramUser';
-import { convertTelegramFieldNames } from '@/lib/telegramUserMapper';
 
 export default function UserDataDisplay() {
-  const { 
-    userData, 
-    isLoading, 
-    error, 
-    isAuthenticated, 
-    isTelegramUser, 
-    isBrowserUser, 
-    displayName 
-  } = useTelegramUser();
+  const { user, loading, error } = useTelegramUser();
 
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <div className="animate-pulse">
           <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
-          <div className="h-3 bg-gray-200 rounded w-full mb-2"></div>
-          <div className="h-3 bg-gray-200 rounded w-3/4"></div>
+          <div className="space-y-2">
+            <div className="h-3 bg-gray-200 rounded w-3/4"></div>
+            <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+            <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+          </div>
         </div>
       </div>
     );
@@ -29,122 +23,80 @@ export default function UserDataDisplay() {
   if (error) {
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-6">
-        <h3 className="text-lg font-semibold text-red-800 mb-2">Error Loading User Data</h3>
+        <h3 className="text-lg font-semibold text-red-800 mb-2">Error</h3>
         <p className="text-red-600">{error}</p>
       </div>
     );
   }
 
-  if (!isAuthenticated || !userData) {
+  if (!user) {
     return (
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-6">
         <h3 className="text-lg font-semibold text-yellow-800 mb-2">No User Data</h3>
-        <p className="text-yellow-600">Unable to capture user data. Please refresh the page.</p>
+        <p className="text-yellow-600">No Telegram user data available</p>
       </div>
     );
   }
 
-  // Convert field names for safe access
-  const safeUserData = convertTelegramFieldNames(userData);
-
   return (
     <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-800">
-          {isTelegramUser ? '📱 Telegram User Data' : '🌐 Browser User Data'}
-        </h3>
-        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-          isTelegramUser 
-            ? 'bg-blue-100 text-blue-800' 
-            : 'bg-gray-100 text-gray-800'
-        }`}>
-          {(userData.source?.toUpperCase() || 'UNKNOWN')}
-        </span>
-      </div>
-
+      <h3 className="text-lg font-semibold text-gray-800 mb-4">User Information</h3>
+      
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-3">
-          <div>
-            <label className="text-sm font-medium text-gray-500">User ID</label>
-            <p className="text-gray-900 font-mono text-sm">{userData.id || 'N/A'}</p>
-          </div>
-          
-          <div>
-            <label className="text-sm font-medium text-gray-500">Name</label>
-            <p className="text-gray-900">
-              {safeUserData.firstName || userData.first_name || 'N/A'}
-              {(safeUserData.lastName || userData.last_name) && ` ${safeUserData.lastName || userData.last_name}`}
-            </p>
-          </div>
-
-          {userData.username && (
+          <div className="flex items-center space-x-3">
+            {user.photoUrl ? (
+              <img
+                src={user.photoUrl}
+                alt={user.firstName}
+                className="w-12 h-12 rounded-full object-cover"
+              />
+            ) : (
+              <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center">
+                <span className="text-white font-bold text-lg">
+                  {user.firstName.charAt(0).toUpperCase()}
+                </span>
+              </div>
+            )}
             <div>
-              <label className="text-sm font-medium text-gray-500">Username</label>
-              <p className="text-gray-900">@{userData.username}</p>
+              <h4 className="font-medium text-gray-800">
+                {user.firstName} {user.lastName}
+              </h4>
+              {user.username && (
+                <p className="text-sm text-gray-600">@{user.username}</p>
+              )}
             </div>
-          )}
-
-          {isTelegramUser && (safeUserData.languageCode || (userData as any).language_code) && (
-            <div>
-              <label className="text-sm font-medium text-gray-500">Language</label>
-              <p className="text-gray-900">{safeUserData.languageCode || (userData as any).language_code}</p>
-            </div>
-          )}
+          </div>
         </div>
-
-        <div className="space-y-3">
-          <div>
-            <label className="text-sm font-medium text-gray-500">Captured At</label>
-            <p className="text-gray-900 text-sm">
-              {userData.capturedAt ? new Date(userData.capturedAt).toLocaleString() : 'N/A'}
-            </p>
+        
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-gray-600">User ID:</span>
+            <span className="font-medium">{user.userId}</span>
           </div>
-
-          <div>
-            <label className="text-sm font-medium text-gray-500">Last Seen</label>
-            <p className="text-gray-900 text-sm">
-              {userData.lastSeen ? new Date(userData.lastSeen).toLocaleString() : 'N/A'}
-            </p>
+          <div className="flex justify-between">
+            <span className="text-gray-600">Language:</span>
+            <span className="font-medium">{user.languageCode.toUpperCase()}</span>
           </div>
-
-          {isTelegramUser && (safeUserData.isPremium !== undefined || (userData as any).is_premium !== undefined) && (
-            <div>
-              <label className="text-sm font-medium text-gray-500">Telegram Premium</label>
-              <p className="text-gray-900">
-                {(safeUserData.isPremium || (userData as any).is_premium) ? '✅ Yes' : '❌ No'}
-              </p>
-            </div>
-          )}
-
-          {isTelegramUser && (userData as any).platform && (
-            <div>
-              <label className="text-sm font-medium text-gray-500">Platform</label>
-              <p className="text-gray-900">{(userData as any).platform}</p>
-            </div>
-          )}
+          <div className="flex justify-between">
+            <span className="text-gray-600">Premium:</span>
+            <span className={`font-medium ${user.isPremium ? 'text-yellow-600' : 'text-gray-500'}`}>
+              {user.isPremium ? 'Yes' : 'No'}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-600">Joined:</span>
+            <span className="font-medium">
+              {new Date(user.createdAt).toLocaleDateString()}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-600">Last Seen:</span>
+            <span className="font-medium">
+              {new Date(user.lastSeen).toLocaleString()}
+            </span>
+          </div>
         </div>
-      </div>
-
-      {isTelegramUser && (safeUserData.photoUrl || (userData as any).photo_url) && (
-        <div className="mt-4 pt-4 border-t border-gray-200">
-          <label className="text-sm font-medium text-gray-500 block mb-2">Profile Picture</label>
-          <img 
-            src={safeUserData.photoUrl || (userData as any).photo_url} 
-            alt="Profile" 
-            className="w-16 h-16 rounded-full border-2 border-gray-200"
-            onError={(e) => {
-              // Hide image if it fails to load
-              (e.target as HTMLImageElement).style.display = 'none';
-            }}
-          />
-        </div>
-      )}
-
-      <div className="mt-4 pt-4 border-t border-gray-200">
-        <p className="text-xs text-gray-500">
-          ✅ User data automatically captured and stored in Firebase
-          {isTelegramUser ? ' (from Telegram WebApp)' : ' (browser fallback)'}
-        </p>
       </div>
     </div>
   );
