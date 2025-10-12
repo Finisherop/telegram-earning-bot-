@@ -774,54 +774,97 @@ export const completeTask = async (userId: string, taskId: string): Promise<void
 };
 
 /**
- * Claim task reward
+ * Claim task reward with enhanced validation and error handling
  */
 export const claimTask = async (userId: string, taskId: string, reward: number): Promise<void> => {
   const db = getRealtimeDb();
   
   if (!db) {
     console.warn('[Firebase] Database not available for claimTask');
-    return;
+    throw new Error('Database service unavailable. Please try again later.');
+  }
+  
+  // Validate inputs
+  if (!userId || userId.trim() === '' || userId === 'undefined' || userId === 'null') {
+    console.error('[Firebase] Invalid user ID for claimTask:', userId);
+    throw new Error('Invalid user ID. Please refresh the app and try again.');
+  }
+  
+  if (!taskId || taskId.trim() === '') {
+    console.error('[Firebase] Invalid task ID for claimTask:', taskId);
+    throw new Error('Invalid task ID. Please refresh the app and try again.');
+  }
+  
+  if (!reward || reward <= 0) {
+    console.error('[Firebase] Invalid reward amount for claimTask:', reward);
+    throw new Error('Invalid reward amount.');
   }
   
   try {
-    const userRef = ref(db, `telegram_users/${userId}`);
-    const userTaskRef = ref(db, `userTasks/${userId}/${taskId}`);
+    const sanitizedUserId = userId.toString().trim();
+    const sanitizedTaskId = taskId.toString().trim();
+    
+    console.log(`[Firebase] Claiming task ${sanitizedTaskId} for user ${sanitizedUserId} with reward ${reward}`);
+    
+    const userRef = ref(db, `telegram_users/${sanitizedUserId}`);
+    const userTaskRef = ref(db, `userTasks/${sanitizedUserId}/${sanitizedTaskId}`);
+    
+    // Check if task is already claimed
+    const userTaskSnapshot = await get(userTaskRef);
+    if (userTaskSnapshot.exists()) {
+      const taskData = userTaskSnapshot.val();
+      if (taskData.status === 'claimed') {
+        throw new Error('Task has already been claimed.');
+      }
+    }
     
     // Get current user data
     const userSnapshot = await get(userRef);
     if (!userSnapshot.exists()) {
       // Auto-create user if not found
-      console.log(`[Firebase] User ${userId} not found, creating new user before claiming task`);
-      const newUser = await initializeUser(userId);
+      console.log(`[Firebase] User ${sanitizedUserId} not found, creating new user before claiming task`);
+      const newUser = await initializeUser(sanitizedUserId);
       if (!newUser) {
-        throw new Error(`Failed to initialize user ${userId}`);
+        throw new Error(`Failed to initialize user ${sanitizedUserId}`);
       }
     }
     
     // Get user data again after potential creation
     const updatedUserSnapshot = await get(userRef);
+    if (!updatedUserSnapshot.exists()) {
+      throw new Error('User data could not be retrieved after initialization.');
+    }
+    
     const userData = updatedUserSnapshot.val();
     const currentCoins = userData.coins || 0;
     const currentXp = userData.xp || 0;
+    
+    // Perform atomic updates
+    const now = new Date().toISOString();
     
     // Update user coins and XP
     await update(userRef, {
       coins: currentCoins + reward,
       xp: currentXp + Math.floor(reward / 10),
-      updatedAt: new Date().toISOString()
+      updatedAt: now
     });
     
     // Mark task as claimed
     await update(userTaskRef, {
       status: 'claimed',
-      claimedAt: new Date().toISOString()
+      claimedAt: now
     });
     
-    console.log(`[Firebase] Task ${taskId} claimed successfully by user ${userId} for ${reward} coins`);
+    console.log(`[Firebase] Task ${sanitizedTaskId} claimed successfully by user ${sanitizedUserId} for ${reward} coins`);
   } catch (error) {
     console.error('[Firebase] Error claiming task:', error);
-    throw error;
+    
+    // Provide more specific error messages
+    if (error instanceof Error) {
+      throw error;
+    } else {
+      throw new Error('Failed to claim task reward. Please try again.');
+    }
   }
 };
 

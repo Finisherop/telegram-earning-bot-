@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { User, Task as TaskType, UserTask } from '@/types';
 import { getTasks, getUserTasks, completeTask, claimTask, safeUpdateUser, subscribeToTasks, subscribeToUserTasks } from '@/lib/firebaseService';
 import { TelegramService } from '@/lib/telegram';
+import { validateUserForOperation, getUserValidationError } from '@/lib/userValidation';
 import toast from 'react-hot-toast';
 
 interface TaskProps {
@@ -22,6 +23,13 @@ const Task = ({ user }: TaskProps) => {
   const [adsWatchedToday, setAdsWatchedToday] = useState(0);
 
   useEffect(() => {
+    // Validate user before setting up listeners
+    if (!validateUserForOperation(user, 'task listeners setup')) {
+      console.warn('Invalid user data, skipping task listeners setup');
+      setLoading(false);
+      return;
+    }
+
     // Set up real-time listeners
     console.log('Setting up real-time listeners for tasks and user tasks');
     
@@ -101,7 +109,7 @@ const Task = ({ user }: TaskProps) => {
       unsubscribeTasks();
       unsubscribeUserTasks();
     };
-  }, [user.telegramId, tasks]);
+  }, [user?.telegramId, tasks]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -345,10 +353,16 @@ const Task = ({ user }: TaskProps) => {
     const telegram = TelegramService.getInstance();
     telegram.hapticFeedback('heavy');
 
-    // Validate user and task data
-    if (!user || !user.telegramId) {
-      console.error('User not available for task claim');
-      toast.error('User not found. Please refresh the app.');
+    // Prevent claiming when component is still loading
+    if (loading) {
+      toast.error('Please wait for tasks to load.');
+      return;
+    }
+
+    // Enhanced validation for user data using utility function
+    if (!validateUserForOperation(user, 'task claim')) {
+      const errorMessage = getUserValidationError(user);
+      toast.error(errorMessage);
       return;
     }
 
@@ -358,15 +372,21 @@ const Task = ({ user }: TaskProps) => {
       return;
     }
 
+    if (task.reward <= 0) {
+      console.error('Invalid reward amount:', task.reward);
+      toast.error('Invalid reward amount.');
+      return;
+    }
+
     try {
-      console.log(`Claiming task reward: ${task.reward} coins for task:`, task.id);
+      console.log(`Claiming task reward: ${task.reward} coins for task: ${task.id}, user: ${user.telegramId}`);
       
       // Add loading state
       setIsLoading(true);
       
       await claimTask(user.telegramId, task.id, task.reward);
       
-      // Real-time listener will automatically update userTasks
+      // Real-time listener will automatically update userTasks and user coins
       // Coin fly animation
       toast.success(`💰 +${task.reward} coins claimed! 🎉`);
       console.log('Task reward claimed successfully');
@@ -380,11 +400,15 @@ const Task = ({ user }: TaskProps) => {
       // Provide more specific error messages
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       
-      if (errorMessage.includes('User not found')) {
+      if (errorMessage.includes('Invalid user ID')) {
+        toast.error('User ID is invalid. Please refresh the app and try again.');
+      } else if (errorMessage.includes('User not found') || errorMessage.includes('User profile not found')) {
         toast.error('User profile not found. Please refresh the app and try again.');
-      } else if (errorMessage.includes('Task already claimed')) {
+      } else if (errorMessage.includes('Task has already been claimed') || errorMessage.includes('Task already claimed')) {
         toast.error('This task has already been claimed.');
-      } else if (errorMessage.includes('Network')) {
+      } else if (errorMessage.includes('Database service unavailable')) {
+        toast.error('Service temporarily unavailable. Please try again in a moment.');
+      } else if (errorMessage.includes('Network') || errorMessage.includes('network')) {
         toast.error('Network error. Please check your connection and try again.');
       } else {
         toast.error(`Failed to claim reward: ${errorMessage}`);

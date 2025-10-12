@@ -28,11 +28,18 @@ export const useAuth = () => {
         if (telegramUser && telegramUser.id && telegramUser.id > 0) {
           // Real Telegram user or valid browser user
           userId = telegramUser.id.toString();
+          
+          // Ensure userId is valid and not undefined
+          if (!userId || userId.trim() === '' || userId === 'undefined' || userId === 'null') {
+            console.error('Invalid user ID generated:', userId);
+            return;
+          }
+          
           userData = {
             telegramId: userId,
-            username: telegramUser.username,
-            firstName: telegramUser.first_name,
-            lastName: telegramUser.last_name,
+            username: telegramUser.username || '',
+            firstName: telegramUser.first_name || 'User',
+            lastName: telegramUser.last_name || '',
             profilePic: telegramUser.photo_url,
             referrerId: startParam || undefined,
           };
