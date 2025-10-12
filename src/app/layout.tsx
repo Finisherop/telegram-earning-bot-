@@ -4,6 +4,7 @@ import './globals.css';
 import { Toaster } from 'react-hot-toast';
 import EnhancedErrorBoundary from '@/components/EnhancedErrorBoundary';
 import UserCaptureInitializer from '@/components/UserCaptureInitializer';
+import SilentErrorInitializer from '@/components/SilentErrorInitializer';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -183,6 +184,7 @@ export default function RootLayout({
         />
       </head>
       <body className={inter.className}>
+        <SilentErrorInitializer />
         <EnhancedErrorBoundary>
           <UserCaptureInitializer />
           {children}

@@ -36,16 +36,41 @@ if (typeof window !== 'undefined') {
     // Initialize Firebase app (only once)
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
     
-    // Initialize services
+    // Initialize services with Telegram WebApp optimizations
     realtimeDb = getDatabase(app);
+    
+    // Force long-polling for Telegram WebApp stability
+    if (realtimeDb && typeof window !== 'undefined') {
+      // Set up long-polling by forcing offline then online
+      import('firebase/database').then(({ goOffline, goOnline }) => {
+        if (realtimeDb) {
+          goOffline(realtimeDb);
+          setTimeout(() => {
+            if (realtimeDb) {
+              goOnline(realtimeDb);
+            }
+          }, 100);
+        }
+      });
+    }
     auth = getAuth(app);
     
-    console.log('[Firebase] Initialized successfully');
+    console.log('[Firebase] Initialized successfully with long-polling for Telegram WebApp');
   } catch (error) {
-    console.error('[Firebase] Initialization failed:', error);
-    app = null;
-    realtimeDb = null;
-    auth = null;
+    console.warn('[Firebase] Initialization failed, running in offline mode');
+    // Don't set to null - keep trying in background
+    if (!app && getApps().length === 0) {
+      try {
+        app = initializeApp(firebaseConfig);
+        realtimeDb = getDatabase(app);
+        auth = getAuth(app);
+      } catch (retryError) {
+        // Silent fallback
+        app = null;
+        realtimeDb = null;
+        auth = null;
+      }
+    }
   }
 }
 

@@ -287,7 +287,7 @@ class FirebaseConnectionManager {
         app = existingApps[0];
       }
 
-      // Initialize services (Realtime DB only)
+      // Initialize services with Telegram WebApp optimizations
       const realtimeDb = getDatabase(app);
       const auth = getAuth(app);
 
