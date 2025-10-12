@@ -13,9 +13,11 @@ import {
 import AdminStats from './admin/AdminStats';
 import EnhancedAdminSettings from './admin/EnhancedAdminSettings';
 import AdminApprovals from './admin/AdminApprovals';
+import TaskManager from './admin/TaskManager';
 
 const tabs = [
   { id: 'stats', label: 'Dashboard', icon: '📊' },
+  { id: 'tasks', label: 'Tasks', icon: '📋' },
   { id: 'settings', label: 'Settings', icon: '⚙️' },
   { id: 'approvals', label: 'W/D Requests', icon: '💸' },
 ];
@@ -46,6 +48,8 @@ const AdminDashboard = () => {
     switch (activeTab) {
       case 'stats':
         return <AdminStats />;
+      case 'tasks':
+        return <TaskManager />;
       case 'settings':
         return <EnhancedAdminSettings />;
       case 'approvals':

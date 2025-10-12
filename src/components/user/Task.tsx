@@ -21,6 +21,7 @@ const Task = ({ user }: TaskProps) => {
   const [timer, setTimer] = useState<number | null>(null);
   const [timerTaskId, setTimerTaskId] = useState<string | null>(null);
   const [adsWatchedToday, setAdsWatchedToday] = useState(0);
+  const [visitedLinks, setVisitedLinks] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     // Validate user before setting up listeners
@@ -35,11 +36,13 @@ const Task = ({ user }: TaskProps) => {
     
     const unsubscribeTasks = subscribeToTasks((tasksData) => {
       console.log('Real-time tasks update:', tasksData);
-      setTasks(tasksData);
+      // Filter only active tasks
+      const activeTasks = tasksData.filter(task => task.isActive);
+      setTasks(activeTasks);
       
       // If no tasks found, add default tasks
-      if (tasksData.length === 0) {
-        console.log('No tasks found, using default tasks');
+      if (activeTasks.length === 0) {
+        console.log('No active tasks found, using default tasks');
         const defaultTasks: TaskType[] = [
           {
             id: 'task_1',
@@ -304,16 +307,26 @@ const Task = ({ user }: TaskProps) => {
     const telegram = TelegramService.getInstance();
     
     if (task.url) {
+      // Open the link
       telegram.openLink(task.url);
+      
+      // Mark as visited
+      setVisitedLinks(prev => {
+        const newSet = new Set(prev);
+        newSet.add(task.id);
+        return newSet;
+      });
+      
+      // Mark task as completed (ready to claim)
+      await completeTask(user.telegramId, task.id);
+      
+      toast.success('🔗 Link opened! You can now claim your reward.');
+    } else {
+      // For tasks without URL, complete immediately
+      await completeTask(user.telegramId, task.id);
+      toast.success('✅ Task completed! You can now claim your reward.');
     }
     
-    setCompletingTask(task.id);
-    setTimer(10);
-    setTimerTaskId(task.id);
-    toast.success('🔗 Link opened! Please wait 10 seconds to claim reward.');
-    
-    await completeTask(user.telegramId, task.id);
-    // Real-time listener will automatically update userTasks
     console.log('Link task completed');
   };
 
@@ -391,6 +404,15 @@ const Task = ({ user }: TaskProps) => {
       toast.success(`💰 +${task.reward} coins claimed! 🎉`);
       console.log('Task reward claimed successfully');
       
+      // Remove from visited links if it was a link task
+      if (task.type === 'link') {
+        setVisitedLinks(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(task.id);
+          return newSet;
+        });
+      }
+      
       if (task.type === 'ads') {
         setAdsWatchedToday(prev => prev + 1);
       }
@@ -430,7 +452,11 @@ const Task = ({ user }: TaskProps) => {
     }
   };
 
-  const getTaskButtonText = (type: string) => {
+  const getTaskButtonText = (type: string, taskId?: string) => {
+    if (type === 'link' && visitedLinks.has(taskId || '')) {
+      return '✅ Visited';
+    }
+    
     switch (type) {
       case 'farming': return '🚜 Start Farm';
       case 'daily': return '🎁 Claim Daily';
@@ -524,7 +550,7 @@ const Task = ({ user }: TaskProps) => {
                       whileTap={{ scale: 0.95 }}
                       whileHover={{ scale: task.type === 'ads' && !canWatchAds() ? 1 : 1.05 }}
                     >
-                      {getTaskButtonText(task.type)}
+                      {getTaskButtonText(task.type, task.id)}
                     </motion.button>
                   )}
 
