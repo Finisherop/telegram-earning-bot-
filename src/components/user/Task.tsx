@@ -15,6 +15,7 @@ const Task = ({ user }: TaskProps) => {
   const [tasks, setTasks] = useState<TaskType[]>([]);
   const [userTasks, setUserTasks] = useState<UserTask[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false); // For individual task actions
   const [completingTask, setCompletingTask] = useState<string | null>(null);
   const [timer, setTimer] = useState<number | null>(null);
   const [timerTaskId, setTimerTaskId] = useState<string | null>(null);
@@ -344,11 +345,28 @@ const Task = ({ user }: TaskProps) => {
     const telegram = TelegramService.getInstance();
     telegram.hapticFeedback('heavy');
 
+    // Validate user and task data
+    if (!user || !user.telegramId) {
+      console.error('User not available for task claim');
+      toast.error('User not found. Please refresh the app.');
+      return;
+    }
+
+    if (!task || !task.id || !task.reward) {
+      console.error('Invalid task data:', task);
+      toast.error('Invalid task data. Please refresh the app.');
+      return;
+    }
+
     try {
       console.log(`Claiming task reward: ${task.reward} coins for task:`, task.id);
-      await claimTask(user.telegramId, task.id, task.reward);
-      // Real-time listener will automatically update userTasks
       
+      // Add loading state
+      setIsLoading(true);
+      
+      await claimTask(user.telegramId, task.id, task.reward);
+      
+      // Real-time listener will automatically update userTasks
       // Coin fly animation
       toast.success(`💰 +${task.reward} coins claimed! 🎉`);
       console.log('Task reward claimed successfully');
@@ -358,7 +376,21 @@ const Task = ({ user }: TaskProps) => {
       }
     } catch (error) {
       console.error('Task claim error:', error);
-      toast.error('Failed to claim reward. Please try again.');
+      
+      // Provide more specific error messages
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      
+      if (errorMessage.includes('User not found')) {
+        toast.error('User profile not found. Please refresh the app and try again.');
+      } else if (errorMessage.includes('Task already claimed')) {
+        toast.error('This task has already been claimed.');
+      } else if (errorMessage.includes('Network')) {
+        toast.error('Network error. Please check your connection and try again.');
+      } else {
+        toast.error(`Failed to claim reward: ${errorMessage}`);
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 

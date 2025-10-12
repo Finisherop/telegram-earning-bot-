@@ -67,31 +67,59 @@ const ShopWithdrawal = ({ user, setUser, onClose }: ShopWithdrawalProps) => {
       if (invoiceData.invoiceUrl) {
         // Open invoice in Telegram WebApp
         if (window.Telegram?.WebApp) {
-          window.Telegram.WebApp.openInvoice(invoiceData.invoiceId, async (status) => {
-            if (status === 'paid') {
-              try {
-                // Payment successful - the webhook will handle VIP activation
-                toast.success('🎉 Payment successful! VIP benefits will be activated shortly.');
-                playSound('success');
-                
-                // Refresh user data to get updated VIP status
-                setTimeout(() => {
-                  window.location.reload();
-                }, 2000);
-                
-              } catch (error) {
-                console.error('Error processing star payment:', error);
-                toast.error('Payment successful but activation may be delayed. Contact support if needed.');
+          // Validate invoice URL before opening
+          const invoiceUrl = invoiceData.invoiceUrl;
+          const invoiceId = invoiceData.invoiceId;
+          
+          console.log('Opening invoice:', { invoiceId, invoiceUrl });
+          
+          // Check if we have a valid invoice URL and the WebApp supports openInvoice
+          if (typeof window.Telegram.WebApp.openInvoice === 'function') {
+            try {
+              // Use the invoiceUrl instead of invoiceId for openInvoice
+              window.Telegram.WebApp.openInvoice(invoiceUrl, async (status) => {
+                console.log('Invoice payment status:', status);
+                if (status === 'paid') {
+                  try {
+                    // Payment successful - the webhook will handle VIP activation
+                    toast.success('🎉 Payment successful! VIP benefits will be activated shortly.');
+                    playSound('success');
+                    
+                    // Refresh user data to get updated VIP status
+                    setTimeout(() => {
+                      window.location.reload();
+                    }, 2000);
+                    
+                  } catch (error) {
+                    console.error('Error processing star payment:', error);
+                    toast.error('Payment successful but activation may be delayed. Contact support if needed.');
+                  }
+                } else if (status === 'cancelled') {
+                  toast.error('Payment cancelled');
+                  playSound('error');
+                } else if (status === 'failed') {
+                  toast.error('Payment failed. Please try again.');
+                  playSound('error');
+                }
+                setIsProcessing(false);
+              });
+            } catch (invoiceError) {
+              console.error('Error opening invoice:', invoiceError);
+              toast.error('Failed to open payment. Please try again.');
+              setIsProcessing(false);
+              
+              // Fallback: try to open the URL directly
+              if (invoiceUrl.startsWith('https://')) {
+                window.open(invoiceUrl, '_blank');
+                toast('Complete payment in the opened window', { icon: 'ℹ️' });
               }
-            } else if (status === 'cancelled') {
-              toast.error('Payment cancelled');
-              playSound('error');
-            } else if (status === 'failed') {
-              toast.error('Payment failed. Please try again.');
-              playSound('error');
             }
+          } else {
+            console.warn('openInvoice not available, opening URL directly');
+            window.open(invoiceUrl, '_blank');
+            toast('Complete payment in the opened window', { icon: 'ℹ️' });
             setIsProcessing(false);
-          });
+          }
         } else {
           // Fallback for non-Telegram environment
           window.open(invoiceData.invoiceUrl, '_blank');

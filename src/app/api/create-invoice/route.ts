@@ -99,7 +99,15 @@ async function createTelegramStarsInvoice(
   // 3. Return the invoice URL for payment
   
   // Mock implementation for development/testing
-  const mockInvoiceUrl = `https://t.me/$TelegramBot?start=invoice_${invoiceId}`;
+  // For Telegram WebApp openInvoice, we need to provide a properly formatted invoice URL
+  // This should be a real Telegram invoice link in production
+  const mockInvoiceUrl = `https://t.me/invoice/${invoiceId}`;
+  
+  // Alternative: Use a test invoice URL that follows Telegram's format
+  // const mockInvoiceUrl = `https://t.me/$TelegramBot?start=invoice_${invoiceId}`;
+  
+  // Validate the URL format for Telegram WebApp compatibility
+  console.log(`[PaymentAPI] Generated invoice URL: ${mockInvoiceUrl}`);
   
   // Store invoice details (in production, use your database)
   const invoiceData = {
