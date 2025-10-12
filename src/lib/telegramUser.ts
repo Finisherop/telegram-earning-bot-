@@ -21,42 +21,143 @@ export interface UserData {
 }
 
 /**
- * Get Telegram user data directly from WebApp SDK
+ * Get Telegram user data directly from WebApp SDK with enhanced validation
  */
 export function getTelegramUser(): TelegramUser | null {
+  console.log('[TelegramUser] Getting Telegram user data...');
+  
   try {
+    // Check if we're in a browser environment
+    if (typeof window === 'undefined') {
+      console.warn('[TelegramUser] Not in browser environment');
+      return null;
+    }
+
+    // Wait for Telegram WebApp to be ready
     const tg = (window as any).Telegram?.WebApp;
     
-    if (tg?.initDataUnsafe?.user) {
-      const user = tg.initDataUnsafe.user;
-      if (user.id && user.first_name) {
-        return {
-          id: user.id,
-          first_name: user.first_name,
-          last_name: user.last_name || '',
-          username: user.username || '',
-          photo_url: user.photo_url,
-          language_code: user.language_code || 'en',
-          is_premium: user.is_premium || false
-        };
+    if (tg) {
+      console.log('[TelegramUser] Telegram WebApp found, version:', tg.version);
+      console.log('[TelegramUser] Platform:', tg.platform);
+      console.log('[TelegramUser] InitDataUnsafe available:', !!tg.initDataUnsafe);
+      
+      // Method 1: Try initDataUnsafe.user
+      if (tg.initDataUnsafe?.user) {
+        const user = tg.initDataUnsafe.user;
+        console.log('[TelegramUser] Raw user from initDataUnsafe:', user);
+        
+        if (user.id && user.first_name && Number(user.id) > 0) {
+          const telegramUser = {
+            id: Number(user.id),
+            first_name: String(user.first_name).trim(),
+            last_name: user.last_name ? String(user.last_name).trim() : '',
+            username: user.username ? String(user.username).trim() : '',
+            photo_url: user.photo_url ? String(user.photo_url) : undefined,
+            language_code: user.language_code ? String(user.language_code) : 'en',
+            is_premium: Boolean(user.is_premium)
+          };
+          
+          console.log('[TelegramUser] Successfully parsed user:', telegramUser);
+          return telegramUser;
+        } else {
+          console.warn('[TelegramUser] Invalid user data in initDataUnsafe:', user);
+        }
+      }
+      
+      // Method 2: Try parsing initData string
+      if (tg.initData && tg.initData.length > 0) {
+        console.log('[TelegramUser] Trying to parse initData string...');
+        try {
+          const urlParams = new URLSearchParams(tg.initData);
+          const userParam = urlParams.get('user');
+          
+          if (userParam) {
+            const decodedUser = decodeURIComponent(userParam);
+            console.log('[TelegramUser] Decoded user param:', decodedUser);
+            
+            const parsedUser = JSON.parse(decodedUser);
+            console.log('[TelegramUser] Parsed user from initData:', parsedUser);
+            
+            if (parsedUser.id && parsedUser.first_name && Number(parsedUser.id) > 0) {
+              const telegramUser = {
+                id: Number(parsedUser.id),
+                first_name: String(parsedUser.first_name).trim(),
+                last_name: parsedUser.last_name ? String(parsedUser.last_name).trim() : '',
+                username: parsedUser.username ? String(parsedUser.username).trim() : '',
+                photo_url: parsedUser.photo_url ? String(parsedUser.photo_url) : undefined,
+                language_code: parsedUser.language_code ? String(parsedUser.language_code) : 'en',
+                is_premium: Boolean(parsedUser.is_premium)
+              };
+              
+              console.log('[TelegramUser] Successfully parsed user from initData:', telegramUser);
+              return telegramUser;
+            }
+          }
+        } catch (parseError) {
+          console.warn('[TelegramUser] Failed to parse initData:', parseError);
+        }
+      }
+      
+      console.warn('[TelegramUser] No valid user data found in Telegram WebApp');
+    } else {
+      console.log('[TelegramUser] Telegram WebApp not available, using fallback');
+    }
+    
+    // Enhanced fallback for browser testing
+    console.log('[TelegramUser] Creating fallback user for testing...');
+    
+    let testUserId: number;
+    let testUsername: string;
+    
+    // Try to get consistent test user from localStorage
+    const storedTestUser = localStorage.getItem('testTelegramUser');
+    if (storedTestUser) {
+      try {
+        const parsed = JSON.parse(storedTestUser);
+        if (parsed.id && parsed.first_name) {
+          console.log('[TelegramUser] Using stored test user:', parsed);
+          return parsed;
+        }
+      } catch (e) {
+        console.warn('[TelegramUser] Failed to parse stored test user');
       }
     }
     
-    // Fallback for browser testing
-    const browserId = localStorage.getItem('browserId') || `browser_${Date.now()}`;
-    localStorage.setItem('browserId', browserId);
+    // Create new test user
+    testUserId = Math.floor(Math.random() * 900000) + 100000; // 6-digit number
+    testUsername = `testuser${testUserId}`;
     
-    return {
-      id: parseInt(browserId.replace('browser_', '')) || Date.now(),
-      first_name: 'Browser User',
-      last_name: '',
-      username: 'browseruser',
+    const fallbackUser: TelegramUser = {
+      id: testUserId,
+      first_name: 'Test User',
+      last_name: 'Browser',
+      username: testUsername,
       language_code: 'en',
       is_premium: false
     };
+    
+    // Store for consistency
+    localStorage.setItem('testTelegramUser', JSON.stringify(fallbackUser));
+    
+    console.log('[TelegramUser] Created fallback user:', fallbackUser);
+    return fallbackUser;
+    
   } catch (error) {
-    console.error('Error getting Telegram user:', error);
-    return null;
+    console.error('[TelegramUser] Error getting Telegram user:', error);
+    
+    // Emergency fallback
+    const emergencyId = Date.now() % 1000000; // Keep it reasonable
+    const emergencyUser: TelegramUser = {
+      id: emergencyId,
+      first_name: 'Emergency User',
+      last_name: '',
+      username: `emergency${emergencyId}`,
+      language_code: 'en',
+      is_premium: false
+    };
+    
+    console.log('[TelegramUser] Emergency fallback user:', emergencyUser);
+    return emergencyUser;
   }
 }
 

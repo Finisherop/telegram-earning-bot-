@@ -13,14 +13,21 @@ export const useAuth = () => {
 
     const initializeUserAuth = async () => {
       try {
-        // Wait for Telegram service to initialize
+        console.log('[useAuth] Starting user authentication initialization...');
+        
+        // Wait for Telegram WebApp to be ready
         await new Promise(resolve => setTimeout(resolve, 1000));
         
         const telegram = TelegramService.getInstance();
         const telegramUser = telegram.getUser();
         const startParam = telegram.getStartParam();
 
-        console.log('Initializing user auth with:', { telegramUser, startParam });
+        console.log('[useAuth] Telegram user data received:', { 
+          telegramUser, 
+          startParam,
+          userId: telegramUser?.id,
+          firstName: telegramUser?.first_name 
+        });
 
         let userId: string;
         let userData: Partial<User>;

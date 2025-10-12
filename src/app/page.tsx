@@ -7,6 +7,7 @@ import UserDashboard from '@/components/UserDashboard';
 import AdminDashboard from '@/components/AdminDashboard';
 import BackgroundDataLoader from '@/components/BackgroundDataLoader';
 import FirebaseSafetyValidator from '@/components/FirebaseSafetyValidator';
+import TelegramDiagnostics from '@/components/TelegramDiagnostics';
 
 export default function Home() {
   const router = useRouter();
@@ -63,6 +64,9 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-light">
+      {/* Telegram Diagnostics - shows connection status */}
+      <TelegramDiagnostics />
+      
       {/* Firebase Safety Validator - shows validation status */}
       <FirebaseSafetyValidator />
       

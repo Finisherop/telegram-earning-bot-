@@ -96,34 +96,114 @@ export class TelegramService {
   }
 
   public getUser(): TelegramUser | null {
-    // Get user data directly from Telegram WebApp SDK
-    if (this.webApp?.initDataUnsafe?.user) {
-      const user = this.webApp.initDataUnsafe.user;
-      if (user.id && user.first_name) {
-        return {
-          id: user.id,
-          first_name: user.first_name,
-          last_name: user.last_name || '',
-          username: user.username || '',
-          photo_url: user.photo_url,
-          language_code: user.language_code || 'en',
-          is_premium: user.is_premium || false
-        };
+    console.log('[TelegramService] Getting user data...');
+    
+    try {
+      // Check if we're in Telegram WebApp environment
+      if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+        const tg = window.Telegram.WebApp;
+        console.log('[TelegramService] Telegram WebApp detected, version:', tg.version);
+        console.log('[TelegramService] InitDataUnsafe:', tg.initDataUnsafe);
+        
+        // Try to get user from initDataUnsafe
+        if (tg.initDataUnsafe?.user) {
+          const user = tg.initDataUnsafe.user;
+          console.log('[TelegramService] Raw user data from Telegram:', user);
+          
+          // Validate user data
+          if (user.id && user.first_name && user.id > 0) {
+            const telegramUser = {
+              id: Number(user.id),
+              first_name: String(user.first_name),
+              last_name: user.last_name ? String(user.last_name) : '',
+              username: user.username ? String(user.username) : '',
+              photo_url: user.photo_url ? String(user.photo_url) : undefined,
+              language_code: user.language_code ? String(user.language_code) : 'en',
+              is_premium: Boolean(user.is_premium)
+            };
+            
+            console.log('[TelegramService] Validated Telegram user:', telegramUser);
+            return telegramUser;
+          } else {
+            console.warn('[TelegramService] Invalid user data from Telegram:', user);
+          }
+        } else {
+          console.warn('[TelegramService] No user data in initDataUnsafe');
+        }
+        
+        // Try alternative method - check initData string
+        if (tg.initData) {
+          console.log('[TelegramService] Trying to parse initData string...');
+          try {
+            const urlParams = new URLSearchParams(tg.initData);
+            const userParam = urlParams.get('user');
+            if (userParam) {
+              const parsedUser = JSON.parse(decodeURIComponent(userParam));
+              console.log('[TelegramService] Parsed user from initData:', parsedUser);
+              
+              if (parsedUser.id && parsedUser.first_name && parsedUser.id > 0) {
+                const telegramUser = {
+                  id: Number(parsedUser.id),
+                  first_name: String(parsedUser.first_name),
+                  last_name: parsedUser.last_name ? String(parsedUser.last_name) : '',
+                  username: parsedUser.username ? String(parsedUser.username) : '',
+                  photo_url: parsedUser.photo_url ? String(parsedUser.photo_url) : undefined,
+                  language_code: parsedUser.language_code ? String(parsedUser.language_code) : 'en',
+                  is_premium: Boolean(parsedUser.is_premium)
+                };
+                
+                console.log('[TelegramService] User from initData string:', telegramUser);
+                return telegramUser;
+              }
+            }
+          } catch (parseError) {
+            console.warn('[TelegramService] Failed to parse initData:', parseError);
+          }
+        }
+      } else {
+        console.log('[TelegramService] Not in Telegram WebApp environment');
       }
+      
+      // Fallback for browser testing - improved
+      console.log('[TelegramService] Using browser fallback...');
+      let browserId = localStorage.getItem('browserId');
+      
+      if (!browserId || browserId === 'null' || browserId === 'undefined') {
+        // Generate a more realistic test user ID
+        browserId = `test_${Date.now()}`;
+        localStorage.setItem('browserId', browserId);
+      }
+      
+      const testUserId = parseInt(browserId.replace('test_', '').replace('browser_', '')) || Math.floor(Math.random() * 1000000) + 100000;
+      
+      const fallbackUser = {
+        id: testUserId,
+        first_name: 'Test User',
+        last_name: 'Browser',
+        username: `testuser${testUserId}`,
+        language_code: 'en',
+        is_premium: false
+      };
+      
+      console.log('[TelegramService] Fallback user created:', fallbackUser);
+      return fallbackUser;
+      
+    } catch (error) {
+      console.error('[TelegramService] Error getting user data:', error);
+      
+      // Emergency fallback
+      const emergencyUser = {
+        id: Date.now(),
+        first_name: 'Emergency User',
+        last_name: '',
+        username: 'emergency',
+        language_code: 'en',
+        is_premium: false
+      };
+      
+      console.log('[TelegramService] Emergency fallback user:', emergencyUser);
+      return emergencyUser;
     }
-    
-    // Fallback for browser testing
-    const browserId = localStorage.getItem('browserId') || `browser_${Date.now()}`;
-    localStorage.setItem('browserId', browserId);
-    
-    return {
-      id: parseInt(browserId.replace('browser_', '')) || Date.now(),
-      first_name: 'Browser User',
-      last_name: '',
-      username: 'browseruser',
-      language_code: 'en',
-      is_premium: false
-    };
   }
 
   public getStartParam(): string | null {
