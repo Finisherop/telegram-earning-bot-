@@ -621,10 +621,17 @@ export const claimTask = async (userId: string, taskId: string, reward: number):
     // Get current user data
     const userSnapshot = await get(userRef);
     if (!userSnapshot.exists()) {
-      throw new Error('User not found');
+      // Auto-create user if not found
+      console.log(`[Firebase] User ${userId} not found, creating new user before claiming task`);
+      const newUser = await initializeUser(userId);
+      if (!newUser) {
+        throw new Error(`Failed to initialize user ${userId}`);
+      }
     }
     
-    const userData = userSnapshot.val();
+    // Get user data again after potential creation
+    const updatedUserSnapshot = await get(userRef);
+    const userData = updatedUserSnapshot.val();
     const currentCoins = userData.coins || 0;
     const currentXp = userData.xp || 0;
     
@@ -640,6 +647,8 @@ export const claimTask = async (userId: string, taskId: string, reward: number):
       status: 'claimed',
       claimedAt: new Date().toISOString()
     });
+    
+    console.log(`[Firebase] Task ${taskId} claimed successfully by user ${userId} for ${reward} coins`);
   } catch (error) {
     console.error('[Firebase] Error claiming task:', error);
     throw error;

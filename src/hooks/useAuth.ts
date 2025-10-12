@@ -49,16 +49,68 @@ export const useAuth = () => {
           
           if (!existingUser) {
             console.log('Creating new user:', userId);
-            existingUser = await initializeUser(userId);
+            try {
+              existingUser = await initializeUser(userId);
+              if (!existingUser) {
+                throw new Error('Failed to initialize user');
+              }
+            } catch (initError) {
+              console.error('Error initializing user:', initError);
+              // Continue with partial user data if initialization fails
+              existingUser = null;
+            }
           }
           
-          // Update user with latest Telegram data
-          existingUser = await safeUpdateUser(userId, {
-            username: telegramUser.username,
-            firstName: telegramUser.first_name,
-            lastName: telegramUser.last_name,
-            profilePic: telegramUser.photo_url,
-          });
+          // If we still don't have a user, create a minimal one
+          if (!existingUser) {
+            console.warn('Creating minimal user profile due to initialization failure');
+            existingUser = {
+              id: userId,
+              telegramId: userId,
+              username: userData.username || 'user',
+              firstName: userData.firstName || 'User',
+              lastName: userData.lastName || '',
+              profilePic: userData.profilePic,
+              coins: 0,
+              xp: 0,
+              level: 1,
+              vipTier: 'free',
+              farmingMultiplier: 1.0,
+              referralMultiplier: 1.0,
+              adsLimitPerDay: 5,
+              withdrawalLimit: 1,
+              minWithdrawal: 200,
+              referralCount: 0,
+              referralEarnings: 0,
+              referrerId: userData.referrerId,
+              dailyStreak: 0,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            };
+            
+            // Try to save this minimal user data
+            try {
+              await safeUpdateUser(userId, existingUser);
+            } catch (saveError) {
+              console.error('Failed to save minimal user data:', saveError);
+            }
+          }
+          
+          // Update user with latest Telegram data if we have a valid user
+          if (existingUser) {
+            try {
+              existingUser = await safeUpdateUser(userId, {
+                username: telegramUser.username,
+                firstName: telegramUser.first_name,
+                lastName: telegramUser.last_name,
+                profilePic: telegramUser.photo_url,
+                updatedAt: new Date(),
+              });
+            } catch (updateError) {
+              console.error('Failed to update user data:', updateError);
+              // Continue with existing user data
+            }
+          }
           
           // Handle referral for new users
           if (startParam && startParam !== userId && existingUser.createdAt) {
