@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { initializeTelegramUser, updateLastSeen, UserData } from '@/lib/telegramUser';
-import MainDashboard from './MainDashboard';
+import UserDashboard from './UserDashboard';
 
 interface AppInitializerProps {
   children?: React.ReactNode;
@@ -130,7 +130,7 @@ const AppInitializer = ({ children }: AppInitializerProps) => {
   if (state.isReady && state.user) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <MainDashboard user={state.user} />
+        <UserDashboard />
         {children}
       </div>
     );

@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "setup-bot": "node setup-bot.js"
+    "setup-bot": "node setup-bot.js",
+    "enable-features": "node scripts/enable-features.js"
   },
   "dependencies": {
     "@telegram-apps/sdk": "^2.11.0",

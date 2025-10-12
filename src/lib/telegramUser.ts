@@ -54,18 +54,18 @@ export function getTelegramUser(): TelegramUser | null {
 }
 
 /**
- * Convert Telegram user to clean Firebase user data
- * Ensures no undefined values that could cause Firebase errors
+ * Convert Telegram user to minimal Firebase user data
+ * Only stores essential fields - no extra device info or initData
  */
 export function sanitizeUserData(telegramUser: TelegramUser): UserData {
   return {
     userId: telegramUser.id,
     firstName: telegramUser.first_name || 'Telegram User',
-    lastName: telegramUser.last_name || '',
+    lastName: '', // Minimal data - don't store last name
     username: telegramUser.username || '',
-    photoUrl: telegramUser.photo_url || '',
+    photoUrl: '', // Minimal data - don't store photo URL
     languageCode: telegramUser.language_code || 'en',
-    isPremium: telegramUser.is_premium || false,
+    isPremium: false, // Minimal data - don't store premium status
     createdAt: new Date().toISOString(),
     lastSeen: new Date().toISOString(),
   };
