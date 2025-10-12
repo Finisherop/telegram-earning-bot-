@@ -2,11 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { 
   ref,
   get,
-  set,
-  update,
   push
 } from 'firebase/database';
 import { getFirebaseServices } from '@/lib/firebaseSingleton';
+import { safeSet, safeUpdate, safeGet, sanitizeUserId, buildUserPath, extractUserId, FirebaseLogger } from '@/lib/firebaseGlobal';
 import { User } from '@/types';
 
 export interface CreateWithdrawalRequest {
@@ -131,17 +130,21 @@ export async function POST(request: NextRequest) {
     };
 
     // Save withdrawal request
-    await set(newWithdrawalRef, withdrawalData);
+    await safeSet(`withdrawals/${newWithdrawalRef.key}`, withdrawalData);
 
     // Update user's balance (deduct the amount)
-    await update(userRef, {
+    const userPath = buildUserPath(sanitizedUserId);
+    if (!userPath) {
+      throw new Error('Invalid user ID for balance update');
+    }
+    
+    await safeUpdate(userPath, {
       coins: currentBalance - amount,
       updatedAt: new Date().toISOString()
     });
 
     // Add to user's withdrawal history
-    const userWithdrawalRef = ref(realtimeDb, `userWithdrawals/${sanitizedUserId}/${today}/${withdrawalId}`);
-    await set(userWithdrawalRef, {
+    await safeSet(`userWithdrawals/${sanitizedUserId}/${today}/${withdrawalId}`, {
       withdrawalId,
       amount,
       timestamp: new Date().toISOString()

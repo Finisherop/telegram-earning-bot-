@@ -1,4 +1,5 @@
-import { ref, set, get } from 'firebase/database';
+import { ref, get } from 'firebase/database';
+import { safeSet, safeUpdate, safeGet, sanitizeUserId, buildUserPath, extractUserId, FirebaseLogger } from './firebaseGlobal';
 
 /**
  * Safe Firebase storage utilities for Telegram user data
@@ -110,7 +111,12 @@ export async function safeRealtimeStorage(
       updatedAt: new Date().toISOString()
     };
 
-    await set(userRef, realtimeData);
+    const userPath = buildUserPath(userId);
+    if (!userPath) {
+      return { success: false, error: 'Invalid user ID for storage' };
+    }
+    
+    await safeSet(userPath, realtimeData);
     console.log(`[SafeRealtime] Successfully stored user ${userId} in Realtime Database`);
     
     return { success: true, error: null };
@@ -171,11 +177,16 @@ export async function safeUpdateLastSeen(
   // Update Realtime Database only
   if (realtimeDb) {
     try {
-      const userRef = ref(realtimeDb, `${path}/${userIdStr}`);
-      const existingData = await get(userRef);
+      const userPath = buildUserPath(userIdStr);
+      if (!userPath) {
+        console.warn('[SafeUpdate] Invalid user ID for last seen update:', userIdStr);
+        return { realtime: false };
+      }
       
-      await set(userRef, {
-        ...(existingData.exists() ? existingData.val() : {}),
+      const existingData = await safeGet(userPath);
+      
+      await safeSet(userPath, {
+        ...(existingData || {}),
         lastSeen: now,
         updatedAt: now
       });

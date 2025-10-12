@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { realtimeDb } from '@/lib/firebase';
-import { ref, get, update, push, set } from 'firebase/database';
+import { ref, get, push } from 'firebase/database';
+import { safeSet, safeUpdate, safeGet, sanitizeUserId, buildUserPath, extractUserId, FirebaseLogger } from '@/lib/firebaseGlobal';
 
 /**
  * Payment Webhook Handler
@@ -89,11 +90,14 @@ async function processVipUpgrade(userId: string, amount: number, paymentMethod: 
     }
     
     const config = VIP_CONFIGS[tier];
-    const userRef = ref(realtimeDb, `telegram_users/${userId}`);
+    const userPath = buildUserPath(userId);
+    if (!userPath) {
+      throw new Error('Invalid user ID for VIP upgrade');
+    }
     
     // Get current user data
-    const snapshot = await get(userRef);
-    if (!snapshot.exists()) {
+    const userData = await safeGet(userPath);
+    if (!userData) {
       throw new Error('User not found');
     }
     
@@ -102,7 +106,7 @@ async function processVipUpgrade(userId: string, amount: number, paymentMethod: 
     const vipEndTime = new Date(now.getTime() + (config.duration * 24 * 60 * 60 * 1000));
     
     // Update user with VIP benefits
-    await update(userRef, {
+    await safeUpdate(userPath, {
       vipTier: config.vipTier,
       tier: tier,
       vip_tier: tier,
@@ -125,7 +129,6 @@ async function processVipUpgrade(userId: string, amount: number, paymentMethod: 
     });
     
     // Add VIP badge
-    const userData = snapshot.val();
     const existingBadges = userData.badges || [];
     const newBadge = {
       type: tier === 'bronze' ? 'bronze_vip' : 'diamond_vip',
@@ -136,7 +139,7 @@ async function processVipUpgrade(userId: string, amount: number, paymentMethod: 
       unlockedAt: Date.now()
     };
     
-    await update(userRef, {
+    await safeUpdate(userPath, {
       badges: [...existingBadges, newBadge]
     });
     
@@ -154,18 +157,20 @@ async function addCoinsToUser(userId: string, coins: number): Promise<void> {
       throw new Error('Database connection unavailable');
     }
 
-    const userRef = ref(realtimeDb, `telegram_users/${userId}`);
-    const snapshot = await get(userRef);
+    const userPath = buildUserPath(userId);
+    if (!userPath) {
+      throw new Error('Invalid user ID for adding coins');
+    }
     
-    if (!snapshot.exists()) {
+    const userData = await safeGet(userPath);
+    if (!userData) {
       throw new Error('User not found');
     }
     
-    const userData = snapshot.val();
     const currentCoins = userData.coins || 0;
     const newCoins = currentCoins + coins;
     
-    await update(userRef, {
+    await safeUpdate(userPath, {
       coins: newCoins,
       totalEarned: (userData.totalEarned || 0) + coins,
       lastPayment: new Date().toISOString(),
@@ -201,7 +206,7 @@ async function recordPaymentTransaction(payload: PaymentWebhookPayload): Promise
       webhookReceived: new Date().toISOString()
     };
     
-    await set(newTransactionRef, transactionData);
+    await safeSet(`payment_transactions/${newTransactionRef.key}`, transactionData);
     
     console.log(`[PaymentWebhook] Transaction recorded: ${newTransactionRef.key}`);
     

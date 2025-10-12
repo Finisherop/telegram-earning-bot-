@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { realtimeDb } from '@/lib/firebase';
-import { ref, get, update, push, set } from 'firebase/database';
+import { ref, get, push } from 'firebase/database';
+import { safeSet, safeUpdate, safeGet, sanitizeUserId, buildUserPath, extractUserId, FirebaseLogger } from '@/lib/firebaseGlobal';
 
 /**
  * Enhanced Withdrawal Processing API
