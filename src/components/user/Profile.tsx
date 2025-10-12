@@ -68,7 +68,7 @@ const Profile = ({ user: propUser }: ProfileProps) => {
       setError(null);
 
       try {
-        const userRef = ref(realtimeDb, `users/${userId}`);
+        const userRef = ref(realtimeDb, `telegram_users/${userId}`);
         
         // Set up real-time listener
         const unsubscribe = onValue(userRef, async (snapshot) => {
