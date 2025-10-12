@@ -7,6 +7,7 @@ import { ADMIN_SECRET_KEY } from '@/lib/constants';
 import UserDashboard from '@/components/UserDashboard';
 import AdminDashboard from '@/components/AdminDashboard';
 import IntegrationTest from '@/components/IntegrationTest';
+import TelegramUserWriterDemo from '@/components/TelegramUserWriterDemo';
 import { motion } from 'framer-motion';
 
 export default function EnhancedHome() {
@@ -14,6 +15,7 @@ export default function EnhancedHome() {
   const router = useRouter();
   const [isAdmin, setIsAdmin] = useState(false);
   const [showTests, setShowTests] = useState(false);
+  const [showDemo, setShowDemo] = useState(false);
 
   // Mock data for enhanced features (replace with real data in production)
   const payments: any[] = [];
@@ -58,6 +60,11 @@ export default function EnhancedHome() {
         setShowTests(true);
         console.log('[Enhanced Home] Test mode activated');
       }
+
+      if (urlParams.get('demo') === 'true') {
+        setShowDemo(true);
+        console.log('[Enhanced Home] Demo mode activated');
+      }
     }
   }, [router]);
 
@@ -96,6 +103,41 @@ export default function EnhancedHome() {
             </div>
           </div>
         </motion.div>
+      </div>
+    );
+  }
+
+  if (showDemo) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4">
+        <div className="max-w-4xl mx-auto space-y-6">
+          <motion.div
+            className="bg-gradient-to-r from-green-600 to-blue-600 rounded-2xl p-6 text-white"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <h1 className="text-2xl font-bold mb-2">🔥 Telegram User Data Writer Demo</h1>
+            <p className="text-white/90">
+              Test the new Firebase user data writing functionality
+            </p>
+          </motion.div>
+
+          <TelegramUserWriterDemo />
+
+          <motion.div
+            className="text-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+          >
+            <button
+              onClick={() => setShowDemo(false)}
+              className="px-6 py-3 bg-primary text-white rounded-xl font-bold hover:bg-primary/90 transition-colors"
+            >
+              🏠 Back to App
+            </button>
+          </motion.div>
+        </div>
       </div>
     );
   }
@@ -205,6 +247,12 @@ export default function EnhancedHome() {
           <div className="bg-white rounded-xl shadow-lg p-4 border border-gray-200">
             <h4 className="font-bold text-gray-800 mb-2">🛠️ Dev Tools</h4>
             <div className="space-y-2">
+              <button
+                onClick={() => setShowDemo(true)}
+                className="w-full text-left px-3 py-2 text-sm bg-green-50 hover:bg-green-100 rounded-lg transition-colors"
+              >
+                🔥 User Writer Demo
+              </button>
               <button
                 onClick={() => setShowTests(true)}
                 className="w-full text-left px-3 py-2 text-sm bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
