@@ -9,7 +9,7 @@ import {
   remove,
   serverTimestamp as realtimeServerTimestamp,
 } from 'firebase/database';
-import { realtimeDb } from './firebase';
+import { realtimeDb } from './firebaseClient.js';
 import { 
   User, 
   Task, 

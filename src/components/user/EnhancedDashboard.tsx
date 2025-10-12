@@ -28,6 +28,8 @@ const EnhancedDashboard = ({ user: initialUser, onUserUpdate }: EnhancedDashboar
   const [canClaim, setCanClaim] = useState(false);
   const [dailyClaimAvailable, setDailyClaimAvailable] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDailyClaimLoading, setIsDailyClaimLoading] = useState(false);
+  const [isFarmingLoading, setIsFarmingLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
   // Real-time subscription to user data with extended information
@@ -142,7 +144,7 @@ const EnhancedDashboard = ({ user: initialUser, onUserUpdate }: EnhancedDashboar
   }, [user, canClaim]);
 
   const startFarming = useCallback(async () => {
-    if (isLoading || isFarming) {
+    if (isFarmingLoading || isFarming) {
       toast.error('Farming is already in progress!');
       return;
     }
@@ -151,7 +153,7 @@ const EnhancedDashboard = ({ user: initialUser, onUserUpdate }: EnhancedDashboar
     const telegram = TelegramService.getInstance();
     telegram.hapticFeedback('medium');
     
-    setIsLoading(true);
+    setIsFarmingLoading(true);
     
     try {
       const result = await startFarmingWithValidation(user.telegramId);
@@ -170,9 +172,9 @@ const EnhancedDashboard = ({ user: initialUser, onUserUpdate }: EnhancedDashboar
       console.error('[Enhanced Dashboard] Farming start error:', error);
       toast.error('❌ Failed to start farming. Please check your connection and try again.');
     } finally {
-      setIsLoading(false);
+      setIsFarmingLoading(false);
     }
-  }, [user.telegramId, isLoading, isFarming]);
+  }, [user.telegramId, isFarmingLoading, isFarming]);
 
   const claimFarming = useCallback(async () => {
     if (isLoading || !canClaim) {
@@ -227,16 +229,16 @@ const EnhancedDashboard = ({ user: initialUser, onUserUpdate }: EnhancedDashboar
   }, [user, canClaim, isLoading]);
 
   const claimDaily = useCallback(async () => {
-    if (isLoading || !dailyClaimAvailable) {
+    if (isDailyClaimLoading || !dailyClaimAvailable) {
       toast.error('Daily reward already claimed today!');
       return;
     }
-    
+
     console.log('[Enhanced Dashboard] Daily claim clicked');
     const telegram = TelegramService.getInstance();
     telegram.hapticFeedback('heavy');
     
-    setIsLoading(true);
+    setIsDailyClaimLoading(true);
     
     const baseReward = 150;
     const streakBonus = Math.min((user.dailyStreak || 0) * 10, 100);
@@ -245,18 +247,28 @@ const EnhancedDashboard = ({ user: initialUser, onUserUpdate }: EnhancedDashboar
     
     try {
       console.log(`[Enhanced Dashboard] Claiming daily reward: ${totalReward} coins for user:`, user.telegramId);
+      console.log('[Enhanced Dashboard] Current user data:', { 
+        coins: user.coins, 
+        xp: user.xp, 
+        dailyStreak: user.dailyStreak 
+      });
       
       // Atomic update to prevent race conditions
       const currentCoins = user.coins || 0;
       const currentXp = user.xp || 0;
       const currentStreak = user.dailyStreak || 0;
       
-      await safeUpdateUserWithRetry(user.telegramId, {
+      const updateData = {
         coins: currentCoins + totalReward,
         xp: currentXp + Math.floor(totalReward / 10),
         dailyStreak: currentStreak + 1,
         lastClaimDate: new Date(),
-      });
+      };
+      
+      console.log('[Enhanced Dashboard] Updating user with data:', updateData);
+      
+      const updatedUser = await safeUpdateUserWithRetry(user.telegramId, updateData);
+      console.log('[Enhanced Dashboard] User updated successfully:', updatedUser);
       
       // Log conversion event
       await logConversionEvent(user.telegramId, 'daily_claim', {
@@ -279,9 +291,9 @@ const EnhancedDashboard = ({ user: initialUser, onUserUpdate }: EnhancedDashboar
       console.error('[Enhanced Dashboard] Daily claim error:', error);
       toast.error('❌ Failed to claim daily reward. Please try again.');
     } finally {
-      setIsLoading(false);
+      setIsDailyClaimLoading(false);
     }
-  }, [user, dailyClaimAvailable, isLoading]);
+  }, [user, dailyClaimAvailable, isDailyClaimLoading]);
 
   const handleMessageClick = useCallback(async (message: BotMessage) => {
     if (!message.isRead) {
@@ -490,16 +502,16 @@ const EnhancedDashboard = ({ user: initialUser, onUserUpdate }: EnhancedDashboar
           </div>
           <motion.button
             onClick={claimDaily}
-            disabled={!dailyClaimAvailable || isLoading}
+            disabled={!dailyClaimAvailable || isDailyClaimLoading}
             className={`px-6 py-3 rounded-xl font-bold transition-all ${
-              dailyClaimAvailable && !isLoading
+              dailyClaimAvailable && !isDailyClaimLoading
                 ? 'bg-accent text-dark hover:bg-accent/90'
                 : 'bg-gray-200 text-gray-500 cursor-not-allowed'
             }`}
             whileTap={{ scale: 0.95 }}
-            whileHover={{ scale: dailyClaimAvailable && !isLoading ? 1.05 : 1 }}
+            whileHover={{ scale: dailyClaimAvailable && !isDailyClaimLoading ? 1.05 : 1 }}
           >
-            {isLoading ? '⏳' : dailyClaimAvailable ? '🎁 Claim' : '✅ Claimed'}
+            {isDailyClaimLoading ? '⏳' : dailyClaimAvailable ? '🎁 Claim' : '✅ Claimed'}
           </motion.button>
         </div>
         
@@ -544,16 +556,16 @@ const EnhancedDashboard = ({ user: initialUser, onUserUpdate }: EnhancedDashboar
           {!isFarming && !canClaim && (
             <motion.button
               onClick={startFarming}
-              disabled={isLoading}
+              disabled={isFarmingLoading}
               className={`px-6 py-3 rounded-xl font-bold transition-all ${
-                isLoading
+                isFarmingLoading
                   ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
                   : 'bg-primary text-white hover:bg-primary/90'
               }`}
               whileTap={{ scale: 0.95 }}
-              whileHover={{ scale: isLoading ? 1 : 1.05 }}
+              whileHover={{ scale: isFarmingLoading ? 1 : 1.05 }}
             >
-              {isLoading ? '⏳ Starting...' : '🚀 Start Farming'}
+              {isFarmingLoading ? '⏳ Starting...' : '🚀 Start Farming'}
             </motion.button>
           )}
           
