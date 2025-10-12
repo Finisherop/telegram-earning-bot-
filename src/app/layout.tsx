@@ -82,7 +82,7 @@ export default function RootLayout({
                       console.log('[TG-WebApp] Initialized successfully');
                       
                     } else {
-                      console.log('[TG-WebApp] Not running in Telegram WebApp environment');
+                      // Silent fallback for non-Telegram environments (browser testing)
                       window.__TELEGRAM_WEBAPP_AVAILABLE__ = false;
                       window.__TELEGRAM_WEBAPP__ = null;
                     }

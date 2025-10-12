@@ -64,14 +64,15 @@ export function useTelegramWebApp() {
           }
           
           setError(null);
-          console.log('[useTelegramWebApp] Successfully initialized Telegram WebApp');
+          console.log('[useTelegramWebApp] ✅ Successfully initialized Telegram WebApp');
+          console.log('[useTelegramWebApp] 📱 Telegram WebApp is ready for use!');
           
         } else {
           // Fallback for non-Telegram environments (browser testing)
-          console.warn('[useTelegramWebApp] Not running in Telegram WebApp environment');
+          console.log('[useTelegramWebApp] Running in browser mode (not Telegram WebApp)');
           setTg(null);
           setUser(null);
-          setError('Not running in Telegram WebApp environment');
+          setError(null); // Don't treat this as an error for browser testing
         }
       } catch (err) {
         console.error('[useTelegramWebApp] Error initializing Telegram WebApp:', err);
