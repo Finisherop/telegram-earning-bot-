@@ -4,16 +4,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { User, AdminSettings } from '@/types';
 import { 
-  safeFirebaseUserSync,
-  setupRealtimeUserListener,
-  ultimateFirebaseSanitizer
-} from '@/lib/firebaseSafeSyncFix';
-import { 
-  firebaseRealtimeManager,
   subscribeToUser,
-  subscribeToGlobalConfig,
-  updateUserSafe 
-} from '@/lib/firebaseRealtimeManager';
+  subscribeToAdminSettings,
+  safeUpdateUser
+} from '@/lib/firebaseService';
 import { TelegramService } from '@/lib/telegram';
 import toast from 'react-hot-toast';
 
@@ -32,14 +26,9 @@ const EnhancedUserDashboard = ({ user: initialUser }: EnhancedUserDashboardProps
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [connectionStatus, setConnectionStatus] = useState({ isOnline: true, listenersCount: 0 });
 
-  // Real-time Firebase connection status monitoring
+  // Simplified connection status
   useEffect(() => {
-    const interval = setInterval(() => {
-      const status = firebaseRealtimeManager.getStatus();
-      setConnectionStatus(status);
-    }, 5000);
-
-    return () => clearInterval(interval);
+    setConnectionStatus({ isOnline: navigator.onLine, listenersCount: 1 });
   }, []);
 
   // Real-time user data subscription with enhanced error handling
@@ -61,17 +50,13 @@ const EnhancedUserDashboard = ({ user: initialUser }: EnhancedUserDashboardProps
     return unsubscribeUser;
   }, [user.telegramId]);
 
-  // Real-time global config subscription for instant admin updates
+  // Real-time admin settings subscription
   useEffect(() => {
-    console.log('[Enhanced User Dashboard] Setting up global config subscription for instant admin sync');
+    console.log('[Enhanced User Dashboard] Setting up admin settings subscription');
     
-    const unsubscribeConfig = subscribeToGlobalConfig((configData) => {
+    const unsubscribeConfig = subscribeToAdminSettings((configData) => {
       if (configData) {
-        console.log('[Enhanced User Dashboard] ⚡ Admin settings updated instantly!', {
-          vip1Price: configData.vipTiers?.vip1?.price,
-          vip2Price: configData.vipTiers?.vip2?.price,
-          baseAdReward: configData.baseAdReward
-        });
+        console.log('[Enhanced User Dashboard] Admin settings updated:', configData);
         setGlobalConfig(configData);
         
         // Show toast to user when admin makes changes
@@ -191,7 +176,7 @@ const EnhancedUserDashboard = ({ user: initialUser }: EnhancedUserDashboardProps
         }
       }
       
-      await updateUserSafe(user.telegramId, {
+      await safeUpdateUser(user.telegramId, {
         farmingStartTime: startTime,
         farmingEndTime: endTime,
       });
@@ -233,7 +218,7 @@ const EnhancedUserDashboard = ({ user: initialUser }: EnhancedUserDashboardProps
       const currentCoins = user.coins || 0;
       const currentXp = user.xp || 0;
       
-      await updateUserSafe(user.telegramId, {
+      await safeUpdateUser(user.telegramId, {
         coins: currentCoins + reward,
         xp: currentXp + Math.floor(reward / 10),
         farmingStartTime: undefined,
@@ -282,7 +267,7 @@ const EnhancedUserDashboard = ({ user: initialUser }: EnhancedUserDashboardProps
       const currentXp = user.xp || 0;
       const currentStreak = user.dailyStreak || 0;
       
-      await updateUserSafe(user.telegramId, {
+      await safeUpdateUser(user.telegramId, {
         coins: currentCoins + totalReward,
         xp: currentXp + Math.floor(totalReward / 10),
         dailyStreak: currentStreak + 1,

@@ -45,22 +45,22 @@ export default function UserDataDisplay() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-3">
           <div className="flex items-center space-x-3">
-            {user.photoUrl ? (
+            {user.photo_url ? (
               <img
-                src={user.photoUrl}
-                alt={user.firstName}
+                src={user.photo_url}
+                alt={user.first_name}
                 className="w-12 h-12 rounded-full object-cover"
               />
             ) : (
               <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center">
                 <span className="text-white font-bold text-lg">
-                  {user.firstName.charAt(0).toUpperCase()}
+                  {user.first_name.charAt(0).toUpperCase()}
                 </span>
               </div>
             )}
             <div>
               <h4 className="font-medium text-gray-800">
-                {user.firstName} {user.lastName}
+                {user.first_name} {user.last_name}
               </h4>
               {user.username && (
                 <p className="text-sm text-gray-600">@{user.username}</p>
@@ -72,29 +72,21 @@ export default function UserDataDisplay() {
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-gray-600">User ID:</span>
-            <span className="font-medium">{user.userId}</span>
+            <span className="font-medium">{user.id}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-600">Language:</span>
-            <span className="font-medium">{user.languageCode.toUpperCase()}</span>
+            <span className="font-medium">{user.language_code?.toUpperCase()}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-600">Premium:</span>
-            <span className={`font-medium ${user.isPremium ? 'text-yellow-600' : 'text-gray-500'}`}>
-              {user.isPremium ? 'Yes' : 'No'}
+            <span className={`font-medium ${user.is_premium ? 'text-yellow-600' : 'text-gray-500'}`}>
+              {user.is_premium ? 'Yes' : 'No'}
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-600">Joined:</span>
-            <span className="font-medium">
-              {new Date(user.createdAt).toLocaleDateString()}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">Last Seen:</span>
-            <span className="font-medium">
-              {new Date(user.lastSeen).toLocaleString()}
-            </span>
+            <span className="text-gray-600">Status:</span>
+            <span className="font-medium text-green-600">Online</span>
           </div>
         </div>
       </div>

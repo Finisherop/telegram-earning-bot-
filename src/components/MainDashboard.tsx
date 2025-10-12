@@ -31,25 +31,25 @@ const MainDashboard = ({ user }: MainDashboardProps) => {
           transition={{ delay: 0.1 }}
         >
           <div className="flex items-center space-x-4">
-            {user.photoUrl ? (
+            {user.photo_url ? (
               <img
-                src={user.photoUrl}
-                alt={user.firstName}
+                src={user.photo_url}
+                alt={user.first_name}
                 className="w-16 h-16 rounded-full object-cover"
               />
             ) : (
               <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
                 <span className="text-2xl font-bold text-white">
-                  {user.firstName.charAt(0).toUpperCase()}
+                  {user.first_name.charAt(0).toUpperCase()}
                 </span>
               </div>
             )}
             <div>
               <h1 className="text-2xl font-bold text-gray-800">
-                Welcome, {user.firstName}!
+                Welcome, {user.first_name}!
               </h1>
               <p className="text-gray-600">
-                {user.username ? `@${user.username}` : `User ID: ${user.userId}`}
+                {user.username ? `@${user.username}` : `User ID: ${user.id}`}
               </p>
             </div>
           </div>

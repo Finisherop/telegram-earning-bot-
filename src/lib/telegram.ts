@@ -81,13 +81,10 @@ export interface TelegramUser {
 export class TelegramService {
   private static instance: TelegramService;
   private webApp: any = null;
-  private user: TelegramUser | null = null;
-  private startParam: string | null = null;
-  private isInitialized: boolean = false;
 
   private constructor() {
     if (typeof window !== 'undefined') {
-      this.initializeWebApp();
+      this.webApp = (window as any).Telegram?.WebApp || null;
     }
   }
 
@@ -98,208 +95,49 @@ export class TelegramService {
     return TelegramService.instance;
   }
 
-  private initializeWebApp() {
-    try {
-      // Listen for the custom event from the enhanced initialization
-      window.addEventListener('telegramWebAppReady', (event: any) => {
-        console.log('[TelegramService] WebApp ready event received');
-        this.webApp = event.detail.webApp;
-        this.setupWebApp();
-      });
-      
-      window.addEventListener('telegramWebAppBrowserMode', () => {
-        console.log('[TelegramService] Browser mode event received');
-        this.setupFallbackMode();
-      });
-      
-      // Fallback timeout in case events don't fire
-      setTimeout(() => {
-        if (!this.isInitialized) {
-          if (typeof window !== 'undefined' && (window as any).__TELEGRAM_WEBAPP__) {
-            console.log('[TelegramService] Using global WebApp reference');
-            this.webApp = (window as any).__TELEGRAM_WEBAPP__;
-            this.setupWebApp();
-          } else {
-            console.log('[TelegramService] Timeout reached, using fallback mode');
-            this.setupFallbackMode();
-          }
-        }
-      }, 2000);
-    } catch (error) {
-      console.error('[TelegramService] Failed to initialize Telegram WebApp:', error);
-      this.setupFallbackMode();
-    }
-  }
-
-  private setupFallbackMode() {
-    // Generate unique user ID for browser users
-    let browserId = localStorage.getItem('browserId');
-    if (!browserId) {
-      browserId = 'browser_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-      localStorage.setItem('browserId', browserId);
-    }
-    
-    // Get user data from localStorage or create new
-    const storedUserData = localStorage.getItem('browserUserData');
-    if (storedUserData && storedUserData.trim()) {
-      try {
-        // Validate JSON before parsing
-        if (storedUserData.startsWith('{') && storedUserData.endsWith('}')) {
-          const userData = JSON.parse(storedUserData);
-          if (userData && typeof userData === 'object') {
-            this.user = {
-              id: parseInt(browserId.replace('browser_', '')) || Date.now(),
-              first_name: userData.first_name || 'Browser User',
-              last_name: userData.last_name || '',
-              username: userData.username || 'browseruser',
-              language_code: userData.language_code || 'en',
-              is_premium: false
-            };
-          }
-        } else {
-          console.warn('[TelegramService] Invalid JSON format in stored user data');
-          localStorage.removeItem('browserUserData'); // Clean up invalid data
-        }
-      } catch (error) {
-        console.error('[TelegramService] Error parsing stored user data:', error);
-        localStorage.removeItem('browserUserData'); // Clean up corrupted data
-      }
-    }
-    
-    // If no user data, create default but prompt for setup
-    if (!this.user) {
-      this.user = {
-        id: parseInt(browserId.replace('browser_', '')) || Date.now(),
-        first_name: 'Browser User',
-        last_name: '',
-        username: 'browseruser',
-        language_code: 'en',
-        is_premium: false
-      };
-    }
-    
-    // Check for referral in URL
-    if (typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search);
-      const referral = urlParams.get('ref') || urlParams.get('start') || urlParams.get('startapp');
-      if (referral) {
-        this.startParam = referral;
-        console.log('Browser referral detected:', referral);
-      }
-    }
-    
-    this.isInitialized = true;
-    console.log('Browser fallback mode setup completed:', this.user);
-  }
-
-  private setupWebApp() {
-    if (!this.webApp) {
-      console.warn('WebApp not available, falling back to browser mode');
-      this.setupFallbackMode();
-      return;
-    }
-
-    try {
-      console.log('Setting up Telegram WebApp...');
-      
-      // Initialize WebApp
-      if (typeof this.webApp.ready === 'function') {
-        this.webApp.ready();
-      }
-      if (typeof this.webApp.expand === 'function') {
-        this.webApp.expand();
-      }
-      
-      // Log all available data for debugging
-      console.log('WebApp initData:', this.webApp.initData);
-      console.log('WebApp initDataUnsafe:', this.webApp.initDataUnsafe);
-      console.log('WebApp version:', this.webApp.version);
-      console.log('WebApp platform:', this.webApp.platform);
-      
-      // Get user data from Telegram with better validation
-      if (this.webApp.initDataUnsafe?.user) {
-        const userData = this.webApp.initDataUnsafe.user;
-        console.log('Raw Telegram user data:', userData);
-        
-        // Validate user data more thoroughly
-        if (userData.id && typeof userData.id === 'number' && userData.id > 0 && userData.first_name) {
-          this.user = {
-            id: userData.id,
-            first_name: userData.first_name,
-            last_name: userData.last_name || '',
-            username: userData.username || '',
-            photo_url: userData.photo_url || undefined,
-            language_code: userData.language_code || 'en',
-            is_premium: userData.is_premium || false
-          };
-          console.log('Valid Telegram user data set:', this.user);
-        } else {
-          console.warn('Invalid Telegram user data:', userData);
-        }
-      } else {
-        console.log('No user data in initDataUnsafe');
-      }
-      
-      // Get start parameter with comprehensive checking
-      const startSources = [
-        this.webApp.initDataUnsafe?.start_param,
-        this.webApp.initDataUnsafe?.startapp,
-        new URLSearchParams(window.location.search).get('tgWebAppStartParam'),
-        new URLSearchParams(window.location.search).get('start'),
-        new URLSearchParams(window.location.search).get('startapp'),
-        new URLSearchParams(window.location.search).get('ref'),
-      ];
-      
-      for (const source of startSources) {
-        if (source) {
-          this.startParam = source;
-          console.log('Start param found:', this.startParam, 'from source');
-          break;
-        }
-      }
-      
-      // If no valid user data from Telegram, use enhanced fallback
-      if (!this.user || !this.user.id || this.user.id <= 0) {
-        console.log('No valid Telegram user data, using enhanced fallback');
-        this.setupFallbackMode();
-      } else {
-        this.isInitialized = true;
-        console.log('Telegram WebApp setup completed successfully with real user:', this.user);
-      }
-      
-    } catch (error) {
-      console.error('WebApp setup error:', error);
-      this.setupFallbackMode();
-    }
-  }
-
   public getUser(): TelegramUser | null {
-    // First try to get from the new capture system
-    if (typeof window !== 'undefined' && (window as any).__TELEGRAM_USER_DATA__) {
-      const capturedData = (window as any).__TELEGRAM_USER_DATA__;
-      if (capturedData.source === 'telegram') {
+    // Get user data directly from Telegram WebApp SDK
+    if (this.webApp?.initDataUnsafe?.user) {
+      const user = this.webApp.initDataUnsafe.user;
+      if (user.id && user.first_name) {
         return {
-          id: capturedData.id,
-          first_name: capturedData.first_name,
-          last_name: capturedData.last_name,
-          username: capturedData.username,
-          photo_url: capturedData.photo_url,
-          language_code: capturedData.language_code,
-          is_premium: capturedData.is_premium
+          id: user.id,
+          first_name: user.first_name,
+          last_name: user.last_name || '',
+          username: user.username || '',
+          photo_url: user.photo_url,
+          language_code: user.language_code || 'en',
+          is_premium: user.is_premium || false
         };
       }
     }
     
-    // Fallback to existing user data
-    return this.user;
+    // Fallback for browser testing
+    const browserId = localStorage.getItem('browserId') || `browser_${Date.now()}`;
+    localStorage.setItem('browserId', browserId);
+    
+    return {
+      id: parseInt(browserId.replace('browser_', '')) || Date.now(),
+      first_name: 'Browser User',
+      last_name: '',
+      username: 'browseruser',
+      language_code: 'en',
+      is_premium: false
+    };
   }
 
   public getStartParam(): string | null {
-    return this.startParam;
-  }
-
-  public isReady(): boolean {
-    return this.isInitialized;
+    if (this.webApp?.initDataUnsafe?.start_param) {
+      return this.webApp.initDataUnsafe.start_param;
+    }
+    
+    // Check URL parameters
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get('start') || urlParams.get('ref') || null;
+    }
+    
+    return null;
   }
 
   public showAlert(message: string, callback?: () => void): void {
@@ -387,7 +225,8 @@ export class TelegramService {
     try {
       console.log(`Creating invoice for ${tier}: ${amount} Stars - ${description}`);
       
-      if (!this.user?.id) {
+      const user = this.getUser();
+      if (!user?.id) {
         throw new Error('User not authenticated');
       }
       
@@ -401,8 +240,8 @@ export class TelegramService {
           amount: amount,
           description: description,
           tier: tier,
-          userId: this.user.id,
-          chatId: this.user.id, // Same as userId for direct messages
+          userId: user.id,
+          chatId: user.id, // Same as userId for direct messages
           title: `${tier?.toUpperCase() || ''} Membership - 30 Days`,
         })
       });
@@ -460,7 +299,8 @@ export class TelegramService {
         return;
       }
 
-      if (!this.user?.id) {
+      const user = this.getUser();
+      if (!user?.id) {
         console.error('User not authenticated');
         this.showAlert('❌ Please refresh the app and try again');
         resolve(false);
@@ -546,15 +386,16 @@ export class TelegramService {
 
   private async activateVIPAfterPayment(tier: 'vip1' | 'vip2'): Promise<void> {
     try {
-      if (!this.user?.id) {
+      const user = this.getUser();
+      if (!user?.id) {
         throw new Error('User not authenticated');
       }
 
       // Import the activation function dynamically to avoid circular dependency
       const { activateSubscription } = await import('@/lib/firebaseService');
       
-      console.log(`Activating VIP ${tier} for user:`, this.user.id);
-      await activateSubscription(this.user.id.toString(), tier, 30); // 30 days
+      console.log(`Activating VIP ${tier} for user:`, user.id);
+      await activateSubscription(user.id.toString(), tier, 30); // 30 days
       
       console.log('VIP activation completed successfully');
     } catch (error) {
