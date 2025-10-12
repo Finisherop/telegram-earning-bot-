@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { User } from '@/types';
+import { User, AdminSettings } from '@/types';
 import { TIER_CONFIGS } from '@/lib/constants';
-import { createTelegramStarInvoice, createVipRequest, createWithdrawalRequest } from '@/lib/firebaseService';
+import { createTelegramStarInvoice, createVipRequest, createWithdrawalRequest, subscribeToAdminSettings } from '@/lib/firebaseService';
 import { playSound } from '@/lib/utils';
 import { getSafeNumericUserId, createSafePaymentData, withSafeUserId, logSafeUserInfo } from '@/lib/userDataUtils';
 import toast from 'react-hot-toast';
@@ -18,6 +18,20 @@ interface ShopWithdrawalProps {
 const ShopWithdrawal = ({ user, setUser, onClose }: ShopWithdrawalProps) => {
   const [activeSection, setActiveSection] = useState<'shop' | 'withdrawal'>('shop');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [adminSettings, setAdminSettings] = useState<AdminSettings | null>(null);
+
+  // Subscribe to admin settings for real-time updates
+  useEffect(() => {
+    console.log('[ShopWithdrawal] Setting up admin settings subscription...');
+    const unsubscribe = subscribeToAdminSettings((settings) => {
+      console.log('[ShopWithdrawal] ✅ Admin settings updated:', settings);
+      setAdminSettings(settings);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   // Telegram Stars payment handler
   const handleStarPayment = async (tier: 'bronze' | 'diamond') => {
@@ -372,20 +386,21 @@ const ShopWithdrawal = ({ user, setUser, onClose }: ShopWithdrawalProps) => {
       )}
 
       {activeSection === 'withdrawal' && (
-        <WithdrawalSection user={user} />
+        <WithdrawalSection user={user} adminSettings={adminSettings} />
       )}
     </div>
   );
 };
 
 // Withdrawal Section Component
-const WithdrawalSection = ({ user }: { user: User }) => {
+const WithdrawalSection = ({ user, adminSettings }: { user: User; adminSettings: AdminSettings | null }) => {
   const [withdrawalAmount, setWithdrawalAmount] = useState('');
   const [upiId, setUpiId] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
   const minWithdrawal = user.minWithdrawal || 200;
-  const maxWithdrawal = Math.floor(user.coins / 100); // Convert coins to INR
+  const exchangeRate = adminSettings?.inrExchangeRate || 100; // Default to 100 if not loaded
+  const maxWithdrawal = Math.floor(user.coins / exchangeRate); // Convert coins to INR using admin rate
   const dailyLimit = user.withdrawalLimit || 1;
 
   const handleWithdrawal = async () => {
@@ -455,7 +470,7 @@ const WithdrawalSection = ({ user }: { user: User }) => {
           
           <div className="text-center">
             <div className="text-2xl font-bold text-accent">
-              ₹{Math.floor(user.coins / 100)}
+              ₹{Math.floor(user.coins / exchangeRate)}
             </div>
             <p className="text-gray-600 text-sm">INR Equivalent</p>
           </div>
@@ -463,7 +478,7 @@ const WithdrawalSection = ({ user }: { user: User }) => {
         
         <div className="mt-4 bg-gray-50 rounded-lg p-3">
           <p className="text-gray-600 text-sm text-center">
-            Exchange Rate: 100 coins = ₹1
+            Exchange Rate: {exchangeRate} coins = ₹1
           </p>
         </div>
       </div>

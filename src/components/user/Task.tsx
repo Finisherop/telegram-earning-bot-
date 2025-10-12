@@ -131,6 +131,8 @@ const Task = ({ user: propUser }: TaskProps) => {
             const userTasksData = snapshot.val();
             const userTasksArray = Object.keys(userTasksData).map(key => ({
               id: key,
+              taskId: key, // Add taskId field for getTaskStatus function
+              userId: userId,
               ...userTasksData[key]
             }));
             console.log('✅ User tasks loaded from Firebase:', userTasksArray);

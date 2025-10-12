@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { DailyStats } from '@/types';
-import { getEnhancedDailyStats } from '@/lib/enhancedFirebaseService';
+import { DailyStats, User } from '@/types';
+import { getEnhancedDailyStats, upgradeUserToVIP } from '@/lib/enhancedFirebaseService';
+import { realtimeDb } from '@/lib/firebase';
+import { ref, get } from 'firebase/database';
 import toast from 'react-hot-toast';
 
 const AdminStats = () => {
@@ -17,6 +19,13 @@ const AdminStats = () => {
     totalConversions: 0,   // Initialize missing fields
   });
   const [loading, setLoading] = useState(true);
+  
+  // VIP Management State
+  const [showVipManager, setShowVipManager] = useState(false);
+  const [searchUserId, setSearchUserId] = useState('');
+  const [foundUser, setFoundUser] = useState<User | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [upgradeLoading, setUpgradeLoading] = useState(false);
 
   useEffect(() => {
     loadStats();
@@ -49,6 +58,76 @@ const AdminStats = () => {
       toast.error('Failed to load enhanced statistics');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // VIP Management Functions
+  const searchUser = async () => {
+    if (!searchUserId.trim()) {
+      toast.error('Please enter a user ID');
+      return;
+    }
+
+    setSearchLoading(true);
+    try {
+      if (!realtimeDb) {
+        toast.error('Firebase not available');
+        return;
+      }
+      
+      console.log('[Admin VIP] Searching for user:', searchUserId);
+      const userRef = ref(realtimeDb, `telegram_users/${searchUserId}`);
+      const snapshot = await get(userRef);
+      
+      if (snapshot.exists()) {
+        const userData = snapshot.val();
+        setFoundUser({
+          ...userData,
+          telegramId: userData.telegramId || userData.id || searchUserId
+        });
+        console.log('[Admin VIP] ✅ User found:', userData);
+        toast.success('User found!');
+      } else {
+        setFoundUser(null);
+        toast.error('User not found');
+      }
+    } catch (error) {
+      console.error('[Admin VIP] Error searching user:', error);
+      toast.error('Error searching user');
+      setFoundUser(null);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const upgradeUserToVip = async (tier: 'vip1' | 'vip2') => {
+    if (!foundUser) {
+      toast.error('No user selected');
+      return;
+    }
+
+    setUpgradeLoading(true);
+    try {
+      console.log('[Admin VIP] Upgrading user to', tier, ':', foundUser.telegramId);
+      
+      await upgradeUserToVIP(foundUser.telegramId, tier, 0); // 0 payment amount for manual upgrade
+      
+      // Update found user state
+      setFoundUser({
+        ...foundUser,
+        vipTier: tier
+      });
+      
+      toast.success(`✅ User upgraded to ${tier.toUpperCase()} successfully!`);
+      console.log('[Admin VIP] ✅ User upgrade successful');
+      
+      // Refresh stats
+      loadStats();
+    } catch (error) {
+      console.error('[Admin VIP] Error upgrading user:', error);
+      toast.error('Failed to upgrade user');
+    } finally {
+      setUpgradeLoading(false);
     }
   };
 
@@ -281,7 +360,7 @@ const AdminStats = () => {
             className="bg-purple-500 text-white p-4 rounded-xl font-bold hover:bg-purple-600 transition-all"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={() => toast.success('Feature coming soon!')}
+            onClick={() => setShowVipManager(true)}
           >
             <div className="text-2xl mb-2">👑</div>
             <span className="text-sm">VIP Manager</span>
@@ -338,6 +417,111 @@ const AdminStats = () => {
           </div>
         </div>
       </div>
+
+      {/* VIP Manager Modal */}
+      {showVipManager && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <motion.div
+            className="bg-white rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto"
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+          >
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-800">👑 VIP Manager</h3>
+              <button
+                onClick={() => {
+                  setShowVipManager(false);
+                  setFoundUser(null);
+                  setSearchUserId('');
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* User Search */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Search User by Telegram ID
+              </label>
+              <div className="flex space-x-2">
+                <input
+                  type="text"
+                  value={searchUserId}
+                  onChange={(e) => setSearchUserId(e.target.value)}
+                  placeholder="Enter Telegram User ID"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <motion.button
+                  onClick={searchUser}
+                  disabled={searchLoading}
+                  className="bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600 disabled:opacity-50"
+                  whileTap={{ scale: 0.95 }}
+                >
+                  {searchLoading ? '⏳' : '🔍'}
+                </motion.button>
+              </div>
+            </div>
+
+            {/* User Found */}
+            {foundUser && (
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                <h4 className="font-bold text-gray-800 mb-2">User Found:</h4>
+                <div className="space-y-1 text-sm">
+                  <p><strong>Name:</strong> {foundUser.firstName || (foundUser as any).first_name} {foundUser.lastName || (foundUser as any).last_name}</p>
+                  <p><strong>Username:</strong> @{foundUser.username || 'N/A'}</p>
+                  <p><strong>ID:</strong> {foundUser.telegramId}</p>
+                  <p><strong>Current VIP:</strong> <span className={`font-bold ${foundUser.vipTier === 'free' ? 'text-gray-500' : 'text-purple-600'}`}>
+                    {foundUser.vipTier?.toUpperCase() || 'FREE'}
+                  </span></p>
+                  <p><strong>Coins:</strong> {foundUser.coins || 0}</p>
+                </div>
+
+                {/* VIP Upgrade Buttons */}
+                <div className="mt-4 space-y-2">
+                  <h5 className="font-medium text-gray-700">Upgrade to:</h5>
+                  <div className="flex space-x-2">
+                    <motion.button
+                      onClick={() => upgradeUserToVip('vip1')}
+                      disabled={upgradeLoading || foundUser.vipTier === 'vip1'}
+                      className="flex-1 bg-blue-500 text-white py-2 px-3 rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      {upgradeLoading ? '⏳' : '👑 VIP 1'}
+                    </motion.button>
+                    <motion.button
+                      onClick={() => upgradeUserToVip('vip2')}
+                      disabled={upgradeLoading || foundUser.vipTier === 'vip2'}
+                      className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white py-2 px-3 rounded-lg hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      {upgradeLoading ? '⏳' : '💎 VIP 2'}
+                    </motion.button>
+                  </div>
+                  
+                  {foundUser.vipTier !== 'free' && (
+                    <motion.button
+                      onClick={() => upgradeUserToVIP(foundUser.telegramId, 'free' as any, 0)}
+                      disabled={upgradeLoading}
+                      className="w-full bg-gray-500 text-white py-2 px-3 rounded-lg hover:bg-gray-600 disabled:opacity-50 text-sm font-medium"
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      {upgradeLoading ? '⏳' : '🚫 Remove VIP'}
+                    </motion.button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Instructions */}
+            <div className="text-xs text-gray-500 text-center">
+              Enter a Telegram User ID to search and manage their VIP status
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };
