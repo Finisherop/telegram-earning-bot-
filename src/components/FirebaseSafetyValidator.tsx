@@ -26,14 +26,8 @@ const FirebaseSafetyValidator = () => {
     );
   }
 
-  return (
-    <div className="fixed top-4 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-2 rounded-lg shadow-lg z-50">
-      <div className="flex items-center space-x-2">
-        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-        <span className="text-sm font-medium">Firebase Connected</span>
-      </div>
-    </div>
-  );
+  // Don't show any message when connected
+  return null;
 };
 
 export default FirebaseSafetyValidator;

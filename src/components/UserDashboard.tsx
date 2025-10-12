@@ -31,22 +31,59 @@ const UserDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [telegramId, setTelegramId] = useState<string | null>(null);
 
-  // Get Telegram user ID
+  // Get Telegram user ID and initialize user
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      try {
-        const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
-        if (tgUser?.id) {
-          setTelegramId(String(tgUser.id));
-        } else {
-          // Fallback for browser mode
-          const browserId = localStorage.getItem('browser_user_id') || 'browser_user';
-          setTelegramId(browserId);
+      const initializeUser = async () => {
+        try {
+          const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
+          let userId: string;
+          let userInfo: any = {};
+          
+          if (tgUser?.id) {
+            // Real Telegram user
+            userId = String(tgUser.id);
+            userInfo = {
+              firstName: tgUser.first_name || 'User',
+              lastName: tgUser.last_name || '',
+              username: tgUser.username || '',
+              profilePic: tgUser.photo_url || ''
+            };
+            console.log('[UserDashboard] Telegram user detected:', userId, userInfo);
+          } else {
+            // Fallback for browser mode
+            userId = localStorage.getItem('browser_user_id') || `browser_${Date.now()}`;
+            localStorage.setItem('browser_user_id', userId);
+            userInfo = {
+              firstName: 'Browser User',
+              lastName: '',
+              username: 'browseruser',
+              profilePic: ''
+            };
+            console.log('[UserDashboard] Browser mode user:', userId);
+          }
+          
+          setTelegramId(userId);
+          
+          // Initialize user in Firebase if not exists
+          const { initializeUser: initUser } = await import('@/lib/firebaseService');
+          await initUser(userId);
+          
+          // Update user info if we have new data
+          if (userInfo.firstName && userInfo.firstName !== 'User') {
+            const { safeUpdateUser } = await import('@/lib/firebaseService');
+            await safeUpdateUser(userId, userInfo);
+          }
+          
+        } catch (error) {
+          console.error('[UserDashboard] Error initializing user:', error);
+          // Silent fallback
+          const fallbackId = 'browser_user';
+          setTelegramId(fallbackId);
         }
-      } catch (error) {
-        // Silent fallback
-        setTelegramId('browser_user');
-      }
+      };
+      
+      initializeUser();
     }
   }, []);
 
