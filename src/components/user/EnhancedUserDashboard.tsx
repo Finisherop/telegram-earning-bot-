@@ -4,6 +4,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { User, AdminSettings } from '@/types';
 import { 
+  safeFirebaseUserSync,
+  setupRealtimeUserListener,
+  ultimateFirebaseSanitizer
+} from '@/lib/firebaseSafeSyncFix';
+import { 
   firebaseRealtimeManager,
   subscribeToUser,
   subscribeToGlobalConfig,

@@ -232,7 +232,7 @@ export const cleanupListeners = () => {
 };
 
 /**
- * Initialize or get user data
+ * Initialize or get user data with safe defaults
  */
 export const initializeUser = async (userId: string): Promise<User> => {
   const db = getRealtimeDb();
@@ -254,11 +254,15 @@ export const initializeUser = async (userId: string): Promise<User> => {
         vipEndTime: userData.vipEndTime ? new Date(userData.vipEndTime) : undefined
       };
     } else {
-      // Create new user with default values
+      // Create new user with default values - NO UNDEFINED VALUES
       const now = new Date().toISOString();
-      const newUser: User = {
+      const newUser: Omit<User, 'createdAt' | 'updatedAt'> & { createdAt: string; updatedAt: string } = {
         id: userId,
         telegramId: userId,
+        firstName: 'User', // Never undefined
+        lastName: '', // Never undefined
+        username: '', // Never undefined
+        profilePic: '', // Never undefined
         coins: 0,
         xp: 0,
         level: 1,
@@ -271,18 +275,19 @@ export const initializeUser = async (userId: string): Promise<User> => {
         referralCount: 0,
         referralEarnings: 0,
         dailyStreak: 0,
-        createdAt: new Date(now),
-        updatedAt: new Date(now)
-      };
-      
-      await set(userRef, {
-        ...newUser,
         createdAt: now,
         updatedAt: now
-      });
+      };
       
-      console.log('Created new user:', userId);
-      return newUser;
+      console.log('[Firebase] Creating new user with safe defaults:', userId);
+      await set(userRef, newUser);
+      
+      // Return user object with proper Date objects
+      return {
+        ...newUser,
+        createdAt: new Date(now),
+        updatedAt: new Date(now)
+      } as User;
     }
   } catch (error) {
     console.error('[Firebase] Error initializing user:', error);
@@ -291,7 +296,7 @@ export const initializeUser = async (userId: string): Promise<User> => {
 };
 
 /**
- * Safe user update with validation
+ * Safe user update with validation and undefined prevention
  */
 export const safeUpdateUser = async (userId: string, updateData: Partial<User>): Promise<User> => {
   const db = getRealtimeDb();
@@ -305,24 +310,35 @@ export const safeUpdateUser = async (userId: string, updateData: Partial<User>):
 
     const userRef = ref(db, `telegram_users/${sanitizedUserId}`);
     
-    // Prepare sanitized update data
+    // Prepare sanitized update data - CRITICAL for preventing undefined errors
     const sanitizedData: Record<string, any> = {};
     
     Object.entries(updateData).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        if (value instanceof Date) {
-          sanitizedData[key] = value.toISOString();
-        } else if (typeof value === 'string') {
-          sanitizedData[key] = value.trim() || undefined;
-        } else {
-          sanitizedData[key] = value;
-        }
+      if (value === undefined) {
+        // NEVER send undefined to Firebase - log warning and skip
+        console.warn(`[Firebase] Skipping undefined value for key '${key}' in user update`);
+        return;
+      }
+      
+      if (value === null) {
+        sanitizedData[key] = null;
+      } else if (value instanceof Date) {
+        sanitizedData[key] = value.toISOString();
+      } else if (typeof value === 'string') {
+        sanitizedData[key] = value.trim() || '';
+      } else {
+        sanitizedData[key] = value;
       }
     });
     
+    // Only update if we have valid data
     if (Object.keys(sanitizedData).length > 0) {
       sanitizedData.updatedAt = new Date().toISOString();
+      
+      console.log(`[Firebase] Updating user ${sanitizedUserId} with:`, Object.keys(sanitizedData));
       await update(userRef, sanitizedData);
+    } else {
+      console.warn(`[Firebase] No valid data to update for user ${sanitizedUserId}`);
     }
     
     // Get updated user data
