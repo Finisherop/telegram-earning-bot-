@@ -96,7 +96,7 @@ export function sanitizeUserId(userId: any): string | null {
 
 export function buildUserPath(userId: any): string | null {
   const cleanId = sanitizeUserId(userId);
-  return cleanId ? `users/${cleanId}` : null;
+  return cleanId ? `telegram_users/${cleanId}` : null;
 }
 
 export function buildTaskPath(taskId: any): string | null {
@@ -107,7 +107,7 @@ export function buildTaskPath(taskId: any): string | null {
 export function buildUserTaskPath(userId: any, taskId: any): string | null {
   const cleanUserId = sanitizeUserId(userId);
   const cleanTaskId = sanitizeUserId(taskId);
-  return (cleanUserId && cleanTaskId) ? `user_tasks/${cleanUserId}/${cleanTaskId}` : null;
+  return (cleanUserId && cleanTaskId) ? `userTasks/${cleanUserId}/${cleanTaskId}` : null;
 }
 
 export function extractUserId(path: string): string | null {

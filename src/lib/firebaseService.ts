@@ -55,6 +55,7 @@ export const subscribeToUser = (userId: string, callback: (user: User | null) =>
         const user: User = {
           ...userData,
           id: userId,
+          telegramId: userId, // Ensure telegramId is set
           createdAt: userData.createdAt ? new Date(userData.createdAt) : new Date(),
           updatedAt: userData.updatedAt ? new Date(userData.updatedAt) : new Date(),
           lastClaimDate: userData.lastClaimDate ? new Date(userData.lastClaimDate) : undefined,
