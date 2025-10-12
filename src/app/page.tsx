@@ -91,16 +91,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-light">
-      {/* Telegram User Welcome Message */}
-      {user && (
-        <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4 text-center">
-          <h2 className="text-lg font-bold">Welcome, {user.first_name}!</h2>
-          {user.username && (
-            <p className="text-sm opacity-90">@{user.username}</p>
-          )}
-        </div>
-      )}
-      
       {/* Firebase Safety Validator - shows validation status */}
       <FirebaseSafetyValidator />
       

@@ -6,16 +6,21 @@ import { User, Task as TaskType, UserTask } from '@/types';
 import { getTasks, getUserTasks, completeTask, claimTask, safeUpdateUser, subscribeToTasks, subscribeToUserTasks } from '@/lib/firebaseService';
 import { TelegramService } from '@/lib/telegram';
 import { validateUserForOperation, getUserValidationError } from '@/lib/userValidation';
+import { realtimeDb } from '@/lib/firebaseClient.js';
+import { ref, onValue, off } from 'firebase/database';
+import { useTelegramWebApp } from '@/hooks/useTelegramWebApp.js';
 import toast from 'react-hot-toast';
 
 interface TaskProps {
-  user: User;
+  user?: User;
 }
 
-const Task = ({ user }: TaskProps) => {
+const Task = ({ user: propUser }: TaskProps) => {
+  const { user: telegramUser } = useTelegramWebApp() as any;
   const [tasks, setTasks] = useState<TaskType[]>([]);
   const [userTasks, setUserTasks] = useState<UserTask[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false); // For individual task actions
   const [completingTask, setCompletingTask] = useState<string | null>(null);
   const [timer, setTimer] = useState<number | null>(null);
@@ -23,96 +28,133 @@ const Task = ({ user }: TaskProps) => {
   const [adsWatchedToday, setAdsWatchedToday] = useState(0);
   const [visitedLinks, setVisitedLinks] = useState<Set<string>>(new Set());
 
+  // Create a combined user object for compatibility
+  const user = propUser || {
+    telegramId: telegramUser?.id?.toString() || '',
+    vipTier: 'free',
+    adsLimitPerDay: 5,
+    coins: 0,
+    xp: 0,
+    dailyStreak: 0,
+    farmingStartTime: null,
+    farmingEndTime: null,
+    lastClaimDate: null,
+    firstName: telegramUser?.first_name || 'User',
+    username: telegramUser?.username || ''
+  };
+
   useEffect(() => {
-    // Validate user before setting up listeners
-    if (!validateUserForOperation(user, 'task listeners setup')) {
-      console.warn('Invalid user data, skipping task listeners setup');
-      setLoading(false);
-      return;
-    }
-
-    // Set up real-time listeners
-    console.log('Setting up real-time listeners for tasks and user tasks');
-    
-    const unsubscribeTasks = subscribeToTasks((tasksData) => {
-      console.log('Real-time tasks update:', tasksData);
-      // Filter only active tasks
-      const activeTasks = tasksData.filter(task => task.isActive);
-      setTasks(activeTasks);
-      
-      // If no tasks found, add default tasks
-      if (activeTasks.length === 0) {
-        console.log('No active tasks found, using default tasks');
-        const defaultTasks: TaskType[] = [
-          {
-            id: 'task_1',
-            title: 'Join Telegram Channel',
-            description: 'Join our official Telegram channel',
-            type: 'social',
-            reward: 100,
-            url: 'https://t.me/your_channel',
-            isActive: true,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          },
-          {
-            id: 'task_2',
-            title: 'Watch Advertisement',
-            description: 'Watch a short video ad to earn coins',
-            type: 'ads',
-            reward: 50,
-            isActive: true,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          },
-          {
-            id: 'task_3',
-            title: 'Daily Reward',
-            description: 'Claim your daily reward',
-            type: 'daily',
-            reward: 50,
-            isActive: true,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          },
-          {
-            id: 'task_4',
-            title: 'Start Farming',
-            description: 'Start your 8-hour farming cycle',
-            type: 'farming',
-            reward: 100,
-            isActive: true,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          }
-        ];
-        setTasks(defaultTasks);
+    const loadTasks = async () => {
+      if (!realtimeDb) {
+        console.error('❌ Firebase Realtime Database not available');
+        setError('Firebase not available');
+        setLoading(false);
+        return;
       }
-    });
 
-    const unsubscribeUserTasks = subscribeToUserTasks(user.telegramId, (userTasksData) => {
-      console.log('Real-time user tasks update:', userTasksData);
-      setUserTasks(userTasksData);
+      // Get user ID from Telegram or fallback to prop user
+      const userId = telegramUser?.id || propUser?.telegramId;
       
-      // Update ads count
-      const today = new Date().toDateString();
-      const todayTasks = userTasksData.filter(ut => {
-        const task = tasks.find(t => t.id === ut.taskId);
-        return task?.type === 'ads' && 
-               ut.claimedAt && 
-               new Date(ut.claimedAt).toDateString() === today;
-      });
-      setAdsWatchedToday(todayTasks.length);
-    });
+      if (!userId) {
+        console.warn('Tasks: No user ID available');
+        setError('No user ID available');
+        setLoading(false);
+        return;
+      }
 
-    setLoading(false);
+      console.log('Loading tasks for user:', userId);
+      setLoading(true);
+      setError(null);
 
-    // Cleanup function
-    return () => {
-      unsubscribeTasks();
-      unsubscribeUserTasks();
+      try {
+        // Set up real-time listener for tasks
+        const tasksRef = ref(realtimeDb, 'tasks');
+        const unsubscribeTasks = onValue(tasksRef, (snapshot) => {
+          if (snapshot.exists()) {
+            const tasksData = snapshot.val();
+            const tasksArray = Object.keys(tasksData).map(key => ({
+              id: key,
+              ...tasksData[key]
+            })).filter(task => task.isActive !== false); // Only show active tasks
+            
+            console.log('✅ Tasks loaded from Firebase:', tasksArray);
+            setTasks(tasksArray);
+          } else {
+            console.log('No tasks found in Firebase, using default tasks');
+            // Default tasks if none exist in Firebase
+            const defaultTasks: TaskType[] = [
+              {
+                id: 'task_1',
+                title: 'Join Telegram Channel',
+                description: 'Join our official Telegram channel',
+                type: 'social',
+                reward: 100,
+                link: 'https://t.me/your_channel',
+                isActive: true,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+              {
+                id: 'task_2',
+                title: 'Watch Advertisement',
+                description: 'Watch a short video ad to earn coins',
+                type: 'ads',
+                reward: 50,
+                isActive: true,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+              {
+                id: 'task_3',
+                title: 'Daily Reward',
+                description: 'Claim your daily reward',
+                type: 'daily',
+                reward: 50,
+                isActive: true,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              }
+            ];
+            setTasks(defaultTasks);
+          }
+          setLoading(false);
+        }, (error) => {
+          console.error('❌ Error fetching tasks:', error);
+          setError('Failed to load tasks');
+          setLoading(false);
+        });
+
+        // Set up real-time listener for user tasks
+        const userTasksRef = ref(realtimeDb, `userTasks/${userId}`);
+        const unsubscribeUserTasks = onValue(userTasksRef, (snapshot) => {
+          if (snapshot.exists()) {
+            const userTasksData = snapshot.val();
+            const userTasksArray = Object.keys(userTasksData).map(key => ({
+              id: key,
+              ...userTasksData[key]
+            }));
+            console.log('✅ User tasks loaded from Firebase:', userTasksArray);
+            setUserTasks(userTasksArray);
+          } else {
+            console.log('No user tasks found');
+            setUserTasks([]);
+          }
+        });
+
+        // Cleanup function
+        return () => {
+          off(tasksRef, 'value', unsubscribeTasks);
+          off(userTasksRef, 'value', unsubscribeUserTasks);
+        };
+      } catch (error) {
+        console.error('❌ Firebase error:', error);
+        setError('Failed to load tasks');
+        setLoading(false);
+      }
     };
-  }, [user?.telegramId, tasks]);
+
+    loadTasks();
+  }, [telegramUser?.id, propUser?.telegramId]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -471,10 +513,28 @@ const Task = ({ user }: TaskProps) => {
   if (loading) {
     return (
       <div className="p-4">
-        <div className="animate-pulse space-y-4">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="bg-gray-200 rounded-2xl h-24" />
-          ))}
+        <div className="bg-white rounded-2xl p-6 text-center mb-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Loading tasks...</h2>
+          <p className="text-gray-600">Fetching available tasks from Firebase</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4">
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center">
+          <div className="text-4xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold text-red-800 mb-2">Error fetching tasks</h2>
+          <p className="text-red-600 mb-4">{error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+          >
+            Refresh App
+          </button>
         </div>
       </div>
     );

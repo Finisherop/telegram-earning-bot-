@@ -5,9 +5,12 @@ import { motion } from 'framer-motion';
 import { User } from '@/types';
 import { TelegramService } from '@/lib/telegram';
 import { getWithdrawalRequests } from '@/lib/firebaseService';
+import { realtimeDb } from '@/lib/firebaseClient.js';
+import { ref, get, set, onValue, off } from 'firebase/database';
+import { useTelegramWebApp } from '@/hooks/useTelegramWebApp.js';
 
 interface ProfileProps {
-  user: User;
+  user?: User;
 }
 
 interface WithdrawalStats {
@@ -17,7 +20,23 @@ interface WithdrawalStats {
   pending: number;
 }
 
-const Profile = ({ user }: ProfileProps) => {
+interface FirebaseUser {
+  id: string;
+  first_name: string;
+  username?: string;
+  coins: number;
+  createdAt: number;
+  vipTier?: string;
+  profilePic?: string;
+  lastName?: string;
+  telegramId?: string;
+}
+
+const Profile = ({ user: propUser }: ProfileProps) => {
+  const { user: telegramUser } = useTelegramWebApp() as any;
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [withdrawalStats, setWithdrawalStats] = useState<WithdrawalStats>({
     total: 0,
     successful: 0,
@@ -26,16 +45,78 @@ const Profile = ({ user }: ProfileProps) => {
   });
 
   useEffect(() => {
-    const loadWithdrawalStats = async () => {
-      // Validate user ID before making requests
-      if (!user || !user.telegramId || user.telegramId.trim() === '' || user.telegramId === 'undefined' || user.telegramId === 'null') {
-        console.warn('Profile: Invalid user ID, skipping withdrawal stats load:', user?.telegramId);
+    const loadUserProfile = async () => {
+      if (!realtimeDb) {
+        console.error('❌ Firebase Realtime Database not available');
+        setError('Firebase not available');
+        setLoading(false);
         return;
       }
 
+      // Get user ID from Telegram or fallback to prop user
+      const userId = telegramUser?.id || propUser?.telegramId;
+      
+      if (!userId) {
+        console.warn('Profile: No user ID available');
+        setError('No user ID available');
+        setLoading(false);
+        return;
+      }
+
+      console.log('Loading profile for user:', userId);
+      setLoading(true);
+      setError(null);
+
+      try {
+        const userRef = ref(realtimeDb, `users/${userId}`);
+        
+        // Set up real-time listener
+        const unsubscribe = onValue(userRef, async (snapshot) => {
+          if (snapshot.exists()) {
+            const userData = snapshot.val();
+            console.log('✅ Profile loaded from Firebase:', userData);
+            setFirebaseUser(userData);
+          } else {
+            // User doesn't exist, create default profile
+            console.log('🆕 New user detected, creating profile...');
+            const defaultUser: FirebaseUser = {
+              id: String(userId),
+              first_name: telegramUser?.first_name || propUser?.firstName || 'User',
+              username: telegramUser?.username || propUser?.username || '',
+              coins: 0,
+              createdAt: Date.now(),
+              vipTier: 'free',
+              telegramId: String(userId)
+            };
+
+            await set(userRef, defaultUser);
+            console.log('🆕 New user created in Firebase:', defaultUser);
+            setFirebaseUser(defaultUser);
+          }
+          setLoading(false);
+        }, (error) => {
+          console.error('❌ Firebase error:', error);
+          setError('Failed to load profile');
+          setLoading(false);
+        });
+
+        // Load withdrawal stats
+        loadWithdrawalStats(String(userId));
+
+        return () => {
+          off(userRef, 'value', unsubscribe);
+        };
+      } catch (error) {
+        console.error('❌ Firebase error:', error);
+        setError('Failed to load profile');
+        setLoading(false);
+      }
+    };
+
+    const loadWithdrawalStats = async (userId: string) => {
       try {
         const withdrawals = await getWithdrawalRequests();
-        const userWithdrawals = withdrawals.filter(w => w.userId === user.telegramId);
+        const userWithdrawals = withdrawals.filter(w => w.userId === userId);
         
         const stats = {
           total: userWithdrawals.length,
@@ -50,16 +131,16 @@ const Profile = ({ user }: ProfileProps) => {
       }
     };
 
-    loadWithdrawalStats();
-  }, [user?.telegramId]);
+    loadUserProfile();
+  }, [telegramUser?.id, propUser?.telegramId]);
 
   const getVIPBadge = () => {
-    if (user.vipTier === 'free') return null;
+    if (!firebaseUser || firebaseUser.vipTier === 'free') return null;
     
     return (
       <motion.div
         className={`absolute -top-2 -right-2 px-3 py-1 rounded-full text-xs font-bold ${
-          user.vipTier === 'vip1' 
+          firebaseUser.vipTier === 'vip1' 
             ? 'bg-blue-500 text-white' 
             : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
         }`}
@@ -73,7 +154,7 @@ const Profile = ({ user }: ProfileProps) => {
           ease: "easeInOut"
         }}
       >
-        {user.vipTier === 'vip1' ? '👑 VIP 1' : '💎 VIP 2'}
+        {firebaseUser.vipTier === 'vip1' ? '👑 VIP 1' : '💎 VIP 2'}
       </motion.div>
     );
   };
@@ -83,29 +164,59 @@ const Profile = ({ user }: ProfileProps) => {
     telegram.hapticFeedback('medium');
     
     // Validate user ID before copying
-    if (!user || !user.telegramId || user.telegramId.trim() === '' || user.telegramId === 'undefined' || user.telegramId === 'null') {
+    if (!firebaseUser || !firebaseUser.id) {
       telegram.showAlert('User ID not available');
       return;
     }
     
     try {
-      await navigator.clipboard.writeText(user.telegramId);
+      await navigator.clipboard.writeText(firebaseUser.id);
       telegram.showAlert('User ID copied to clipboard!');
     } catch (error) {
       telegram.showAlert('Failed to copy User ID');
     }
   };
 
-  // Show error message if user data is invalid
-  if (!user || !user.telegramId || user.telegramId.trim() === '' || user.telegramId === 'undefined' || user.telegramId === 'null') {
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="p-4 space-y-6">
+        <div className="bg-white rounded-2xl p-6 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Loading profile...</h2>
+          <p className="text-gray-600">Fetching your data from Firebase</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error message if there's an error
+  if (error) {
     return (
       <div className="p-4 space-y-6">
         <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center">
           <div className="text-4xl mb-4">⚠️</div>
           <h2 className="text-xl font-bold text-red-800 mb-2">Profile Data Unavailable</h2>
-          <p className="text-red-600 mb-4">
-            Your user profile data is not available. This might be due to a connection issue.
-          </p>
+          <p className="text-red-600 mb-4">{error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+          >
+            Refresh App
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if no Firebase user data
+  if (!firebaseUser) {
+    return (
+      <div className="p-4 space-y-6">
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center">
+          <div className="text-4xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold text-red-800 mb-2">Profile Data Unavailable</h2>
+          <p className="text-red-600 mb-4">Unable to load profile data</p>
           <button 
             onClick={() => window.location.reload()} 
             className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
@@ -128,9 +239,9 @@ const Profile = ({ user }: ProfileProps) => {
               whileHover={{ scale: 1.1 }}
               transition={{ duration: 0.2 }}
             >
-              {user.profilePic ? (
+              {firebaseUser.profilePic ? (
                 <img
-                  src={user.profilePic}
+                  src={firebaseUser.profilePic}
                   alt="Profile"
                   className="w-full h-full rounded-full object-cover"
                 />
@@ -143,18 +254,23 @@ const Profile = ({ user }: ProfileProps) => {
           
           <div className="flex-1">
             <h1 className="text-2xl font-bold">
-              {user.firstName} {user.lastName}
+              {firebaseUser.first_name} {firebaseUser.lastName || ''}
             </h1>
-            {user.username && (
-              <p className="text-white/80">@{user.username}</p>
+            {firebaseUser.username && (
+              <p className="text-white/80">@{firebaseUser.username}</p>
             )}
-            <motion.button
-              onClick={copyUserId}
-              className="text-white/90 text-sm hover:text-white transition-colors mt-1"
-              whileTap={{ scale: 0.95 }}
-            >
-              ID: {user?.telegramId || 'Not available'} 📋
-            </motion.button>
+            <div className="flex items-center space-x-4 mt-2">
+              <motion.button
+                onClick={copyUserId}
+                className="text-white/90 text-sm hover:text-white transition-colors"
+                whileTap={{ scale: 0.95 }}
+              >
+                ID: {firebaseUser.id} 📋
+              </motion.button>
+              <div className="text-white/90 text-sm">
+                💰 {firebaseUser.coins} coins
+              </div>
+            </div>
           </div>
         </div>
       </div>
