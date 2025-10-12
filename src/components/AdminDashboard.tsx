@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useFirebaseReliable } from '@/hooks/useFirebaseReliable';
 import AdminStats from './admin/AdminStats';
 import EnhancedAdminSettings from './admin/EnhancedAdminSettings';
 import AdminApprovals from './admin/AdminApprovals';
@@ -14,6 +15,16 @@ const tabs = [
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('stats');
+  
+  // Use reliable Firebase service for admin operations
+  const { 
+    adminSettings, 
+    dailyStats, 
+    withdrawals, 
+    updateAdminSettings,
+    updateWithdrawalStatus,
+    connectionStatus 
+  } = useFirebaseReliable();
 
   const renderTabContent = () => {
     switch (activeTab) {

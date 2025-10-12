@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User } from '@/types';
-import { useEnhancedAuth } from '@/hooks/useEnhancedAuth';
+import { useFirebaseReliable } from '@/hooks/useFirebaseReliable';
 import EnhancedDashboard from './user/EnhancedDashboard';
 import Task from './user/Task';
 import Referral from './user/Referral';
@@ -21,30 +21,58 @@ const tabs = [
 
 const UserDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const { user, isLoading, hasError, isAuthenticated, updateUser } = useEnhancedAuth();
+  const [telegramId, setTelegramId] = useState<string | null>(null);
+
+  // Get Telegram user ID
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
+        if (tgUser?.id) {
+          setTelegramId(String(tgUser.id));
+        } else {
+          // Fallback for browser mode
+          const browserId = localStorage.getItem('browser_user_id') || 'browser_user';
+          setTelegramId(browserId);
+        }
+      } catch (error) {
+        // Silent fallback
+        setTelegramId('browser_user');
+      }
+    }
+  }, []);
+
+  const { 
+    user, 
+    userLoading: isLoading, 
+    updateUser,
+    tasks,
+    userTasks,
+    withdrawals,
+    connectionStatus
+  } = useFirebaseReliable(telegramId || undefined);
 
   // Handle user updates with optimistic UI
   const handleUserUpdate = useCallback(async (updateData: Partial<User>) => {
-    if (!user?.telegramId) return;
+    if (!telegramId) return;
     
-    try {
-      await updateUser(updateData);
-    } catch (error) {
-      console.error('Error updating user:', error);
-    }
-  }, [user?.telegramId, updateUser]);
+    // Silent update - no error handling needed as it's handled in the hook
+    await updateUser(updateData);
+  }, [telegramId, updateUser]);
 
   // Show skeleton loader while data is loading
-  if (isLoading || (!user && !hasError)) {
+  if (isLoading || !user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        {/* Loading Banner */}
-        <div className="bg-primary/90 text-white p-3 text-center">
-          <div className="flex items-center justify-center space-x-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-            <span className="text-sm">Loading user data...</span>
+        {/* Connection Status - Silent */}
+        {!connectionStatus.isConnected && (
+          <div className="bg-gray-500/90 text-white p-2 text-center">
+            <div className="flex items-center justify-center space-x-2">
+              <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+              <span className="text-xs">Syncing...</span>
+            </div>
           </div>
-        </div>
+        )}
         
         {/* Skeleton Content */}
         <SkeletonLoader 
@@ -67,26 +95,7 @@ const UserDashboard = () => {
     );
   }
 
-  // Show error state
-  if (hasError && !user) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl p-8 text-center shadow-lg max-w-md">
-          <div className="text-6xl mb-4">❌</div>
-          <h2 className="text-xl font-bold text-gray-800 mb-2">Connection Error</h2>
-          <p className="text-gray-600 mb-6">
-            Failed to load user data. Please check your internet connection and try again.
-          </p>
-          <button 
-            onClick={() => window.location.reload()}
-            className="bg-primary text-white px-6 py-3 rounded-xl font-bold hover:bg-primary/90 transition-all"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // No error states - silent handling
 
   if (!user) return null;
 
@@ -115,11 +124,12 @@ const UserDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-20">
-      {/* Sync Status Banner (only show if there are sync issues) */}
-      {hasError && user && (
-        <div className="bg-yellow-500/90 text-white p-2 text-center">
+      {/* Connection Status Banner (silent) */}
+      {!connectionStatus.isConnected && (
+        <div className="bg-gray-500/90 text-white p-1 text-center">
           <div className="flex items-center justify-center space-x-2">
-            <span className="text-xs">⚠️ Sync issues - working offline</span>
+            <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+            <span className="text-xs">Syncing...</span>
           </div>
         </div>
       )}
