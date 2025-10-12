@@ -89,7 +89,7 @@ const Task = ({ user: propUser }: TaskProps) => {
                 description: 'Join our official Telegram channel',
                 type: 'social',
                 reward: 100,
-                link: 'https://t.me/your_channel',
+                url: 'https://t.me/your_channel',
                 isActive: true,
                 createdAt: new Date(),
                 updatedAt: new Date(),
@@ -414,10 +414,9 @@ const Task = ({ user: propUser }: TaskProps) => {
       return;
     }
 
-    // Enhanced validation for user data using utility function
-    if (!validateUserForOperation(user, 'task claim')) {
-      const errorMessage = getUserValidationError(user);
-      toast.error(errorMessage);
+    // Enhanced validation for user data
+    if (!user || !user.telegramId) {
+      toast.error('User data not available');
       return;
     }
 
