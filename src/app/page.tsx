@@ -6,6 +6,7 @@ import { ADMIN_SECRET_KEY } from '@/lib/constants';
 import UserDashboard from '@/components/UserDashboard';
 import AdminDashboard from '@/components/AdminDashboard';
 import BackgroundDataLoader from '@/components/BackgroundDataLoader';
+import FirebaseSafetyValidator from '@/components/FirebaseSafetyValidator';
 
 export default function Home() {
   const router = useRouter();
@@ -62,6 +63,9 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-light">
+      {/* Firebase Safety Validator - shows validation status */}
+      <FirebaseSafetyValidator />
+      
       {/* Background Data Loader - handles all complex loading silently */}
       <BackgroundDataLoader />
       

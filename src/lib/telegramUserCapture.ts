@@ -79,9 +79,9 @@ class TelegramUserCapture {
           const userData: TelegramUserData = {
             id: telegramUser.id,
             first_name: telegramUser.first_name || 'Telegram User',
-            last_name: telegramUser.last_name || '',
-            username: telegramUser.username || '',
-            photo_url: telegramUser.photo_url || '',
+            last_name: telegramUser.last_name || '', // Never undefined
+            username: telegramUser.username || '', // Never undefined
+            photo_url: telegramUser.photo_url || '', // Never undefined
             language_code: telegramUser.language_code || 'en',
             is_premium: telegramUser.is_premium || false,
             capturedAt: new Date().toISOString(),
@@ -135,7 +135,7 @@ class TelegramUserCapture {
     const browserUserData: BrowserUserData = {
       id: browserId,
       first_name: firstName,
-      last_name: undefined,
+      last_name: '', // Never undefined
       username: `browser_${browserId.split('_')[1]}`,
       capturedAt: new Date().toISOString(),
       lastSeen: new Date().toISOString(),

@@ -1,8 +1,8 @@
 /**
  * Enhanced Main Dashboard Component
  * 
- * Uses the new Firebase Realtime Manager for comprehensive real-time sync,
- * auto-reconnection, undefined value sanitization, and instant admin updates.
+ * Now uses comprehensive Firebase safety fixes to prevent all undefined value errors
+ * and implements instant real-time UI updates with proper DOM ready handling.
  */
 
 'use client';
@@ -10,14 +10,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { User } from '@/types';
-import { getTelegramUserSafe } from '@/lib/telegramUserSafe';
-import { mapTelegramUserToUser, createSafeUser } from '@/lib/telegramUserMapper';
-import EnhancedUserDashboard from './user/EnhancedUserDashboard';
 import { 
-  firebaseRealtimeManager,
-  subscribeToUser 
-} from '@/lib/firebaseRealtimeManager';
-import { TelegramService } from '@/lib/telegram';
+  initializeUserSafely,
+  setupRealtimeUserListener,
+  cleanupAllListeners,
+  createSafeUser,
+  safeFirebaseUserSync
+} from '@/lib/firebaseSafeSyncFix';
+import EnhancedUserDashboard from './user/EnhancedUserDashboard';
 import toast from 'react-hot-toast';
 
 interface MainDashboardProps {
@@ -31,67 +31,81 @@ const MainDashboard = ({ initialUser }: MainDashboardProps) => {
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * Initialize user and set up real-time Firebase sync
+   * Initialize user with comprehensive Firebase safety fixes
+   * Implements real-time listeners and proper DOM ready handling
    */
   const initializeUser = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
       
-      console.log('[MainDashboard] Starting enhanced user initialization...');
+      console.log('[MainDashboard] 🚀 Starting SAFE user initialization...');
       
-      // Get Telegram user data safely
-      const telegramUser = getTelegramUserSafe();
+      // Use the new safe initialization system
+      const { user, userId, setupListener } = await initializeUserSafely();
       
-      if (!telegramUser || !telegramUser.id) {
-        throw new Error('Unable to get valid user ID from Telegram');
+      if (user && userId) {
+        console.log('[MainDashboard] ✅ User initialization successful:', {
+          id: userId,
+          firstName: user.firstName,
+          coins: user.coins,
+          vipTier: user.vipTier
+        });
+        
+        setUser(user);
+        setIsInitialized(true);
+        
+        // Set up real-time listener for instant UI updates
+        const unsubscribe = setupRealtimeUserListener(userId, (updatedUser) => {
+          if (updatedUser) {
+            console.log('[MainDashboard] 📡 Real-time update received:', {
+              coins: updatedUser.coins,
+              vipTier: updatedUser.vipTier,
+              timestamp: new Date().toISOString()
+            });
+            
+            setUser(updatedUser);
+            
+            // Show subtle notification for significant changes
+            if (user.coins !== updatedUser.coins) {
+              toast.success('💰 Coins updated!', { duration: 2000 });
+            }
+          } else {
+            console.log('[MainDashboard] ⚠️ User data not found in real-time update');
+          }
+        }, (error) => {
+          console.error('[MainDashboard] Real-time listener error:', error);
+          setError('Real-time sync error');
+        });
+        
+        console.log('[MainDashboard] 🔄 Real-time listener established');
+        return unsubscribe;
+        
+      } else {
+        throw new Error('Failed to initialize user data');
       }
-
-      const userId = telegramUser.id.toString();
-      console.log(`[MainDashboard] Telegram user captured: ${userId}`);
-      
-      // Set up real-time user subscription using enhanced Firebase manager
-      const unsubscribe = subscribeToUser(userId, (userData) => {
-        if (userData) {
-          console.log('[MainDashboard] Real-time user update received:', {
-            coins: userData.coins,
-            vipTier: userData.vipTier,
-            farmingStatus: !!userData.farmingStartTime
-          });
-          setUser(userData);
-          setIsInitialized(true);
-        } else {
-          // Create initial user data if not exists using safe mapper
-          const defaultUser = createSafeUser(telegramUser);
-          
-          // Initialize user in Firebase
-          firebaseRealtimeManager.updateUser(userId, defaultUser).catch(err => {
-            console.error('[MainDashboard] Failed to initialize user:', err);
-          });
-          
-          setUser(defaultUser);
-          setIsInitialized(true);
-        }
-      });
-      
-      console.log('[MainDashboard] Real-time subscription setup complete');
-      
-      // Store unsubscribe function for cleanup
-      return unsubscribe;
       
     } catch (error) {
-      console.error('[MainDashboard] Initialization failed:', error);
+      console.error('[MainDashboard] ❌ Initialization failed:', error);
       setError(error instanceof Error ? error.message : 'Initialization failed');
+      
+      // Show user-friendly error message
+      toast.error('Failed to load user data. Please refresh the app.', {
+        duration: 5000,
+        position: 'top-center'
+      });
+      
       return () => {}; // Return empty cleanup function
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  // Initialize on mount
+  // Initialize with comprehensive safety and real-time sync
   useEffect(() => {
     let cleanup: (() => void) | undefined;
     
+    // Initialize the safe user system
     initializeUser().then((unsubscribe) => {
       cleanup = unsubscribe;
     });
@@ -100,8 +114,10 @@ const MainDashboard = ({ initialUser }: MainDashboardProps) => {
     return () => {
       if (cleanup) {
         cleanup();
-        console.log('[MainDashboard] Cleaned up Firebase listeners');
       }
+      // Clean up all Firebase listeners
+      cleanupAllListeners();
+      console.log('[MainDashboard] 🧹 Complete cleanup performed');
     };
   }, [initializeUser]);
 

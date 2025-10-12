@@ -50,13 +50,27 @@ const DEFAULT_SYNC_OPTIONS: SyncOptions = {
 /**
  * Sanitizes user data payload before Firebase write operations
  * Removes undefined values and converts dates to proper formats
+ * This is a CRITICAL function to prevent Firebase "undefined" errors
  */
 function sanitizeFirebasePayload(data: any): any {
   const sanitized: any = {};
   
   for (const [key, value] of Object.entries(data)) {
     if (value === undefined) {
-      // Skip undefined values completely
+      // NEVER write undefined to Firebase - convert to safe defaults
+      console.warn(`[Firebase Sanitizer] Converting undefined value for key '${key}' to safe default`);
+      
+      // Provide safe defaults based on field name patterns
+      if (['coins', 'xp', 'level', 'referralCount', 'dailyStreak'].includes(key)) {
+        sanitized[key] = 0;
+      } else if (key === 'vipTier') {
+        sanitized[key] = 'free';
+      } else if (key === 'isPremium') {
+        sanitized[key] = false;
+      } else if (['firstName', 'lastName', 'username', 'photoUrl'].includes(key)) {
+        sanitized[key] = '';
+      }
+      // Skip undefined values that don't have defaults
       continue;
     }
     
@@ -84,6 +98,7 @@ function sanitizeFirebasePayload(data: any): any {
 
 /**
  * Creates a User object from Telegram user data with safe defaults
+ * CRITICAL: This function ensures NO UNDEFINED values are passed to Firebase
  */
 function createUserFromTelegramData(telegramUser: SafeTelegramUser, referralId?: string): User {
   const now = new Date();
@@ -93,65 +108,85 @@ function createUserFromTelegramData(telegramUser: SafeTelegramUser, referralId?:
     throw new Error('Unable to generate valid user ID from Telegram data');
   }
 
-  return {
+  // Create safe user object with NO UNDEFINED values
+  const safeUser: User = {
     id: userId,
     telegramId: userId,
-    username: telegramUser.username || undefined,
+    username: telegramUser.username || '',
     firstName: telegramUser.first_name || 'User',
-    lastName: telegramUser.last_name || undefined,
-    profilePic: telegramUser.photo_url || undefined,
-    // Default game values
+    lastName: telegramUser.last_name || '',
+    profilePic: telegramUser.photo_url || '',
+    
+    // Default game values - all defined
     coins: 0,
     xp: 0,
     level: 1,
     
-    // VIP status
+    // VIP status - all defined with safe defaults
     vipTier: 'free',
     farmingMultiplier: VIP_TIERS.free.farmingMultiplier,
     referralMultiplier: VIP_TIERS.free.referralMultiplier,
     adsLimitPerDay: VIP_TIERS.free.adsLimitPerDay,
     withdrawalLimit: VIP_TIERS.free.withdrawalLimit,
     minWithdrawal: VIP_TIERS.free.minWithdrawal,
-    vipEndTime: undefined,
+    // Remove vipEndTime if undefined
     
-    // Referrals
-    referrerId: referralId || undefined,
+    // Referrals - safe defaults
+    referrerId: referralId || '',
     referralCount: 0,
     referralEarnings: 0,
     
-    // Game state
+    // Game state - safe defaults
     dailyStreak: 0,
-    farmingStartTime: undefined,
-    farmingEndTime: undefined,
-    lastClaimDate: undefined,
+    // Remove undefined date fields
     
-    // Timestamps
+    // Timestamps - always defined
     createdAt: now,
-    updatedAt: now,
-    
-    // Telegram specific
+    updatedAt: now
   };
+
+  // Only add optional fields if they have valid values
+  if (telegramUser.photo_url) {
+    safeUser.profilePic = telegramUser.photo_url;
+  }
+  
+  console.log('[Firebase Safe User] Created safe user object:', {
+    id: safeUser.id,
+    firstName: safeUser.firstName,
+    coins: safeUser.coins,
+    hasUndefined: Object.values(safeUser).some(v => v === undefined)
+  });
+  
+  return safeUser;
 }
 
 /**
  * Updates existing user data with new Telegram information
+ * Ensures no undefined values are passed to Firebase
  */
 function updateUserWithTelegramData(existingUser: User, telegramUser: SafeTelegramUser): Partial<User> {
   const updates: Partial<User> = {
-    // Always update these fields from Telegram
-    username: telegramUser.username || existingUser.username,
-    firstName: telegramUser.first_name || existingUser.firstName,
-    lastName: telegramUser.last_name || existingUser.lastName,
-    profilePic: telegramUser.photo_url || existingUser.profilePic,
+    // Always update these fields from Telegram (with safe defaults)
+    username: telegramUser.username || existingUser.username || '',
+    firstName: telegramUser.first_name || existingUser.firstName || 'User',
+    lastName: telegramUser.last_name || existingUser.lastName || '',
+    profilePic: telegramUser.photo_url || existingUser.profilePic || '',
     // Update timestamps
     updatedAt: new Date()
   };
+
+  // Remove any undefined values before returning
+  Object.keys(updates).forEach(key => {
+    if ((updates as any)[key] === undefined) {
+      delete (updates as any)[key];
+    }
+  });
 
   return updates;
 }
 
 /**
- * Syncs user data to Realtime Database only
+ * Syncs user data to Realtime Database only with enhanced safety
  */
 async function syncToRealtimeDbOnly(
   userId: string, 
@@ -166,29 +201,42 @@ async function syncToRealtimeDbOnly(
     
     const userRef = ref(realtimeDb, `${options.syncToPath}/${userId}`);
     
-    // Sanitize data for Realtime Database
+    // CRITICAL: Sanitize data for Realtime Database to prevent undefined errors
     const sanitizedData = sanitizeFirebasePayload(userData);
     
+    // Double-check: ensure no undefined values exist
+    const hasUndefined = JSON.stringify(sanitizedData).includes('undefined');
+    if (hasUndefined) {
+      console.error('[Firebase] CRITICAL: Sanitized data still contains undefined values!', sanitizedData);
+      throw new Error('Data sanitization failed - undefined values detected');
+    }
+    
     if (isNewUser) {
-      // Set complete user data
-      await set(userRef, {
+      // Set complete user data with server timestamp
+      const newUserData = {
         ...sanitizedData,
         createdAt: realtimeServerTimestamp(),
         updatedAt: realtimeServerTimestamp()
-      });
+      };
+      
+      console.log('[Firebase] Creating new user with data:', Object.keys(newUserData));
+      await set(userRef, newUserData);
     } else {
-      // Update existing data
-      await update(userRef, {
+      // Update existing data with server timestamp
+      const updateData = {
         ...sanitizedData,
         updatedAt: realtimeServerTimestamp()
-      });
+      };
+      
+      console.log('[Firebase] Updating existing user with data:', Object.keys(updateData));
+      await update(userRef, updateData);
     }
     
-    console.log(`[UserSync] Realtime DB sync successful for user ${userId}`);
+    console.log(`[UserSync] ✅ Realtime DB sync successful for user ${userId} (${isNewUser ? 'new' : 'update'})`);
     return { success: true };
     
   } catch (error) {
-    console.error(`[UserSync] Realtime DB sync failed for user ${userId}:`, error);
+    console.error(`[UserSync] ❌ Realtime DB sync failed for user ${userId}:`, error);
     return { 
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown Realtime DB error' 
