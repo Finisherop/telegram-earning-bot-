@@ -221,9 +221,30 @@ export async function POST(request: NextRequest): Promise<NextResponse<Withdrawa
     
     const userData = userSnapshot.val();
     const userCoins = userData.coins || 0;
-    const minWithdrawal = userData.minWithdrawal || 200;
+    
+    // Get VIP status and limits - check multiple fields for compatibility
+    const vipTier = userData.vipTier || userData.vip_tier || 'free';
+    const isVipActive = vipTier !== 'free' && userData.vipEndTime && new Date(userData.vipEndTime) > new Date();
+    
+    // Set withdrawal limits based on VIP status
+    let minWithdrawal = 200; // Default for free users
+    let dailyLimit = 1000;   // Default for free users
+    
+    if (isVipActive) {
+      if (vipTier === 'vip1' || vipTier === 'bronze') {
+        minWithdrawal = userData.minWithdrawal || 100;
+        dailyLimit = userData.withdrawalLimit || 2000;
+      } else if (vipTier === 'vip2' || vipTier === 'diamond') {
+        minWithdrawal = userData.minWithdrawal || 50;
+        dailyLimit = userData.withdrawalLimit || 5000;
+      }
+    } else {
+      // Use stored values or defaults for free users
+      minWithdrawal = userData.minWithdrawal || 200;
+      dailyLimit = userData.withdrawalLimit || 1000;
+    }
+    
     const maxWithdrawal = Math.floor(userCoins / 100); // Convert coins to INR
-    const dailyLimit = userData.withdrawalLimit || 1000;
     
     // Validate withdrawal amount
     const amountValidation = validateAmount(amount, userCoins, minWithdrawal, maxWithdrawal);

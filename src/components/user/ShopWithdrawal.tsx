@@ -235,23 +235,39 @@ const ShopWithdrawal = ({ user, setUser, onClose }: ShopWithdrawalProps) => {
           <div className="bg-white rounded-2xl p-6 shadow-lg">
             <h2 className="text-xl font-bold text-gray-800 mb-4">VIP Status</h2>
             
-            {user.tier === undefined || user.tier === null ? (
-              <div className="text-center py-4">
-                <div className="text-4xl mb-3">🆓</div>
-                <h3 className="text-lg font-bold text-gray-800">Free Tier</h3>
-                <p className="text-gray-600 text-sm">Upgrade to VIP for amazing benefits!</p>
-              </div>
-            ) : (
-              <div className="text-center py-4">
-                <div className="text-4xl mb-3">👑</div>
-                <h3 className="text-lg font-bold text-accent">{TIER_CONFIGS[user.tier].name} Active</h3>
-                {user.vip_expiry && (
-                  <p className="text-gray-600 text-sm">
-                    Expires: {new Date(user.vip_expiry).toLocaleDateString()}
-                  </p>
-                )}
-              </div>
-            )}
+            {(() => {
+              // Check VIP status from multiple fields for compatibility
+              const vipTier: string = user.vipTier || user.vip_tier || 'free';
+              const tier = user.tier;
+              const vipEndTime = user.vipEndTime || (user.vip_expiry ? new Date(user.vip_expiry) : null);
+              const isVipActive = vipTier !== 'free' && vipEndTime && new Date(vipEndTime) > new Date();
+              
+              if (!isVipActive || (!tier && vipTier === 'free')) {
+                return (
+                  <div className="text-center py-4">
+                    <div className="text-4xl mb-3">🆓</div>
+                    <h3 className="text-lg font-bold text-gray-800">Free Tier</h3>
+                    <p className="text-gray-600 text-sm">Upgrade to VIP for amazing benefits!</p>
+                  </div>
+                );
+              } else {
+                // Display VIP status
+                const displayTier = tier || (vipTier === 'vip1' ? 'bronze' : vipTier === 'vip2' ? 'diamond' : 'bronze');
+                const tierConfig = TIER_CONFIGS[displayTier as keyof typeof TIER_CONFIGS] || { name: vipTier?.toUpperCase() || '' };
+                
+                return (
+                  <div className="text-center py-4">
+                    <div className="text-4xl mb-3">👑</div>
+                    <h3 className="text-lg font-bold text-accent">{tierConfig.name} Active</h3>
+                    {vipEndTime && (
+                      <p className="text-gray-600 text-sm">
+                        Expires: {new Date(vipEndTime).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                );
+              }
+            })()}
           </div>
 
           {/* VIP Cards */}
@@ -300,19 +316,48 @@ const ShopWithdrawal = ({ user, setUser, onClose }: ShopWithdrawalProps) => {
 
               <motion.button
                 onClick={() => handleStarPayment('bronze')}
-                disabled={user.tier === 'bronze' || user.tier === 'diamond' || isProcessing}
+                disabled={(() => {
+                  const vipTier = user.vipTier || user.vip_tier || 'free';
+                  const tier = user.tier;
+                  const vipEndTime = user.vipEndTime || (user.vip_expiry ? new Date(user.vip_expiry) : null);
+                  const isVipActive = vipTier !== 'free' && vipEndTime && new Date(vipEndTime) > new Date();
+                  return isVipActive || isProcessing;
+                })()}
                 className={`w-full py-3 rounded-xl font-bold transition-all ${
-                  user.tier === 'bronze' || user.tier === 'diamond' || isProcessing
+                  (() => {
+                    const vipTier = user.vipTier || user.vip_tier || 'free';
+                    const tier = user.tier;
+                    const vipEndTime = user.vipEndTime || (user.vip_expiry ? new Date(user.vip_expiry) : null);
+                    const isVipActive = vipTier !== 'free' && vipEndTime && new Date(vipEndTime) > new Date();
+                    return isVipActive || isProcessing;
+                  })()
                     ? 'bg-white/20 text-white/60 cursor-not-allowed'
                     : 'bg-white text-orange-600 hover:bg-white/90'
                 }`}
                 whileTap={{ scale: 0.95 }}
-                whileHover={{ scale: (!user.tier && !isProcessing) ? 1.02 : 1 }}
+                whileHover={{ scale: (() => {
+                  const vipTier = user.vipTier || user.vip_tier || 'free';
+                  const vipEndTime = user.vipEndTime || (user.vip_expiry ? new Date(user.vip_expiry) : null);
+                  const isVipActive = vipTier !== 'free' && vipEndTime && new Date(vipEndTime) > new Date();
+                  return (!isVipActive && !isProcessing) ? 1.02 : 1;
+                })() }}
               >
-                {isProcessing ? '⏳ Processing...' :
-                 user.tier === 'bronze' ? '✅ Active' : 
-                 user.tier === 'diamond' ? '💎 Diamond Active' :
-                 `💰 Buy with ${TIER_CONFIGS.bronze.starCost} Stars ⭐`}
+                {(() => {
+                  if (isProcessing) return '⏳ Processing...';
+                  
+                  const vipTier = user.vipTier || user.vip_tier || 'free';
+                  const tier = user.tier;
+                  const vipEndTime = user.vipEndTime || (user.vip_expiry ? new Date(user.vip_expiry) : null);
+                  const isVipActive = vipTier !== 'free' && vipEndTime && new Date(vipEndTime) > new Date();
+                  
+                  if (isVipActive) {
+                    if (tier === 'bronze' || vipTier === 'vip1') return '✅ Bronze Active';
+                    if (tier === 'diamond' || vipTier === 'vip2') return '💎 Diamond Active';
+                    return '✅ VIP Active';
+                  }
+                  
+                  return `💰 Buy with ${TIER_CONFIGS.bronze.starCost} Stars ⭐`;
+                })()}
               </motion.button>
             </motion.div>
 
@@ -367,18 +412,47 @@ const ShopWithdrawal = ({ user, setUser, onClose }: ShopWithdrawalProps) => {
 
               <motion.button
                 onClick={() => handleStarPayment('diamond')}
-                disabled={user.tier === 'diamond' || isProcessing}
+                disabled={(() => {
+                  const vipTier = user.vipTier || user.vip_tier || 'free';
+                  const tier = user.tier;
+                  const vipEndTime = user.vipEndTime || (user.vip_expiry ? new Date(user.vip_expiry) : null);
+                  const isVipActive = vipTier !== 'free' && vipEndTime && new Date(vipEndTime) > new Date();
+                  return isVipActive || isProcessing;
+                })()}
                 className={`w-full py-3 rounded-xl font-bold transition-all ${
-                  user.tier === 'diamond' || isProcessing
+                  (() => {
+                    const vipTier = user.vipTier || user.vip_tier || 'free';
+                    const tier = user.tier;
+                    const vipEndTime = user.vipEndTime || (user.vip_expiry ? new Date(user.vip_expiry) : null);
+                    const isVipActive = vipTier !== 'free' && vipEndTime && new Date(vipEndTime) > new Date();
+                    return isVipActive || isProcessing;
+                  })()
                     ? 'bg-white/20 text-white/60 cursor-not-allowed'
                     : 'bg-accent text-dark hover:bg-accent/90'
                 }`}
                 whileTap={{ scale: 0.95 }}
-                whileHover={{ scale: (user.tier !== 'diamond' && !isProcessing) ? 1.02 : 1 }}
+                whileHover={{ scale: (() => {
+                  const vipTier = user.vipTier || user.vip_tier || 'free';
+                  const vipEndTime = user.vipEndTime || (user.vip_expiry ? new Date(user.vip_expiry) : null);
+                  const isVipActive = vipTier !== 'free' && vipEndTime && new Date(vipEndTime) > new Date();
+                  return (!isVipActive && !isProcessing) ? 1.02 : 1;
+                })() }}
               >
-                {isProcessing ? '⏳ Processing...' :
-                 user.tier === 'diamond' ? '✅ Active' : 
-                 `💰 Buy with ${TIER_CONFIGS.diamond.starCost} Stars ⭐`}
+                {(() => {
+                  if (isProcessing) return '⏳ Processing...';
+                  
+                  const vipTier = user.vipTier || user.vip_tier || 'free';
+                  const tier = user.tier;
+                  const vipEndTime = user.vipEndTime || (user.vip_expiry ? new Date(user.vip_expiry) : null);
+                  const isVipActive = vipTier !== 'free' && vipEndTime && new Date(vipEndTime) > new Date();
+                  
+                  if (isVipActive) {
+                    if (tier === 'diamond' || vipTier === 'vip2') return '✅ Diamond Active';
+                    return '✅ VIP Active';
+                  }
+                  
+                  return `💰 Buy with ${TIER_CONFIGS.diamond.starCost} Stars ⭐`;
+                })()}
               </motion.button>
             </motion.div>
           </div>
@@ -398,10 +472,31 @@ const WithdrawalSection = ({ user, adminSettings }: { user: User; adminSettings:
   const [upiId, setUpiId] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const minWithdrawal = user.minWithdrawal || 200;
+  // Get VIP status and limits - check multiple fields for compatibility
+  const vipTier: string = user.vipTier || user.vip_tier || 'free';
+  const vipEndTime = user.vipEndTime || (user.vip_expiry ? new Date(user.vip_expiry) : null);
+  const isVipActive = vipTier !== 'free' && vipEndTime && new Date(vipEndTime) > new Date();
+  
+  // Set withdrawal limits based on VIP status
+  let minWithdrawal = 200; // Default for free users
+  let dailyLimit = 1;      // Default for free users
+  
+  if (isVipActive) {
+    if (vipTier === 'vip1' || user.tier === 'bronze') {
+      minWithdrawal = user.minWithdrawal || 100;
+      dailyLimit = user.withdrawalLimit || 3;
+    } else if (vipTier === 'vip2' || user.tier === 'diamond') {
+      minWithdrawal = user.minWithdrawal || 50;
+      dailyLimit = user.withdrawalLimit || 5;
+    }
+  } else {
+    // Use stored values or defaults for free users
+    minWithdrawal = user.minWithdrawal || 200;
+    dailyLimit = user.withdrawalLimit || 1;
+  }
+  
   const exchangeRate = adminSettings?.inrExchangeRate || 100; // Default to 100 if not loaded
   const maxWithdrawal = Math.floor(user.coins / exchangeRate); // Convert coins to INR using admin rate
-  const dailyLimit = user.withdrawalLimit || 1;
 
   const handleWithdrawal = async () => {
     if (!withdrawalAmount || !upiId) {
@@ -559,7 +654,7 @@ const WithdrawalSection = ({ user, adminSettings }: { user: User; adminSettings:
       </div>
 
       {/* VIP Benefits Reminder */}
-      {user.vipTier === 'free' && (
+      {!isVipActive && (
         <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl p-6 text-white">
           <h3 className="text-lg font-bold mb-3">🌟 Upgrade for Better Withdrawal Limits</h3>
           <div className="space-y-2 text-sm">
