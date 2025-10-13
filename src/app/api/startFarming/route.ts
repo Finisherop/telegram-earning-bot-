@@ -89,7 +89,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Step 4: Get VIP multiplier and calculate farming parameters
-    const vipMultiplier = user.vipTier !== 'free' ? user.farmingMultiplier || 1 : 1;
+    // Check VIP status from multiple fields for compatibility
+    const vipTier = user.vipTier || user.vip_tier || 'free';
+    const vipEndTime = user.vipEndTime || (user.vip_expiry ? new Date(user.vip_expiry) : null);
+    const isVipActive = vipTier !== 'free' && vipEndTime && new Date(vipEndTime) > new Date();
+    
+    const vipMultiplier = isVipActive ? (user.farmingMultiplier || user.multiplier || 1) : 1;
     const baseFarmingDuration = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
     const farmingDuration = Math.floor(baseFarmingDuration / vipMultiplier); // VIP reduces time
     const baseReward = 120;
@@ -97,10 +102,12 @@ export async function POST(request: NextRequest) {
 
     console.log('[Start Farming] Farming parameters:', {
       userId: sanitizedUserId,
-      vipTier: user.vipTier,
+      vipTier: vipTier,
+      isVipActive,
       vipMultiplier,
       farmingDuration: farmingDuration / (60 * 60 * 1000), // hours
       expectedReward,
+      vipEndTime: vipEndTime?.toISOString(),
     });
 
     // Step 5: Start farming with validation (atomic operation)
@@ -144,14 +151,14 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: `Farming started! ${vipMultiplier > 1 ? `VIP ${vipMultiplier}x speed active!` : 'Come back in 8 hours to claim your coins.'}`,
+        message: `Farming started! ${isVipActive && vipMultiplier > 1 ? `VIP ${vipMultiplier}x speed active!` : 'Come back in 8 hours to claim your coins.'}`,
         farming: {
           startTime: farmingStartTime.toISOString(),
           endTime: farmingEndTime.toISOString(),
           duration: farmingDuration,
           expectedReward,
           vipMultiplier,
-          vipActive: user.vipTier !== 'free',
+          vipActive: isVipActive,
         },
         user: {
           vipTier: updatedUser.vipTier,
@@ -224,7 +231,12 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    const vipMultiplier = user.vipTier !== 'free' ? user.farmingMultiplier || 1 : 1;
+    // Check VIP status from multiple fields for compatibility
+    const vipTier = user.vipTier || user.vip_tier || 'free';
+    const vipEndTime = user.vipEndTime || (user.vip_expiry ? new Date(user.vip_expiry) : null);
+    const isVipActive = vipTier !== 'free' && vipEndTime && new Date(vipEndTime) > new Date();
+    
+    const vipMultiplier = isVipActive ? (user.farmingMultiplier || user.multiplier || 1) : 1;
     const baseReward = 120;
     const expectedReward = Math.floor(baseReward * vipMultiplier);
 

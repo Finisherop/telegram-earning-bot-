@@ -327,10 +327,17 @@ const Task = ({ user: propUser }: TaskProps) => {
       return;
     }
     
-    // Claim daily reward
+    // Claim daily reward with VIP multiplier
     const baseReward = task.reward || 50;
     const streakBonus = Math.min(user.dailyStreak * 10, 100);
-    const totalReward = baseReward + streakBonus;
+    
+    // Check VIP status and apply multiplier
+    const vipTier: string = (user as any).vipTier || (user as any).vip_tier || 'free';
+    const vipEndTime = (user as any).vipEndTime || ((user as any).vip_expiry ? new Date((user as any).vip_expiry) : null);
+    const isVipActive = vipTier !== 'free' && vipEndTime && new Date(vipEndTime) > new Date();
+    const vipMultiplier = isVipActive ? ((user as any).referralMultiplier || (user as any).referral_boost || 1) : 1;
+    
+    const totalReward = Math.floor((baseReward + streakBonus) * vipMultiplier);
     
     await safeUpdateUser(user.telegramId, {
       coins: user.coins + totalReward,
@@ -343,7 +350,10 @@ const Task = ({ user: propUser }: TaskProps) => {
     await completeTask(user.telegramId, task.id);
     // Real-time listener will automatically update userTasks
     
-    toast.success(`🎁 Daily reward claimed! +${totalReward} coins (Streak: ${user.dailyStreak + 1})`);
+    const message = isVipActive && vipMultiplier > 1
+      ? `🎁 Daily reward claimed! +${totalReward} coins (Streak: ${user.dailyStreak + 1}) ✨ VIP ${vipMultiplier}x bonus!`
+      : `🎁 Daily reward claimed! +${totalReward} coins (Streak: ${user.dailyStreak + 1})`;
+    toast.success(message);
   };
 
   const handleLinkTask = async (task: TaskType) => {
@@ -392,17 +402,27 @@ const Task = ({ user: propUser }: TaskProps) => {
   const handleGenericTask = async (task: TaskType) => {
     console.log('Processing generic task');
     
-    // Award coins immediately for generic tasks
+    // Award coins immediately for generic tasks with VIP multiplier
+    const vipTier: string = (user as any).vipTier || (user as any).vip_tier || 'free';
+    const vipEndTime = (user as any).vipEndTime || ((user as any).vip_expiry ? new Date((user as any).vip_expiry) : null);
+    const isVipActive = vipTier !== 'free' && vipEndTime && new Date(vipEndTime) > new Date();
+    const vipMultiplier = isVipActive ? ((user as any).referralMultiplier || (user as any).referral_boost || 1) : 1;
+    
+    const finalReward = Math.floor(task.reward * vipMultiplier);
+    
     await safeUpdateUser(user.telegramId, {
-      coins: user.coins + task.reward,
-      xp: user.xp + Math.floor(task.reward / 10),
+      coins: user.coins + finalReward,
+      xp: user.xp + Math.floor(finalReward / 10),
     });
     
     // Mark task as completed
     await completeTask(user.telegramId, task.id);
     // Real-time listener will automatically update userTasks
     
-    toast.success(`✅ Task completed! +${task.reward} coins earned.`);
+    const message = isVipActive && vipMultiplier > 1
+      ? `✅ Task completed! +${finalReward} coins earned. ✨ VIP ${vipMultiplier}x bonus!`
+      : `✅ Task completed! +${finalReward} coins earned.`;
+    toast.success(message);
   };
 
   const handleClaim = async (task: TaskType) => {
@@ -435,16 +455,27 @@ const Task = ({ user: propUser }: TaskProps) => {
     }
 
     try {
-      console.log(`Claiming task reward: ${task.reward} coins for task: ${task.id}, user: ${user.telegramId}`);
+      // Calculate VIP multiplier for task rewards
+      const vipTier: string = (user as any).vipTier || (user as any).vip_tier || 'free';
+      const vipEndTime = (user as any).vipEndTime || ((user as any).vip_expiry ? new Date((user as any).vip_expiry) : null);
+      const isVipActive = vipTier !== 'free' && vipEndTime && new Date(vipEndTime) > new Date();
+      const vipMultiplier = isVipActive ? ((user as any).referralMultiplier || (user as any).referral_boost || 1) : 1;
+      
+      const finalReward = Math.floor(task.reward * vipMultiplier);
+      
+      console.log(`Claiming task reward: ${finalReward} coins (base: ${task.reward}, multiplier: ${vipMultiplier}) for task: ${task.id}, user: ${user.telegramId}`);
       
       // Add loading state
       setIsLoading(true);
       
-      await claimTask(user.telegramId, task.id, task.reward);
+      await claimTask(user.telegramId, task.id, finalReward);
       
       // Real-time listener will automatically update userTasks and user coins
       // Coin fly animation
-      toast.success(`💰 +${task.reward} coins claimed! 🎉`);
+      const message = isVipActive && vipMultiplier > 1
+        ? `💰 +${finalReward} coins claimed! 🎉 ✨ VIP ${vipMultiplier}x bonus!`
+        : `💰 +${finalReward} coins claimed! 🎉`;
+      toast.success(message);
       console.log('Task reward claimed successfully');
       
       // Remove from visited links if it was a link task
@@ -591,9 +622,28 @@ const Task = ({ user: propUser }: TaskProps) => {
                     </h3>
                     <p className="text-gray-600 text-sm">{task.description}</p>
                     <div className="flex items-center mt-1">
-                      <span className="text-accent font-bold">+{task.reward} coins</span>
-                      <span className="text-gray-400 mx-2">•</span>
-                      <span className="text-gray-500 text-sm">+{Math.floor(task.reward / 10)} XP</span>
+                      {(() => {
+                        const vipTier: string = (user as any).vipTier || (user as any).vip_tier || 'free';
+                        const vipEndTime = (user as any).vipEndTime || ((user as any).vip_expiry ? new Date((user as any).vip_expiry) : null);
+                        const isVipActive = vipTier !== 'free' && vipEndTime && new Date(vipEndTime) > new Date();
+                        const vipMultiplier = isVipActive ? ((user as any).referralMultiplier || (user as any).referral_boost || 1) : 1;
+                        const finalReward = Math.floor(task.reward * vipMultiplier);
+                        
+                        return (
+                          <>
+                            <span className="text-accent font-bold">
+                              +{finalReward} coins
+                              {isVipActive && vipMultiplier > 1 && (
+                                <span className="text-xs ml-1 bg-accent text-dark px-1 rounded">
+                                  {vipMultiplier}x
+                                </span>
+                              )}
+                            </span>
+                            <span className="text-gray-400 mx-2">•</span>
+                            <span className="text-gray-500 text-sm">+{Math.floor(finalReward / 10)} XP</span>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>

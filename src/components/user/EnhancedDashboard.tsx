@@ -198,8 +198,14 @@ const EnhancedDashboard = ({ user: initialUser, onUserUpdate }: EnhancedDashboar
     
     setIsLoading(true);
     
+    // Check VIP status from multiple fields for compatibility
+    const vipTier = user.vipTier || user.vip_tier || 'free';
+    const vipEndTime = user.vipEndTime || (user.vip_expiry ? new Date(user.vip_expiry) : null);
+    const isVipActive = vipTier !== 'free' && vipEndTime && new Date(vipEndTime) > new Date();
+    
     const baseReward = 120;
-    const reward = Math.floor(baseReward * (user.farmingMultiplier || 1));
+    const vipMultiplier = isVipActive ? (user.farmingMultiplier || user.multiplier || 1) : 1;
+    const reward = Math.floor(baseReward * vipMultiplier);
     
     try {
       console.log(`[Enhanced Dashboard] Claiming farming reward: ${reward} coins for user:`, user.telegramId);
@@ -225,8 +231,8 @@ const EnhancedDashboard = ({ user: initialUser, onUserUpdate }: EnhancedDashboar
       setIsFarming(false);
       setFarmingProgress(0);
       
-      const message = user.vipTier !== 'free' 
-        ? `💰 Claimed ${reward} coins! 🎉 (✨ VIP bonus applied!)`
+      const message = isVipActive && vipMultiplier > 1
+        ? `💰 Claimed ${reward} coins! 🎉 (✨ VIP ${vipMultiplier}x bonus applied!)`
         : `💰 Claimed ${reward} coins! 🎉`;
       toast.success(message);
       console.log('[Enhanced Dashboard] Farming reward claimed successfully');

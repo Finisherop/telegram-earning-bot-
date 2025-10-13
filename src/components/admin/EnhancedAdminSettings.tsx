@@ -117,10 +117,27 @@ const EnhancedAdminSettings = () => {
       await upgradeUserToVIP(searchedUser.telegramId, tier);
       toast.success(`✅ User upgraded to ${tier?.toUpperCase() || ''} successfully!`);
       
-      // Refresh user data
-      const updatedUser = await getUser(searchedUser.telegramId);
+      // Wait a moment for the database to update
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Refresh user data multiple times to ensure we get the updated data
+      let updatedUser = null;
+      for (let i = 0; i < 3; i++) {
+        updatedUser = await getUser(searchedUser.telegramId);
+        if (updatedUser && updatedUser.vipTier === tier) {
+          break;
+        }
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      
       if (updatedUser) {
         setSearchedUser(updatedUser);
+        console.log('[Admin] Updated user data:', {
+          vipTier: updatedUser.vipTier,
+          tier: updatedUser.tier,
+          vip_tier: updatedUser.vip_tier,
+          vipEndTime: updatedUser.vipEndTime
+        });
       }
     } catch (error) {
       console.error('[Enhanced Admin Settings] User upgrade error:', error);

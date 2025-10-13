@@ -469,14 +469,31 @@ export const upgradeUserToVIP = async (
     const endTime = new Date();
     endTime.setDate(endTime.getDate() + vipTier.duration);
     
+    // Map tier to new tier system for compatibility
+    const newTierMapping = tier === 'vip1' ? 'bronze' : 'diamond';
+    
     await safeUpdateUserWithRetry(userId, {
+      // Old VIP system fields
       vipTier: tier,
       vipEndTime: endTime,
+      
+      // New tier system fields for compatibility
+      tier: newTierMapping,
+      vip_tier: newTierMapping,
+      vip_expiry: endTime.getTime(),
+      vipExpiry: endTime.getTime(),
+      
+      // VIP benefits
       farmingMultiplier: vipTier.farmingMultiplier,
       referralMultiplier: vipTier.referralMultiplier,
       adsLimitPerDay: vipTier.adsLimitPerDay,
       withdrawalLimit: vipTier.withdrawalLimit,
       minWithdrawal: vipTier.minWithdrawal,
+      
+      // Additional fields for compatibility
+      multiplier: vipTier.farmingMultiplier,
+      withdraw_limit: vipTier.withdrawalLimit,
+      referral_boost: vipTier.referralMultiplier,
     });
     
     // Log conversion event

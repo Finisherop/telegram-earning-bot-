@@ -96,15 +96,33 @@ export async function POST(request: NextRequest) {
         const newStarsBalance = (user.coins || 0) - requiredStars;
         
         // Update user with new balance and VIP status atomically
+        const vipEndTime = new Date(Date.now() + vipTierInfo.duration * 24 * 60 * 60 * 1000);
+        const newTierMapping = tier === 'vip1' ? 'bronze' : 'diamond';
+        
         await safeUpdateUserWithRetry(sanitizedUserId, {
           coins: newStarsBalance,
+          
+          // Old VIP system fields
           vipTier: tier,
-          vipEndTime: new Date(Date.now() + vipTierInfo.duration * 24 * 60 * 60 * 1000),
+          vipEndTime: vipEndTime,
+          
+          // New tier system fields for compatibility
+          tier: newTierMapping,
+          vip_tier: newTierMapping,
+          vip_expiry: vipEndTime.getTime(),
+          vipExpiry: vipEndTime.getTime(),
+          
+          // VIP benefits
           farmingMultiplier: vipTierInfo.farmingMultiplier,
           referralMultiplier: vipTierInfo.referralMultiplier,
           adsLimitPerDay: vipTierInfo.adsLimitPerDay,
           withdrawalLimit: vipTierInfo.withdrawalLimit,
           minWithdrawal: vipTierInfo.minWithdrawal,
+          
+          // Additional fields for compatibility
+          multiplier: vipTierInfo.farmingMultiplier,
+          withdraw_limit: vipTierInfo.withdrawalLimit,
+          referral_boost: vipTierInfo.referralMultiplier,
         });
 
         // Mark payment as completed
