@@ -53,7 +53,7 @@ function buildUserPath(userId: string): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { userId, referrerId } = body;
+    const { userId } = body;
 
     if (!userId) {
       return NextResponse.json(
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('[Confirm Referral] 🔄 Processing app open for user:', sanitizedUserId);
+    console.log('[Confirm Referral] 🔄 Processing referral confirmation for user:', sanitizedUserId);
     
     // Initialize Firebase
     const app = initializeFirebase();
@@ -79,62 +79,94 @@ export async function POST(request: NextRequest) {
     const userPath = buildUserPath(sanitizedUserId);
     const userRef = ref(db, userPath);
 
-    // Get current user data
+    // Get current user data to find who referred them
     const snapshot = await get(userRef);
-    const existingData = snapshot.exists() ? snapshot.val() : {};
-    
-    // Prepare updates
-    const updates = {
-      lastSeen: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      // If user doesn't exist, initialize with default values
-      ...(existingData.coins !== undefined ? {} : {
-        coins: 0,
-        referralCount: 0,
-        referralEarnings: 0,
-        xp: 0,
-        level: 1,
-        createdAt: new Date().toISOString()
-      })
-    };
-
-    // If referrerId is provided, handle referral logic
-    if (referrerId && referrerId !== sanitizedUserId) {
-      const sanitizedReferrerId = sanitizeUserId(referrerId);
-      if (sanitizedReferrerId) {
-        const referrerPath = buildUserPath(sanitizedReferrerId);
-        const referrerRef = ref(db, referrerPath);
-        
-        try {
-          const referrerSnapshot = await get(referrerRef);
-          const referrerData = referrerSnapshot.exists() ? referrerSnapshot.val() : {};
-          const newReferralCount = (referrerData.referrals || 0) + 1;
-          
-          await update(referrerRef, { 
-            referrals: newReferralCount,
-            updatedAt: new Date().toISOString()
-          });
-          
-          console.log(`[Confirm Referral] ✅ Updated referrer ${sanitizedReferrerId} referral count to ${newReferralCount}`);
-        } catch (referrerError) {
-          console.error(`[Confirm Referral] ⚠️ Failed to update referrer ${sanitizedReferrerId}:`, referrerError);
-          // Don't fail the entire request if referrer update fails
-        }
-      }
+    if (!snapshot.exists()) {
+      return NextResponse.json(
+        { success: false, message: 'User not found' },
+        { status: 404 }
+      );
     }
 
-    console.log('[Confirm Referral] 🔄 Updating user data:', updates);
+    const userData = snapshot.val();
+    const referrerId = userData.referredBy;
+
+    if (!referrerId) {
+      console.log(`[Confirm Referral] ⚠️ User ${sanitizedUserId} has no referrer`);
+      return NextResponse.json({ 
+        success: true, 
+        message: 'No referrer to update',
+        userId: sanitizedUserId
+      });
+    }
+
+    const sanitizedReferrerId = sanitizeUserId(referrerId);
+    if (!sanitizedReferrerId) {
+      return NextResponse.json(
+        { success: false, message: 'Invalid referrer ID format' },
+        { status: 400 }
+      );
+    }
+
+    console.log(`[Confirm Referral] 🔄 Found referrer ${sanitizedReferrerId} for user ${sanitizedUserId}`);
+
+    // Update referrer's referral count
+    const referrerPath = buildUserPath(sanitizedReferrerId);
+    const referrerRef = ref(db, referrerPath);
     
-    // Update user data
-    await update(userRef, updates);
-    
-    console.log(`[Confirm Referral] ✅ Successfully confirmed app open for user ${sanitizedUserId}`);
-    
-    return NextResponse.json({ 
-      success: true, 
-      message: 'Referral confirmed successfully',
-      userId: sanitizedUserId
-    });
+    try {
+      const referrerSnapshot = await get(referrerRef);
+      const referrerData = referrerSnapshot.exists() ? referrerSnapshot.val() : {};
+      
+      // Increment referral count (use referralCount field to match frontend expectations)
+      const currentReferralCount = referrerData.referralCount || 0;
+      const newReferralCount = currentReferralCount + 1;
+      
+      // Also increment referrals field for backward compatibility
+      const currentReferrals = referrerData.referrals || 0;
+      const newReferrals = currentReferrals + 1;
+      
+      const referrerUpdates = {
+        referralCount: newReferralCount,
+        referrals: newReferrals,
+        updatedAt: new Date().toISOString()
+      };
+
+      await update(referrerRef, referrerUpdates);
+      
+      console.log(`[Confirm Referral] ✅ Updated referrer ${sanitizedReferrerId}:`, {
+        referralCount: newReferralCount,
+        referrals: newReferrals
+      });
+
+      // Also update the confirmed user's last activity
+      const userUpdates = {
+        lastSeen: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      await update(userRef, userUpdates);
+      
+      console.log(`[Confirm Referral] ✅ Successfully processed referral confirmation for user ${sanitizedUserId}`);
+      
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Referral confirmed successfully',
+        userId: sanitizedUserId,
+        referrerId: sanitizedReferrerId,
+        newReferralCount: newReferralCount
+      });
+
+    } catch (referrerError) {
+      console.error(`[Confirm Referral] ❌ Failed to update referrer ${sanitizedReferrerId}:`, referrerError);
+      return NextResponse.json(
+        { 
+          success: false, 
+          message: `Failed to update referrer: ${referrerError instanceof Error ? referrerError.message : 'Unknown error'}` 
+        },
+        { status: 500 }
+      );
+    }
 
   } catch (error) {
     console.error('[Confirm Referral] ❌ Error:', error);

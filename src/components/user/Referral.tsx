@@ -29,6 +29,44 @@ const Referral = ({ user, onUserUpdate }: ReferralProps) => {
   const [referredUsers, setReferredUsers] = useState<ReferredUser[]>([]);
   const [isProcessingRewards, setIsProcessingRewards] = useState(false);
   const listenersRef = useRef<(() => void)[]>([]);
+  const processedReferralsRef = useRef<Set<string>>(new Set());
+
+  // Function to auto-trigger confirm-referral API for newly confirmed referrals
+  const triggerConfirmReferralIfNeeded = async (referredUserId: string, status: string) => {
+    // Only trigger for confirmed status and if not already processed
+    if (status !== 'confirmed' || processedReferralsRef.current.has(referredUserId)) {
+      return;
+    }
+
+    // Mark as processed to prevent duplicate calls
+    processedReferralsRef.current.add(referredUserId);
+
+    try {
+      console.log(`[Referral] 🚀 Auto-triggering /confirm-referral for user ${referredUserId}`);
+      
+      const response = await fetch('/api/confirm-referral', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: referredUserId }),
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        console.log(`[Referral] ✅ Referral confirmed successfully for user ${referredUserId}:`, data);
+        toast.success(`🎉 Referral confirmed! +1 referral count`);
+      } else {
+        console.error(`[Referral] ❌ Failed to confirm referral for user ${referredUserId}:`, data.message);
+        // Remove from processed set so it can be retried
+        processedReferralsRef.current.delete(referredUserId);
+      }
+      
+    } catch (error) {
+      console.error(`[Referral] ❌ Error triggering confirm-referral for user ${referredUserId}:`, error);
+      // Remove from processed set so it can be retried
+      processedReferralsRef.current.delete(referredUserId);
+    }
+  };
 
   useEffect(() => {
     const telegram = TelegramService.getInstance();
@@ -157,6 +195,9 @@ const Referral = ({ user, onUserUpdate }: ReferralProps) => {
           
           if (referredUser.referralStatus === 'confirmed') {
             confirmedCount++;
+            
+            // Auto-trigger confirm-referral API for newly confirmed referrals
+            triggerConfirmReferralIfNeeded(referredUserId, referredUser.referralStatus);
           }
         }
       });
