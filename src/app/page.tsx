@@ -23,8 +23,27 @@ export default function Home() {
       console.log('[Telegram WebApp] ✅ WebApp instance ready:', tg);
       console.log('[Integration] 🎉 Both Telegram and Firebase are ready!');
       
-      // Example: Save user to Realtime Database
+      // Send referral confirmation to backend
       if (user && user.id) {
+        // Call /confirm-referral endpoint
+        fetch('/api/confirm-referral', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id }),
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            console.log('[Referral] ✅ App open confirmed for user:', user.id);
+          } else {
+            console.warn('[Referral] ⚠️ Failed to confirm app open:', data.error);
+          }
+        })
+        .catch(error => {
+          console.error('[Referral] ❌ Error confirming app open:', error);
+        });
+
+        // Example: Save user to Realtime Database
         setTelegramUserData(user.id, user).then(success => {
           if (success) {
             console.log('[Firebase] ✅ Telegram user saved to Realtime Database successfully');
