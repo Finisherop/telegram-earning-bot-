@@ -26,7 +26,10 @@ export interface User {
   minWithdrawal: number;
   referralCount: number;
   referralEarnings: number;
+  referralRewardedCount?: number; // Track how many confirmed referrals have been rewarded
   referrerId?: string;
+  referredBy?: string; // ID of the user who referred this user
+  referralStatus?: 'pending' | 'confirmed'; // Status of this user's referral
   dailyStreak: number;
   lastClaimDate?: Date;
   farmingStartTime?: Date;
