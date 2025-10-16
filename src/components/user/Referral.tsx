@@ -1,24 +1,188 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { User } from '@/types';
 import { TelegramService } from '@/lib/telegram';
+import { safeGet, safeUpdate, buildUserPath } from '@/lib/firebaseUtils';
+import { ref, onValue, off } from 'firebase/database';
+import { realtimeDb } from '@/lib/firebase';
 import toast from 'react-hot-toast';
 
 interface ReferralProps {
   user: User;
+  onUserUpdate?: (updatedUser: Partial<User>) => void;
 }
 
-const Referral = ({ user }: ReferralProps) => {
+interface ReferredUser {
+  id: string;
+  firstName?: string;
+  lastName?: string;
+  username?: string;
+  referralStatus: 'pending' | 'confirmed';
+  createdAt: string;
+}
+
+const Referral = ({ user, onUserUpdate }: ReferralProps) => {
   const [referralLink, setReferralLink] = useState('');
   const [copied, setCopied] = useState(false);
+  const [referredUsers, setReferredUsers] = useState<ReferredUser[]>([]);
+  const [isProcessingRewards, setIsProcessingRewards] = useState(false);
+  const listenersRef = useRef<(() => void)[]>([]);
 
   useEffect(() => {
     const telegram = TelegramService.getInstance();
     const link = telegram.generateReferralLink(user.telegramId);
     setReferralLink(link);
   }, [user.telegramId]);
+
+  // Function to get current user ID from Telegram WebApp
+  const getCurrentUserId = () => {
+    return window.Telegram?.WebApp?.initDataUnsafe?.user?.id?.toString() || user.telegramId;
+  };
+
+  // Function to calculate referral reward based on user's VIP tier
+  const calculateReferralReward = (vipTier: string = 'free', referralMultiplier: number = 1) => {
+    const baseReward = 100;
+    return Math.floor(baseReward * referralMultiplier);
+  };
+
+  // Function to update user rewards for confirmed referrals
+  const updateUserRewards = async (confirmedCount: number) => {
+    if (!realtimeDb || isProcessingRewards) return;
+
+    try {
+      setIsProcessingRewards(true);
+      const userId = getCurrentUserId();
+      const userPath = buildUserPath(userId);
+      
+      if (!userPath) {
+        console.error('[Referral] Invalid user ID for reward update');
+        return;
+      }
+
+      // Get current user data
+      const currentUserData = await safeGet(userPath);
+      if (!currentUserData) {
+        console.error('[Referral] User data not found for reward update');
+        return;
+      }
+
+      const currentRewardedCount = currentUserData.referralRewardedCount || 0;
+      const newRewardsCount = confirmedCount - currentRewardedCount;
+
+      if (newRewardsCount > 0) {
+        const rewardPerReferral = calculateReferralReward(user.vipTier, user.referralMultiplier);
+        const totalNewReward = newRewardsCount * rewardPerReferral;
+        const newCoins = (currentUserData.coins || 0) + totalNewReward;
+        const newReferralEarnings = (currentUserData.referralEarnings || 0) + totalNewReward;
+
+        // Update user data
+        const updates = {
+          coins: newCoins,
+          referralEarnings: newReferralEarnings,
+          referralRewardedCount: confirmedCount,
+          updatedAt: new Date().toISOString()
+        };
+
+        const success = await safeUpdate(userPath, updates);
+        
+        if (success) {
+          // Notify parent component about the update
+          if (onUserUpdate) {
+            onUserUpdate({
+              coins: newCoins,
+              referralEarnings: newReferralEarnings,
+              referralRewardedCount: confirmedCount
+            });
+          }
+
+          // Show success toast
+          toast.success(
+            `🎉 Earned ${totalNewReward} coins from ${newRewardsCount} confirmed referral${newRewardsCount > 1 ? 's' : ''}!`,
+            { duration: 5000 }
+          );
+
+          console.log(`[Referral] Rewarded ${totalNewReward} coins for ${newRewardsCount} new confirmed referrals`);
+        } else {
+          console.error('[Referral] Failed to update user rewards');
+        }
+      }
+    } catch (error) {
+      console.error('[Referral] Error updating user rewards:', error);
+    } finally {
+      setIsProcessingRewards(false);
+    }
+  };
+
+  // Function to listen to referred users and track their status
+  useEffect(() => {
+    if (!realtimeDb) return;
+
+    const userId = getCurrentUserId();
+    console.log(`[Referral] Setting up referral tracking for user ${userId}`);
+
+    // Clean up existing listeners
+    listenersRef.current.forEach(cleanup => cleanup());
+    listenersRef.current = [];
+
+    // Listen to all users to find those referred by current user
+    const usersRef = ref(realtimeDb, 'telegram_users');
+    
+    const unsubscribeUsers = onValue(usersRef, (snapshot) => {
+      if (!snapshot.exists()) return;
+
+      const allUsers = snapshot.val();
+      const referred: ReferredUser[] = [];
+      let confirmedCount = 0;
+
+      // Find users referred by current user
+      Object.entries(allUsers).forEach(([referredUserId, userData]: [string, any]) => {
+        if (userData.referredBy === userId) {
+          const referredUser: ReferredUser = {
+            id: referredUserId,
+            firstName: userData.firstName || 'User',
+            lastName: userData.lastName || '',
+            username: userData.username,
+            referralStatus: userData.referralStatus || 'pending',
+            createdAt: userData.createdAt || new Date().toISOString()
+          };
+          
+          referred.push(referredUser);
+          
+          if (referredUser.referralStatus === 'confirmed') {
+            confirmedCount++;
+          }
+        }
+      });
+
+      // Sort by creation date (newest first)
+      referred.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      
+      setReferredUsers(referred);
+      
+      // Update rewards if confirmed count increased
+      updateUserRewards(confirmedCount);
+    }, (error) => {
+      console.error('[Referral] Error listening to users:', error);
+    });
+
+    listenersRef.current.push(() => off(usersRef, 'value', unsubscribeUsers));
+
+    // Cleanup function
+    return () => {
+      listenersRef.current.forEach(cleanup => cleanup());
+      listenersRef.current = [];
+    };
+  }, [user.telegramId, user.vipTier, user.referralMultiplier, isProcessingRewards]);
+
+  // Cleanup listeners on component unmount
+  useEffect(() => {
+    return () => {
+      listenersRef.current.forEach(cleanup => cleanup());
+      listenersRef.current = [];
+    };
+  }, []);
 
   const copyReferralLink = async () => {
     console.log('Copy referral link clicked');
@@ -64,6 +228,25 @@ const Referral = ({ user }: ReferralProps) => {
     return Math.floor(baseReward * user.referralMultiplier);
   };
 
+  // Helper function to get time ago string
+  const getTimeAgo = (date: Date) => {
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    
+    if (diffInSeconds < 60) {
+      return 'Just now';
+    } else if (diffInSeconds < 3600) {
+      const minutes = Math.floor(diffInSeconds / 60);
+      return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+    } else if (diffInSeconds < 86400) {
+      const hours = Math.floor(diffInSeconds / 3600);
+      return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    } else {
+      const days = Math.floor(diffInSeconds / 86400);
+      return `${days} day${days > 1 ? 's' : ''} ago`;
+    }
+  };
+
   return (
     <div className="p-4 space-y-6">
       {/* Header */}
@@ -90,9 +273,12 @@ const Referral = ({ user }: ReferralProps) => {
         >
           <div className="text-3xl mb-2">👥</div>
           <div className="text-2xl font-bold text-gray-800">
-            {user.referralCount}
+            {referredUsers.length}
           </div>
           <p className="text-gray-600 text-sm">Friends Invited</p>
+          <div className="mt-2 text-xs text-gray-500">
+            {referredUsers.filter(u => u.referralStatus === 'confirmed').length} confirmed
+          </div>
         </motion.div>
 
         <motion.div
@@ -223,25 +409,63 @@ const Referral = ({ user }: ReferralProps) => {
         </motion.div>
       )}
 
-      {/* Recent Referrals (placeholder) */}
+      {/* Recent Referrals */}
       <div className="bg-white rounded-2xl p-6 shadow-lg">
-        <h3 className="text-lg font-bold text-gray-800 mb-4">Recent Referrals</h3>
-        
-        {user.referralCount > 0 ? (
-          <div className="space-y-3">
-            {/* This would show actual referral data */}
-            <div className="flex items-center justify-between py-2">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                  <span className="text-primary font-bold">👤</span>
-                </div>
-                <div>
-                  <p className="font-semibold text-gray-800">Friend joined</p>
-                  <p className="text-gray-600 text-sm">2 hours ago</p>
-                </div>
-              </div>
-              <div className="text-accent font-bold">+{getReferralReward()}</div>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-gray-800">Recent Referrals</h3>
+          {isProcessingRewards && (
+            <div className="flex items-center space-x-2 text-sm text-blue-600">
+              <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+              <span>Processing rewards...</span>
             </div>
+          )}
+        </div>
+        
+        {referredUsers.length > 0 ? (
+          <div className="space-y-3 max-h-64 overflow-y-auto">
+            {referredUsers.map((referredUser) => {
+              const displayName = referredUser.firstName + (referredUser.lastName ? ` ${referredUser.lastName}` : '') || referredUser.username || 'Anonymous User';
+              const isConfirmed = referredUser.referralStatus === 'confirmed';
+              const joinedDate = new Date(referredUser.createdAt);
+              const timeAgo = getTimeAgo(joinedDate);
+              
+              return (
+                <motion.div
+                  key={referredUser.id}
+                  className={`flex items-center justify-between py-3 px-3 rounded-xl transition-all ${
+                    isConfirmed ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'
+                  }`}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      isConfirmed ? 'bg-green-100' : 'bg-gray-100'
+                    }`}>
+                      <span className={`font-bold ${
+                        isConfirmed ? 'text-green-600' : 'text-gray-600'
+                      }`}>
+                        {isConfirmed ? '✅' : '⏳'}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-800 text-sm">
+                        {displayName}
+                      </p>
+                      <p className="text-gray-600 text-xs">
+                        {isConfirmed ? 'Confirmed' : 'Pending'} • {timeAgo}
+                      </p>
+                    </div>
+                  </div>
+                  <div className={`font-bold text-sm ${
+                    isConfirmed ? 'text-green-600' : 'text-gray-400'
+                  }`}>
+                    {isConfirmed ? `+${getReferralReward()}` : `+${getReferralReward()}`}
+                  </div>
+                </motion.div>
+              );
+            })}
           </div>
         ) : (
           <div className="text-center py-8">
