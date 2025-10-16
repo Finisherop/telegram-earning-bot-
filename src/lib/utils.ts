@@ -169,3 +169,6 @@ export const playSound = (type: 'click' | 'success' | 'error') => {
     console.debug('Audio not supported:', error);
   }
 };
+
+// Re-export safeGet from firebaseUtils for convenience
+export { safeGet } from './firebaseUtils';

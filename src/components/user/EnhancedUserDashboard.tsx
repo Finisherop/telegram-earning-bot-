@@ -10,6 +10,7 @@ import {
 } from '@/lib/firebaseService';
 import { TelegramService } from '@/lib/telegram';
 import toast from 'react-hot-toast';
+import ReferralCard from '../ReferralCard';
 
 interface EnhancedUserDashboardProps {
   user: User;
@@ -462,6 +463,9 @@ const EnhancedUserDashboard = ({ user: initialUser }: EnhancedUserDashboardProps
           ))}
         </div>
       </motion.div>
+
+      {/* Referral Section */}
+      <ReferralCard user={user} />
 
       {/* Enhanced Farming Section */}
       <motion.div
