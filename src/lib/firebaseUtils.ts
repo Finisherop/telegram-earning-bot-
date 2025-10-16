@@ -43,21 +43,38 @@ export async function safeSet(path: string, data: any): Promise<boolean> {
 // Simple safe update function
 export async function safeUpdate(path: string, updates: any): Promise<boolean> {
   try {
-    if (!realtimeDb) {
-      FirebaseLogger.error('safeUpdate', path, 'Database not initialized');
+    if (!path || !updates) {
+      FirebaseLogger.warn('safeUpdate', path || 'undefined', 'Missing path or data');
+      console.warn('[Firebase] ⚠️ Skipped safeUpdate (missing path/data)', { path, updates });
       return false;
     }
 
-    // Remove undefined values
+    if (!realtimeDb) {
+      FirebaseLogger.error('safeUpdate', path, 'Database not initialized');
+      console.error('[Firebase] ❌ Database not initialized for safeUpdate at', path);
+      return false;
+    }
+
+    // Remove undefined values and validate data
     const cleanUpdates = JSON.parse(JSON.stringify(updates));
+    
+    if (Object.keys(cleanUpdates).length === 0) {
+      FirebaseLogger.warn('safeUpdate', path, 'No valid data to update');
+      console.warn('[Firebase] ⚠️ No valid data to update at', path);
+      return false;
+    }
+    
+    console.log('[Firebase] 🔄 Attempting safeUpdate at', path, 'with data:', cleanUpdates);
     
     const dbRef = ref(realtimeDb, path);
     await update(dbRef, cleanUpdates);
     
     FirebaseLogger.info('safeUpdate', path, 'Success');
+    console.log('[Firebase] ✅ safeUpdate success at', path, cleanUpdates);
     return true;
   } catch (error) {
     FirebaseLogger.error('safeUpdate', path, error);
+    console.error('[Firebase] ❌ safeUpdate failed at', path, 'Error:', error);
     return false;
   }
 }

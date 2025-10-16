@@ -214,12 +214,20 @@ const EnhancedDashboard = ({ user: initialUser, onUserUpdate }: EnhancedDashboar
       const currentCoins = user.coins || 0;
       const currentXp = user.xp || 0;
       
-      await safeUpdateUserWithRetry(user.telegramId, {
+      console.log(`[Enhanced Dashboard] 🔄 Claiming farming reward for user ${user.telegramId}:`, {
+        currentCoins,
+        reward,
+        newCoins: currentCoins + reward
+      });
+
+      const updatedUser = await safeUpdateUserWithRetry(user.telegramId, {
         coins: currentCoins + reward,
         xp: currentXp + Math.floor(reward / 10),
         farmingStartTime: undefined,
         farmingEndTime: undefined,
       });
+      
+      console.log(`[Enhanced Dashboard] ✅ Farming reward claimed successfully for user ${user.telegramId}`);
       
       // Log conversion event
       await logConversionEvent(user.telegramId, 'farming_claim', {
@@ -227,6 +235,7 @@ const EnhancedDashboard = ({ user: initialUser, onUserUpdate }: EnhancedDashboar
         farmingDuration: 8 * 60 * 60 * 1000, // 8 hours
       });
       
+      // Update UI state ONLY after successful Firebase write
       setCanClaim(false);
       setIsFarming(false);
       setFarmingProgress(0);
@@ -237,8 +246,10 @@ const EnhancedDashboard = ({ user: initialUser, onUserUpdate }: EnhancedDashboar
       toast.success(message);
       console.log('[Enhanced Dashboard] Farming reward claimed successfully');
     } catch (error) {
-      console.error('[Enhanced Dashboard] Farming claim error:', error);
+      console.error(`[Enhanced Dashboard] ❌ Farming claim error for user ${user.telegramId}:`, error);
       toast.error('❌ Failed to claim farming reward. Please try again.');
+      
+      // Don't update UI state on error - keep farming state intact
     } finally {
       setIsLoading(false);
     }

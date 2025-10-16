@@ -293,7 +293,24 @@ export const safeUpdateUserWithRetry = async (
         if (updates.farmingEndTime) updates.farmingEndTime = updates.farmingEndTime.toISOString();
         if (updates.vipEndTime) updates.vipEndTime = updates.vipEndTime.toISOString();
         
+        console.log(`[Firebase] 🔄 Attempting user update for ${userId} with data:`, updates);
+        
         await update(userRef, updates);
+        
+        console.log(`[Firebase] ✅ User update successful for ${userId}`);
+        
+        // Verify the update by reading back the data
+        const verifySnapshot = await get(userRef);
+        if (!verifySnapshot.exists()) {
+          throw new Error(`User data verification failed - user ${userId} not found after update`);
+        }
+        
+        const verifiedData = verifySnapshot.val();
+        console.log(`[Firebase] 🔍 Verified user data for ${userId}:`, {
+          coins: verifiedData.coins,
+          referralCount: verifiedData.referralCount,
+          referralEarnings: verifiedData.referralEarnings
+        });
         
         // Get updated data to return
         const updatedSnapshot = await get(userRef);

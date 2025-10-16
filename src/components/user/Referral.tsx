@@ -85,10 +85,14 @@ const Referral = ({ user, onUserUpdate }: ReferralProps) => {
           updatedAt: new Date().toISOString()
         };
 
+        console.log(`[Referral] 🔄 Updating user rewards for ${userId}:`, updates);
+        
         const success = await safeUpdate(userPath, updates);
         
         if (success) {
-          // Notify parent component about the update
+          console.log(`[Referral] ✅ Successfully updated user rewards for ${userId}`);
+          
+          // Notify parent component about the update ONLY after successful DB write
           if (onUserUpdate) {
             onUserUpdate({
               coins: newCoins,
@@ -103,9 +107,10 @@ const Referral = ({ user, onUserUpdate }: ReferralProps) => {
             { duration: 5000 }
           );
 
-          console.log(`[Referral] Rewarded ${totalNewReward} coins for ${newRewardsCount} new confirmed referrals`);
+          console.log(`[Referral] ✅ Rewarded ${totalNewReward} coins for ${newRewardsCount} new confirmed referrals`);
         } else {
-          console.error('[Referral] Failed to update user rewards');
+          console.error(`[Referral] ❌ Failed to update user rewards for ${userId}`);
+          toast.error('Failed to update rewards. Please try again.');
         }
       }
     } catch (error) {
