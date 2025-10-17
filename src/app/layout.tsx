@@ -4,6 +4,8 @@ import './globals.css';
 import { Toaster } from 'react-hot-toast';
 import EnhancedErrorBoundary from '@/components/EnhancedErrorBoundary';
 import TelegramUserSyncInitializer from '@/components/TelegramUserSyncInitializer';
+import EnhancedFirebaseInitializer from '@/components/EnhancedFirebaseInitializer';
+import FirebaseWriteTest from '@/components/FirebaseWriteTest';
 import SilentErrorInitializer from '@/components/SilentErrorInitializer';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -110,6 +112,8 @@ export default function RootLayout({
         <SilentErrorInitializer />
         <EnhancedErrorBoundary>
           <TelegramUserSyncInitializer />
+          <EnhancedFirebaseInitializer />
+          <FirebaseWriteTest />
           {children}
         </EnhancedErrorBoundary>
         <Toaster
