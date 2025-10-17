@@ -2,14 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  subscribeToAdminSettings, 
-  subscribeToUser, 
-  getDailyStats, 
-  getWithdrawalRequests,
-  updateAdminSettings as updateSettings,
-  updateWithdrawalStatus as updateStatus
-} from '@/lib/firebaseService';
+import { useAllUsers, useWithdrawals, useTasks, useSyncStatus } from '@/hooks/useRealtimeSync';
 import AdminStats from './admin/AdminStats';
 import EnhancedAdminSettings from './admin/EnhancedAdminSettings';
 import AdminApprovals from './admin/AdminApprovals';
@@ -25,53 +18,76 @@ const tabs = [
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('stats');
   
-  const [adminSettings, setAdminSettings] = useState<any>(null);
-  const [dailyStats, setDailyStats] = useState<any>(null);
-  const [withdrawals, setWithdrawals] = useState<any>([]);
-  const [connectionStatus, setConnectionStatus] = useState({ isConnected: true });
+  // Use real-time sync hooks for admin data
+  const { data: users, isLoading: usersLoading, updateUser } = useAllUsers();
+  const { data: withdrawals, isLoading: withdrawalsLoading, updateWithdrawalStatus } = useWithdrawals();
+  const { data: tasks, isLoading: tasksLoading, createTask } = useTasks();
+  const { isOnline, timeSinceLastSync, activeListeners } = useSyncStatus();
 
-  useEffect(() => {
-    // Subscribe to admin settings
-    const unsubscribeSettings = subscribeToAdminSettings(setAdminSettings);
-    
-    // Load initial data
-    getDailyStats().then(setDailyStats);
-    getWithdrawalRequests().then(setWithdrawals);
-    
-    return unsubscribeSettings;
-  }, []);
-
-  const updateAdminSettings = updateSettings;
-  const updateWithdrawalStatus = updateStatus;
+  // Calculate real-time stats from users data
+  const dailyStats = {
+    totalUsers: users.length,
+    activeVipUsers: users.filter(user => user.vipTier !== 'free').length,
+    totalCoinsDistributed: users.reduce((sum, user) => sum + (user.coins || 0), 0),
+    totalInrGenerated: users.reduce((sum, user) => sum + (user.referralEarnings || 0), 0),
+    pendingWithdrawals: withdrawals.filter(w => w.status === 'pending').length,
+    totalPayments: withdrawals.filter(w => w.status === 'paid').length,
+    totalConversions: users.filter(user => user.vipTier !== 'free').length
+  };
 
   const renderTabContent = () => {
     switch (activeTab) {
       case 'stats':
-        return <AdminStats />;
+        return <AdminStats users={users} dailyStats={dailyStats} />;
       case 'tasks':
-        return <TaskManager />;
+        return <TaskManager tasks={tasks} createTask={createTask} />;
       case 'settings':
-        return <EnhancedAdminSettings />;
+        return <EnhancedAdminSettings users={users} updateUser={updateUser} />;
       case 'approvals':
-        return <AdminApprovals />;
+        return <AdminApprovals withdrawals={withdrawals} updateWithdrawalStatus={updateWithdrawalStatus} />;
       default:
-        return <AdminStats />;
+        return <AdminStats users={users} dailyStats={dailyStats} />;
     }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
+      {/* Real-time Sync Status */}
+      {!isOnline && (
+        <div className="bg-red-500/90 text-white p-2 text-center">
+          <div className="flex items-center justify-center space-x-2">
+            <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+            <span className="text-xs">Offline - Admin data may be stale</span>
+          </div>
+        </div>
+      )}
+      
       {/* Admin Header */}
       <div className="bg-gradient-to-r from-red-600 to-purple-600 text-white p-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold flex items-center">
               🛡️ Admin Dashboard
+              {isOnline && (
+                <span className="ml-2 w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+              )}
             </h1>
-            <p className="text-white/80">Telegram Mini App Management</p>
+            <p className="text-white/80">
+              Real-time Telegram Mini App Management
+              {activeListeners > 0 && (
+                <span className="ml-2 text-xs bg-white/20 px-2 py-1 rounded">
+                  {activeListeners} live connections
+                </span>
+              )}
+            </p>
           </div>
           <div className="bg-white/20 px-4 py-2 rounded-lg">
-            <span className="text-sm font-bold">Admin Mode</span>
+            <div className="text-sm">
+              <div className="font-bold">Admin Mode</div>
+              <div className="text-xs text-white/80">
+                Last sync: {Math.round(timeSinceLastSync / 1000)}s ago
+              </div>
+            </div>
           </div>
         </div>
       </div>

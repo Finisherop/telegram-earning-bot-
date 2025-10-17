@@ -3,22 +3,18 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { DailyStats, User } from '@/types';
-import { getEnhancedDailyStats, upgradeUserToVIP } from '@/lib/enhancedFirebaseService';
+import { updateUserData } from '@/lib/realtimeSyncManager';
 import { realtimeDb } from '@/lib/firebase';
 import { ref, get } from 'firebase/database';
 import toast from 'react-hot-toast';
 
-const AdminStats = () => {
-  const [stats, setStats] = useState<DailyStats>({
-    totalUsers: 0,
-    activeVipUsers: 0,
-    totalCoinsDistributed: 0,
-    totalInrGenerated: 0,
-    pendingWithdrawals: 0,
-    totalPayments: 0,      // Initialize missing fields
-    totalConversions: 0,   // Initialize missing fields
-  });
-  const [loading, setLoading] = useState(true);
+interface AdminStatsProps {
+  users: User[];
+  dailyStats: DailyStats;
+}
+
+const AdminStats = ({ users, dailyStats }: AdminStatsProps) => {
+  const [loading, setLoading] = useState(false);
   
   // VIP Management State
   const [showVipManager, setShowVipManager] = useState(false);
@@ -27,39 +23,10 @@ const AdminStats = () => {
   const [searchLoading, setSearchLoading] = useState(false);
   const [upgradeLoading, setUpgradeLoading] = useState(false);
 
+  // Real-time stats are now passed as props, no need for manual loading
   useEffect(() => {
-    loadStats();
-    
-    // Set up auto-refresh every 30 seconds for real-time updates
-    const interval = setInterval(loadStats, 30000);
-    
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadStats = async () => {
-    try {
-      console.log('[Admin Stats] Loading enhanced daily stats...');
-      const statsData = await getEnhancedDailyStats();
-      
-      // Merge with defaults to avoid missing fields
-      setStats({
-        totalUsers: statsData.totalUsers ?? 0,
-        activeVipUsers: statsData.activeVipUsers ?? 0,
-        totalCoinsDistributed: statsData.totalCoinsDistributed ?? 0,
-        totalInrGenerated: statsData.totalInrGenerated ?? 0,
-        pendingWithdrawals: statsData.pendingWithdrawals ?? 0,
-        totalPayments: statsData.totalPayments ?? 0,
-        totalConversions: statsData.totalConversions ?? 0,
-      });
-      
-      console.log('[Admin Stats] Enhanced stats loaded successfully:', statsData);
-    } catch (error) {
-      console.error('[Admin Stats] Failed to load enhanced stats:', error);
-      toast.error('Failed to load enhanced statistics');
-    } finally {
-      setLoading(false);
-    }
-  };
+    console.log('[Admin Stats] Real-time stats updated:', dailyStats);
+  }, [dailyStats]);
 
   // VIP Management Functions
   const searchUser = async () => {
@@ -110,19 +77,30 @@ const AdminStats = () => {
     try {
       console.log('[Admin VIP] Upgrading user to', tier, ':', foundUser.telegramId);
       
-      await upgradeUserToVIP(foundUser.telegramId, tier, 0); // 0 payment amount for manual upgrade
+      // Use real-time sync manager for instant updates
+      const vipEndTime = new Date();
+      vipEndTime.setDate(vipEndTime.getDate() + 30); // 30 days VIP
+      
+      await updateUserData(foundUser.telegramId, {
+        vipTier: tier,
+        vipEndTime: vipEndTime,
+        farmingMultiplier: tier === 'vip1' ? 2.0 : 2.5,
+        referralMultiplier: tier === 'vip1' ? 1.5 : 2.0,
+        adsLimitPerDay: -1, // unlimited
+        withdrawalLimit: tier === 'vip1' ? 3 : 5,
+        minWithdrawal: tier === 'vip1' ? 250 : 500
+      });
       
       // Update found user state
       setFoundUser({
         ...foundUser,
-        vipTier: tier
+        vipTier: tier,
+        vipEndTime: vipEndTime
       });
       
       toast.success(`✅ User upgraded to ${tier.toUpperCase()} successfully!`);
       console.log('[Admin VIP] ✅ User upgrade successful');
       
-      // Refresh stats
-      loadStats();
     } catch (error) {
       console.error('[Admin VIP] Error upgrading user:', error);
       toast.error('Failed to upgrade user');
@@ -229,70 +207,70 @@ const AdminStats = () => {
         </motion.div>
       </div>
 
-      {/* Main Stats Grid */}
+      {/* Main Stats Grid - Real-time Data */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <StatCard
           title="Total Users"
-          value={stats.totalUsers}
+          value={dailyStats.totalUsers}
           icon="👥"
           color="bg-blue-500/10 text-blue-600"
-          subtitle="Registered members"
+          subtitle="Registered members (Live)"
         />
         
         <StatCard
           title="VIP Users"
-          value={stats.activeVipUsers}
+          value={dailyStats.activeVipUsers}
           icon="👑"
           color="bg-purple-500/10 text-purple-600"
-          subtitle="Active subscriptions"
+          subtitle="Active subscriptions (Live)"
         />
         
         <StatCard
           title="Coins Distributed"
-          value={stats.totalCoinsDistributed}
+          value={dailyStats.totalCoinsDistributed}
           icon="💰"
           color="bg-yellow-500/10 text-yellow-600"
-          subtitle="Total rewards given"
+          subtitle="Total rewards given (Live)"
         />
         
         <StatCard
           title="Revenue Generated"
-          value={`₹${stats.totalInrGenerated}`}
+          value={`₹${dailyStats.totalInrGenerated}`}
           icon="💵"
           color="bg-green-500/10 text-green-600"
-          subtitle="From VIP sales"
+          subtitle="From VIP sales (Live)"
         />
         
         <StatCard
           title="Pending Withdrawals"
-          value={stats.pendingWithdrawals}
+          value={dailyStats.pendingWithdrawals}
           icon="⏳"
           color="bg-orange-500/10 text-orange-600"
-          subtitle="Awaiting approval"
+          subtitle="Awaiting approval (Live)"
         />
         
         <StatCard
           title="Total Payments"
-          value={stats.totalPayments}
+          value={dailyStats.totalPayments}
           icon="💳"
           color="bg-indigo-500/10 text-indigo-600"
-          subtitle="Processed payments"
+          subtitle="Processed payments (Live)"
         />
         
         <StatCard
           title="Total Conversions"
-          value={stats.totalConversions}
+          value={dailyStats.totalConversions}
           icon="📊"
           color="bg-pink-500/10 text-pink-600"
-          subtitle="User actions tracked"
+          subtitle="User actions tracked (Live)"
         />
         
         <StatCard
           title="Conversion Rate"
-          value={`${stats.totalUsers > 0 ? ((stats.activeVipUsers / stats.totalUsers) * 100).toFixed(1) : 0}%`}
+          value={`${dailyStats.totalUsers > 0 ? ((dailyStats.activeVipUsers / dailyStats.totalUsers) * 100).toFixed(1) : 0}%`}
           icon="📈"
           color="bg-teal-500/10 text-teal-600"
-          subtitle="Free to VIP"
+          subtitle="Free to VIP (Live)"
         />
       </div>
 
@@ -370,10 +348,10 @@ const AdminStats = () => {
             className="bg-orange-500 text-white p-4 rounded-xl font-bold hover:bg-orange-600 transition-all"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={loadStats}
+            onClick={() => toast.success('Data is already live! 🔄')}
           >
-            <div className="text-2xl mb-2">🔄</div>
-            <span className="text-sm">Refresh Data</span>
+            <div className="text-2xl mb-2">⚡</div>
+            <span className="text-sm">Live Data</span>
           </motion.button>
         </div>
       </div>
@@ -410,8 +388,8 @@ const AdminStats = () => {
             <div>
               <h4 className="font-bold text-gray-800">All Features Operational</h4>
               <p className="text-gray-600 text-sm">
-                Real-time sync, payment tracking ({stats.totalPayments} payments), 
-                conversion analytics ({stats.totalConversions} events), and comprehensive error handling are all functioning normally.
+                Real-time sync, payment tracking ({dailyStats.totalPayments} payments), 
+                conversion analytics ({dailyStats.totalConversions} events), and comprehensive error handling are all functioning normally.
               </p>
             </div>
           </div>
@@ -503,7 +481,26 @@ const AdminStats = () => {
                   
                   {foundUser.vipTier !== 'free' && (
                     <motion.button
-                      onClick={() => upgradeUserToVIP(foundUser.telegramId, 'free' as any, 0)}
+                      onClick={async () => {
+                        setUpgradeLoading(true);
+                        try {
+                          await updateUserData(foundUser.telegramId, {
+                            vipTier: 'free',
+                            vipEndTime: undefined,
+                            farmingMultiplier: 1.0,
+                            referralMultiplier: 1.0,
+                            adsLimitPerDay: 5,
+                            withdrawalLimit: 1,
+                            minWithdrawal: 200
+                          });
+                          setFoundUser({ ...foundUser, vipTier: 'free' });
+                          toast.success('VIP status removed successfully!');
+                        } catch (error) {
+                          toast.error('Failed to remove VIP status');
+                        } finally {
+                          setUpgradeLoading(false);
+                        }
+                      }}
                       disabled={upgradeLoading}
                       className="w-full bg-gray-500 text-white py-2 px-3 rounded-lg hover:bg-gray-600 disabled:opacity-50 text-sm font-medium"
                       whileTap={{ scale: 0.95 }}

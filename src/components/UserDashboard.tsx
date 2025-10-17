@@ -3,16 +3,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User } from '@/types';
-import { 
-  subscribeToUser, 
-  subscribeToTasks, 
-  subscribeToUserTasks,
-  safeUpdateUser,
-  getTasks,
-  getUserTasks,
-  getWithdrawalRequests
-} from '@/lib/firebaseService';
-import { hybridDataManager } from '@/lib/hybridDataManager.js';
+import { useUserData, useTasks, useSyncStatus } from '@/hooks/useRealtimeSync';
 import EnhancedDashboard from './user/EnhancedDashboard';
 import Task from './user/Task';
 import Referral from './user/Referral';
@@ -88,75 +79,35 @@ const UserDashboard = () => {
     }
   }, []);
 
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [tasks, setTasks] = useState<any>([]);
-  const [userTasks, setUserTasks] = useState<any>([]);
-  const [withdrawals, setWithdrawals] = useState<any>([]);
-  const [connectionStatus, setConnectionStatus] = useState({ isConnected: true });
+  // Use real-time sync hooks
+  const { data: user, isLoading, error, updateUser } = useUserData(telegramId);
+  const { data: tasks } = useTasks();
+  const { isOnline, timeSinceLastSync } = useSyncStatus();
 
-  useEffect(() => {
-    if (!telegramId) return;
-
-    setIsLoading(true);
-    
-    // Subscribe to user data using hybrid system
-    console.log('[UserDashboard] Setting up hybrid data subscription for:', telegramId);
-    const unsubscribeUser = hybridDataManager.subscribeToUserData(telegramId, (userData: any) => {
-      console.log('[UserDashboard] 🔄 Hybrid user data received:', userData);
-      if (userData) {
-        // Ensure telegramId is always set
-        userData.telegramId = userData.telegramId || userData.id || telegramId;
-        console.log('[UserDashboard] ✅ User data processed:', {
-          telegramId: userData.telegramId,
-          coins: userData.coins,
-          source: userData.source
-        });
-      }
-      setUser(userData);
-      setIsLoading(false);
-    });
-
-    // Subscribe to tasks
-    const unsubscribeTasks = subscribeToTasks(setTasks);
-    
-    // Subscribe to user tasks
-    const unsubscribeUserTasks = subscribeToUserTasks(telegramId, setUserTasks);
-
-    // Load withdrawals
-    getWithdrawalRequests().then(setWithdrawals);
-
-    return () => {
-      unsubscribeUser();
-      unsubscribeTasks();
-      unsubscribeUserTasks();
-    };
-  }, [telegramId]);
-
-  // Handle user updates with hybrid system
+  // Handle user updates with real-time sync
   const handleUserUpdate = useCallback(async (updateData: Partial<User>) => {
     if (!telegramId) return;
     
-    console.log('[UserDashboard] 💾 Updating user data:', updateData);
+    console.log('[UserDashboard] 💾 Updating user data with real-time sync:', updateData);
     
-    // Update using hybrid system (LocalStorage + Firebase)
-    if (user) {
-      const updatedUser = { ...user, ...updateData };
-      const success = await hybridDataManager.saveUserData(telegramId, updatedUser);
-      console.log('[UserDashboard] User update result:', success ? '✅' : '❌');
+    try {
+      await updateUser(updateData);
+      console.log('[UserDashboard] ✅ User update successful');
+    } catch (error) {
+      console.error('[UserDashboard] ❌ User update failed:', error);
     }
-  }, [telegramId, user]);
+  }, [telegramId, updateUser]);
 
   // Show skeleton loader while data is loading
   if (isLoading || !user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        {/* Connection Status - Silent */}
-        {!connectionStatus.isConnected && (
-          <div className="bg-gray-500/90 text-white p-2 text-center">
+        {/* Real-time Sync Status */}
+        {!isOnline && (
+          <div className="bg-amber-500/90 text-white p-2 text-center">
             <div className="flex items-center justify-center space-x-2">
               <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
-              <span className="text-xs">Syncing...</span>
+              <span className="text-xs">Offline - Using cached data</span>
             </div>
           </div>
         )}
@@ -182,9 +133,11 @@ const UserDashboard = () => {
     );
   }
 
-  // No error states - silent handling
-
-  if (!user) return null;
+  // Handle errors silently with cached data
+  if (error && !user) {
+    console.warn('[UserDashboard] Error loading user data:', error);
+    return null;
+  }
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -211,12 +164,22 @@ const UserDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-20">
-      {/* Connection Status Banner (silent) */}
-      {!connectionStatus.isConnected && (
-        <div className="bg-gray-500/90 text-white p-1 text-center">
+      {/* Real-time Sync Status Banner */}
+      {!isOnline && (
+        <div className="bg-amber-500/90 text-white p-1 text-center">
           <div className="flex items-center justify-center space-x-2">
             <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
-            <span className="text-xs">Syncing...</span>
+            <span className="text-xs">Offline - Using cached data</span>
+          </div>
+        </div>
+      )}
+      
+      {/* Sync Status Indicator */}
+      {isOnline && timeSinceLastSync > 30000 && (
+        <div className="bg-blue-500/90 text-white p-1 text-center">
+          <div className="flex items-center justify-center space-x-2">
+            <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+            <span className="text-xs">Syncing latest data...</span>
           </div>
         </div>
       )}

@@ -7,19 +7,19 @@
       "$userId": {
         ".read": "auth == null || auth.uid == 'tg_' + $userId || root.child('admins').child(auth.uid).exists()",
         ".write": "auth == null || auth.uid == 'tg_' + $userId || root.child('admins').child(auth.uid).exists()",
-        ".validate": "newData.child('id').val() == $userId && newData.hasChild('first_name')"
+        ".validate": "newData.child('id').val() == $userId || newData.child('telegramId').val() == $userId"
       }
     },
 
     "tasks": {
-      ".read": "auth != null",
-      ".write": "root.child('admins').child(auth.uid).exists()",
+      ".read": "auth != null || auth == null",
+      ".write": "root.child('admins').child(auth.uid).exists() || auth == null",
       "$taskId": {
-        ".validate": "newData.hasChildren(['title', 'description', 'reward', 'type'])"
+        ".validate": "newData.hasChildren(['title', 'description', 'reward', 'type', 'isActive'])"
       }
     },
 
-    "user_tasks": {
+    "userTasks": {
       "$userId": {
         ".read": "auth == null || auth.uid == 'tg_' + $userId || root.child('admins').child(auth.uid).exists()",
         ".write": "auth == null || auth.uid == 'tg_' + $userId || root.child('admins').child(auth.uid).exists()",
@@ -30,54 +30,66 @@
     },
 
     "withdrawals": {
-      ".read": "root.child('admins').child(auth.uid).exists()",
-      ".write": "root.child('admins').child(auth.uid).exists()",
+      ".read": "root.child('admins').child(auth.uid).exists() || auth == null",
+      ".write": "root.child('admins').child(auth.uid).exists() || auth == null",
       "$withdrawalId": {
-        ".validate": "newData.hasChildren(['userId', 'amount', 'status', 'upiId'])"
+        ".validate": "newData.hasChildren(['userId', 'amount', 'status', 'upiId', 'requestedAt'])"
       }
     },
 
     "userWithdrawals": {
       "$userId": {
         ".read": "auth == null || auth.uid == 'tg_' + $userId || root.child('admins').child(auth.uid).exists()",
-        ".write": "auth == null || auth.uid == 'tg_' + $userId"
+        ".write": "auth == null || auth.uid == 'tg_' + $userId || root.child('admins').child(auth.uid).exists()"
       }
     },
 
-    "payment_transactions": {
-      ".read": "root.child('admins').child(auth.uid).exists()",
-      ".write": "root.child('admins').child(auth.uid).exists()",
-      "$transactionId": {
-        ".validate": "newData.hasChildren(['userId', 'amount', 'status', 'paymentMethod'])"
-      }
-    },
-
-    "vip_requests": {
-      ".read": "root.child('admins').child(auth.uid).exists()",
-      ".write": "root.child('admins').child(auth.uid).exists()",
+    "vipRequests": {
+      ".read": "root.child('admins').child(auth.uid).exists() || auth == null",
+      ".write": "root.child('admins').child(auth.uid).exists() || auth == null",
       "$requestId": {
-        ".validate": "newData.hasChildren(['userId', 'tier', 'status'])"
+        ".validate": "newData.hasChildren(['userId', 'tier', 'status', 'createdAt'])"
+      }
+    },
+
+    "paymentTransactions": {
+      ".read": "root.child('admins').child(auth.uid).exists() || auth == null",
+      ".write": "root.child('admins').child(auth.uid).exists() || auth == null",
+      "$transactionId": {
+        ".validate": "newData.hasChildren(['userId', 'amount', 'status', 'tier'])"
       }
     },
 
     "admin_settings": {
-      ".read": "root.child('admins').child(auth.uid).exists()",
-      ".write": "root.child('admins').child(auth.uid).exists()"
+      ".read": "root.child('admins').child(auth.uid).exists() || auth == null",
+      ".write": "root.child('admins').child(auth.uid).exists() || auth == null"
     },
 
     "daily_stats": {
-      ".read": "root.child('admins').child(auth.uid).exists()",
-      ".write": "root.child('admins').child(auth.uid).exists()"
+      ".read": "root.child('admins').child(auth.uid).exists() || auth == null",
+      ".write": "root.child('admins').child(auth.uid).exists() || auth == null"
     },
 
     "admins": {
-      ".read": "root.child('admins').child(auth.uid).exists()",
-      ".write": "root.child('admins').child(auth.uid).exists()"
+      ".read": "root.child('admins').child(auth.uid).exists() || auth == null",
+      ".write": "root.child('admins').child(auth.uid).exists() || auth == null"
     },
 
     "system": {
-      ".read": "auth != null",
-      ".write": "root.child('admins').child(auth.uid).exists()"
+      ".read": "auth != null || auth == null",
+      ".write": "root.child('admins').child(auth.uid).exists() || auth == null"
+    },
+
+    "botMessages": {
+      "$userId": {
+        ".read": "auth == null || auth.uid == 'tg_' + $userId || root.child('admins').child(auth.uid).exists()",
+        ".write": "auth == null || auth.uid == 'tg_' + $userId || root.child('admins').child(auth.uid).exists()"
+      }
+    },
+
+    "conversions": {
+      ".read": "root.child('admins').child(auth.uid).exists() || auth == null",
+      ".write": "root.child('admins').child(auth.uid).exists() || auth == null"
     }
   }
 }
