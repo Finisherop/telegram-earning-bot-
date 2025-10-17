@@ -181,6 +181,45 @@ const UserSyncTestPage = () => {
     setStatus(prev => ({ ...prev, logs: [] }));
   };
 
+  const testFirebaseDebug = async () => {
+    setStatus(prev => ({ ...prev, isLoading: true }));
+    addLog('🔍 Testing Firebase environment variables...');
+
+    try {
+      const response = await fetch('/api/firebase-debug');
+      const result = await response.json();
+      
+      addLog(`📡 Debug API response status: ${response.status}`);
+      
+      if (response.ok) {
+        addLog('✅ Firebase debug check completed');
+        addLog(`📊 Environment: ${result.environment} (${result.platform})`);
+        addLog(`📋 Missing variables: ${result.missingVariables.length}`);
+        
+        if (result.missingVariables.length > 0) {
+          addLog(`❌ Missing: ${result.missingVariables.join(', ')}`);
+        }
+        
+        addLog(`🔥 Firebase init test: ${result.firebaseInitTest.success ? 'SUCCESS' : 'FAILED'}`);
+        
+        if (!result.firebaseInitTest.success) {
+          addLog(`❌ Init error: ${result.firebaseInitTest.error?.message}`);
+        }
+        
+        result.recommendations.forEach((rec: string) => {
+          addLog(`💡 Recommendation: ${rec}`);
+        });
+      } else {
+        addLog('❌ Firebase debug check failed');
+        addLog(`❌ Error: ${result.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      addLog(`❌ Debug request error: ${error}`);
+    } finally {
+      setStatus(prev => ({ ...prev, isLoading: false }));
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-4xl mx-auto space-y-6">
@@ -289,7 +328,7 @@ const UserSyncTestPage = () => {
               🧪 Test Controls
             </h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <button
                 onClick={testCompleteSync}
                 disabled={status.isLoading}
@@ -304,6 +343,14 @@ const UserSyncTestPage = () => {
                 className="bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {status.isLoading ? '⏳ Testing...' : '🔗 Test API Route'}
+              </button>
+
+              <button
+                onClick={testFirebaseDebug}
+                disabled={status.isLoading}
+                className="bg-red-500 text-white px-6 py-3 rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {status.isLoading ? '⏳ Checking...' : '🔍 Debug Firebase'}
               </button>
             </div>
 
