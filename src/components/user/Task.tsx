@@ -6,7 +6,7 @@ import { User, Task as TaskType, UserTask } from '@/types';
 import { getTasks, getUserTasks, completeTask, claimTask, safeUpdateUser, subscribeToTasks, subscribeToUserTasks } from '@/lib/firebaseService';
 import { TelegramService } from '@/lib/telegram';
 import { validateUserForOperation, getUserValidationError } from '@/lib/userValidation';
-import { realtimeDb } from '@/lib/firebaseClient.js';
+import { getFirebaseDatabase } from '@/lib/firebaseClient';
 import { ref, onValue, off } from 'firebase/database';
 import { useTelegramWebApp } from '@/hooks/useTelegramWebApp.js';
 import toast from 'react-hot-toast';
@@ -45,7 +45,8 @@ const Task = ({ user: propUser }: TaskProps) => {
 
   useEffect(() => {
     const loadTasks = async () => {
-      if (!realtimeDb) {
+      const db = getFirebaseDatabase();
+      if (!db) {
         console.error('❌ Firebase Realtime Database not available');
         setError('Firebase not available');
         setLoading(false);
@@ -68,7 +69,7 @@ const Task = ({ user: propUser }: TaskProps) => {
 
       try {
         // Set up real-time listener for tasks
-        const tasksRef = ref(realtimeDb, 'tasks');
+        const tasksRef = ref(db, 'tasks');
         const unsubscribeTasks = onValue(tasksRef, (snapshot) => {
           if (snapshot.exists()) {
             const tasksData = snapshot.val();
@@ -125,7 +126,7 @@ const Task = ({ user: propUser }: TaskProps) => {
         });
 
         // Set up real-time listener for user tasks
-        const userTasksRef = ref(realtimeDb, `userTasks/${userId}`);
+        const userTasksRef = ref(db, `userTasks/${userId}`);
         const unsubscribeUserTasks = onValue(userTasksRef, (snapshot) => {
           if (snapshot.exists()) {
             const userTasksData = snapshot.val();

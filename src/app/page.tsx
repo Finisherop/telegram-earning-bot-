@@ -44,7 +44,12 @@ export default function Home() {
         });
 
         // Example: Save user to Realtime Database
-        setTelegramUserData(user.id, user).then(success => {
+        const userData = {
+          id: user.id,
+          name: `${user.first_name} ${user.last_name || ''}`.trim(),
+          profile_pic: user.photo_url || ''
+        };
+        setTelegramUserData(userData).then(success => {
           if (success) {
             console.log('[Firebase] ✅ Telegram user saved to Realtime Database successfully');
           }

@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { User } from '@/types';
 import { TelegramService } from '@/lib/telegram';
 import { getWithdrawalRequests } from '@/lib/firebaseService';
-import { realtimeDb } from '@/lib/firebaseClient.js';
+import { getFirebaseDatabase } from '@/lib/firebaseClient';
 import { ref, get, set, onValue, off } from 'firebase/database';
 import { useTelegramWebApp } from '@/hooks/useTelegramWebApp.js';
 
@@ -47,13 +47,6 @@ const Profile = ({ user: propUser }: ProfileProps) => {
 
   useEffect(() => {
     const loadUserProfile = async () => {
-      if (!realtimeDb) {
-        console.error('❌ Firebase Realtime Database not available');
-        setError('Firebase not available');
-        setLoading(false);
-        return;
-      }
-
       // Get user ID from Telegram or fallback to prop user
       const userId = telegramUser?.id || propUser?.telegramId;
       
@@ -69,7 +62,8 @@ const Profile = ({ user: propUser }: ProfileProps) => {
       setError(null);
 
       try {
-        const userRef = ref(realtimeDb, `telegram_users/${userId}`);
+        const db = getFirebaseDatabase();
+        const userRef = ref(db, `telegram_users/${userId}`);
         
         // Set up real-time listener
         const unsubscribe = onValue(userRef, async (snapshot) => {
