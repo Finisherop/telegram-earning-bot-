@@ -33,7 +33,7 @@ const UserDashboard = () => {
           let userInfo: any = {};
           
           if (tgUser?.id) {
-            // Real Telegram user
+            // Real Telegram user only
             userId = String(tgUser.id);
             userInfo = {
               firstName: tgUser.first_name || 'User',
@@ -41,18 +41,11 @@ const UserDashboard = () => {
               username: tgUser.username || '',
               profilePic: tgUser.photo_url || ''
             };
-            console.log('[UserDashboard] Telegram user detected:', userId, userInfo);
+            console.log('[UserDashboard] Real Telegram user detected:', userId, userInfo);
           } else {
-            // Fallback for browser mode
-            userId = localStorage.getItem('browser_user_id') || `browser_${Date.now()}`;
-            localStorage.setItem('browser_user_id', userId);
-            userInfo = {
-              firstName: 'Browser User',
-              lastName: '',
-              username: 'browseruser',
-              profilePic: ''
-            };
-            console.log('[UserDashboard] Browser mode user:', userId);
+            // NO browser fallback - exit silently
+            console.log('[UserDashboard] ⚠️ Not in Telegram WebApp environment - no user created');
+            return;
           }
           
           setTelegramId(userId);
@@ -69,9 +62,8 @@ const UserDashboard = () => {
           
         } catch (error) {
           console.error('[UserDashboard] Error initializing user:', error);
-          // Silent fallback
-          const fallbackId = 'browser_user';
-          setTelegramId(fallbackId);
+          // NO fallback - exit silently if not Telegram WebApp
+          return;
         }
       };
       
