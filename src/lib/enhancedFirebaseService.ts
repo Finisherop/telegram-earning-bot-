@@ -9,7 +9,10 @@ import {
   remove,
   serverTimestamp as realtimeServerTimestamp,
 } from 'firebase/database';
-import { realtimeDb } from './firebaseClient.js';
+import { getFirebaseDatabase } from './firebaseClient';
+
+// Get database instance helper
+const getDb = () => getFirebaseDatabase();
 import { 
   User, 
   Task, 
@@ -53,11 +56,17 @@ const logSuccess = (operation: string, context?: any) => {
 
 // Firebase connection check with enhanced validation
 const checkFirebaseConnection = (): boolean => {
-  if (!realtimeDb) {
-    console.warn('[Firebase Service] Services not properly initialized. Some features may not work.');
+  try {
+    const db = getFirebaseDatabase();
+    if (!db) {
+      console.warn('[Firebase Service] Services not properly initialized. Some features may not work.');
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error('[Firebase Service] ❌ Firebase connection error:', error);
     return false;
   }
-  return true;
 };
 
 // Real-time listeners management
@@ -73,16 +82,16 @@ export const subscribeToUserWithExtendedData = (
     messages: BotMessage[];
   }) => void
 ): (() => void) => {
-  if (!checkFirebaseConnection() || !realtimeDb) {
+  if (!checkFirebaseConnection() || !getDb()) {
     console.warn('Cannot subscribe to user: Firebase not initialized');
     callback({ user: null, payments: [], conversions: [], messages: [] });
     return () => {};
   }
   
-  const userRef = ref(realtimeDb, `telegram_users/${userId}`);
-  const paymentsRef = ref(realtimeDb, `payments/${userId}`);
-  const conversionsRef = ref(realtimeDb, `conversions/${userId}`);
-  const messagesRef = ref(realtimeDb, `messages/${userId}`);
+  const userRef = ref(getDb(), `telegram_users/${userId}`);
+  const paymentsRef = ref(getDb(), `payments/${userId}`);
+  const conversionsRef = ref(getDb(), `conversions/${userId}`);
+  const messagesRef = ref(getDb(), `messages/${userId}`);
   
   let userData: User | null = null;
   let paymentsData: PaymentData[] = [];
@@ -225,7 +234,7 @@ export const safeUpdateUserWithRetry = async (
   updateData: Partial<User>,
   maxRetries: number = 3
 ): Promise<User> => {
-  if (!checkFirebaseConnection() || !realtimeDb) {
+  if (!checkFirebaseConnection() || !getDb()) {
     throw new FirebaseServiceError('Firebase not initialized');
   }
   
@@ -233,7 +242,7 @@ export const safeUpdateUserWithRetry = async (
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const userRef = ref(realtimeDb, `telegram_users/${userId}`);
+      const userRef = ref(getDb(), `telegram_users/${userId}`);
       
       // Get current user data with retry logic
       const userSnapshot = await get(userRef);
@@ -346,12 +355,12 @@ export const safeUpdateUserWithRetry = async (
 
 // Enhanced farming operations with proper state management
 export const startFarmingWithValidation = async (userId: string): Promise<{ success: boolean; message: string }> => {
-  if (!checkFirebaseConnection() || !realtimeDb) {
+  if (!checkFirebaseConnection() || !getDb()) {
     throw new FirebaseServiceError('Firebase not initialized');
   }
   
   try {
-    const userRef = ref(realtimeDb, `telegram_users/${userId}`);
+    const userRef = ref(getDb(), `telegram_users/${userId}`);
     const userSnapshot = await get(userRef);
     
     if (!userSnapshot.exists()) {
@@ -399,12 +408,12 @@ export const createPayment = async (
   tier: 'vip1' | 'vip2',
   metadata?: any
 ): Promise<string> => {
-  if (!checkFirebaseConnection() || !realtimeDb) {
+  if (!checkFirebaseConnection() || !getDb()) {
     throw new FirebaseServiceError('Firebase not initialized');
   }
   
   try {
-    const paymentsRef = ref(realtimeDb, `payments/${userId}`);
+    const paymentsRef = ref(getDb(), `payments/${userId}`);
     const newPaymentRef = push(paymentsRef);
     
     const paymentData: Omit<PaymentData, 'id'> = {
@@ -435,12 +444,12 @@ export const updatePaymentStatus = async (
   status: 'completed' | 'failed',
   telegramPaymentId?: string
 ): Promise<void> => {
-  if (!checkFirebaseConnection() || !realtimeDb) {
+  if (!checkFirebaseConnection() || !getDb()) {
     throw new FirebaseServiceError('Firebase not initialized');
   }
   
   try {
-    const paymentRef = ref(realtimeDb, `payments/${userId}/${paymentId}`);
+    const paymentRef = ref(getDb(), `payments/${userId}/${paymentId}`);
     const updates: any = {
       status,
       updatedAt: new Date().toISOString(),
@@ -477,7 +486,7 @@ export const upgradeUserToVIP = async (
   tier: 'vip1' | 'vip2',
   paymentAmount?: number
 ): Promise<void> => {
-  if (!checkFirebaseConnection() || !realtimeDb) {
+  if (!checkFirebaseConnection() || !getDb()) {
     throw new FirebaseServiceError('Firebase not initialized');
   }
   
@@ -540,12 +549,12 @@ export const logConversionEvent = async (
   type: ConversionData['type'],
   metadata?: any
 ): Promise<void> => {
-  if (!checkFirebaseConnection() || !realtimeDb) {
+  if (!checkFirebaseConnection() || !getDb()) {
     return; // Don't throw error for analytics, just skip
   }
   
   try {
-    const conversionsRef = ref(realtimeDb, `conversions/${userId}`);
+    const conversionsRef = ref(getDb(), `conversions/${userId}`);
     const newConversionRef = push(conversionsRef);
     
     const conversionData: Omit<ConversionData, 'id'> = {
@@ -572,12 +581,12 @@ export const sendBotMessage = async (
   userId: string,
   messageData: Omit<BotMessage, 'id' | 'userId' | 'isRead' | 'createdAt'>
 ): Promise<void> => {
-  if (!checkFirebaseConnection() || !realtimeDb) {
+  if (!checkFirebaseConnection() || !getDb()) {
     return; // Don't throw error for messages, just skip
   }
   
   try {
-    const messagesRef = ref(realtimeDb, `messages/${userId}`);
+    const messagesRef = ref(getDb(), `messages/${userId}`);
     const newMessageRef = push(messagesRef);
     
     const message: Omit<BotMessage, 'id'> = {
@@ -600,12 +609,12 @@ export const sendBotMessage = async (
 };
 
 export const markMessageAsRead = async (userId: string, messageId: string): Promise<void> => {
-  if (!checkFirebaseConnection() || !realtimeDb) {
+  if (!checkFirebaseConnection() || !getDb()) {
     return;
   }
   
   try {
-    const messageRef = ref(realtimeDb, `messages/${userId}/${messageId}`);
+    const messageRef = ref(getDb(), `messages/${userId}/${messageId}`);
     await update(messageRef, {
       isRead: true,
       readAt: new Date().toISOString(),
@@ -617,7 +626,7 @@ export const markMessageAsRead = async (userId: string, messageId: string): Prom
 
 // Enhanced stats with payment and conversion data
 export const getEnhancedDailyStats = async (): Promise<DailyStats> => {
-  if (!checkFirebaseConnection() || !realtimeDb) {
+  if (!checkFirebaseConnection() || !getDb()) {
     console.warn('Cannot get daily stats: Firebase not initialized');
     return {
       totalUsers: 0,
@@ -632,7 +641,7 @@ export const getEnhancedDailyStats = async (): Promise<DailyStats> => {
   
   try {
     // Get users data
-    const usersRef = ref(realtimeDb, 'telegram_users');
+    const usersRef = ref(getDb(), 'telegram_users');
     const usersSnapshot = await get(usersRef);
     
     let totalUsers = 0;
@@ -652,7 +661,7 @@ export const getEnhancedDailyStats = async (): Promise<DailyStats> => {
     }
     
     // Get payments data
-    const paymentsRef = ref(realtimeDb, 'payments');
+    const paymentsRef = ref(getDb(), 'payments');
     const paymentsSnapshot = await get(paymentsRef);
     let totalPayments = 0;
     let totalInrGenerated = 0;
@@ -672,7 +681,7 @@ export const getEnhancedDailyStats = async (): Promise<DailyStats> => {
     }
     
     // Get conversions data
-    const conversionsRef = ref(realtimeDb, 'conversions');
+    const conversionsRef = ref(getDb(), 'conversions');
     const conversionsSnapshot = await get(conversionsRef);
     let totalConversions = 0;
     
@@ -685,7 +694,7 @@ export const getEnhancedDailyStats = async (): Promise<DailyStats> => {
     }
     
     // Get pending withdrawals from Realtime Database
-    const withdrawalsRef = ref(realtimeDb, 'withdrawals');
+    const withdrawalsRef = ref(getDb(), 'withdrawals');
     const withdrawalsSnapshot = await get(withdrawalsRef);
     
     let pendingWithdrawals = 0;
