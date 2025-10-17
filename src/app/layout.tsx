@@ -3,7 +3,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { Toaster } from 'react-hot-toast';
 import EnhancedErrorBoundary from '@/components/EnhancedErrorBoundary';
-import TelegramFirebaseDirectSync from '@/components/TelegramFirebaseDirectSync';
+import TelegramUserSyncManager from '@/components/TelegramUserSyncManager';
 import SilentErrorInitializer from '@/components/SilentErrorInitializer';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -109,7 +109,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <SilentErrorInitializer />
         <EnhancedErrorBoundary>
-          <TelegramFirebaseDirectSync />
+          <TelegramUserSyncManager />
           {children}
         </EnhancedErrorBoundary>
         <Toaster

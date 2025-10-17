@@ -1,18 +1,11 @@
 /**
- * Telegram Mini WebApp User Sync Module
+ * Telegram User Sync - Client-side
  * 
- * Captures Telegram user info and syncs to Firebase Realtime Database
- * with strict requirements compliance:
- * - Only runs in Telegram Mini WebApp environment
- * - No browser fallback users
- * - Respects existing Firebase fields
- * - Silent operation unless debug enabled
+ * Detects Telegram WebApp context and syncs user data via API route
+ * Only works in Telegram Mini App environment
  */
 
-import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getDatabase, ref, get, update, set, Database } from 'firebase/database';
-
-interface TelegramUser {
+interface TelegramWebAppUser {
   id: number;
   first_name: string;
   last_name?: string;
@@ -20,304 +13,268 @@ interface TelegramUser {
   photo_url?: string;
 }
 
-interface TelegramWebApp {
-  initDataUnsafe?: {
-    user?: TelegramUser;
-  };
+interface SyncResponse {
+  success: boolean;
+  operation: 'create' | 'update';
+  user: any;
+  path: string;
+  error?: string;
 }
 
-interface CachedUser {
-  userId: string;
-  name: string;
-  profileUrl: string;
-  lastCached: number;
-}
-
-class TelegramUserSyncManager {
-  private static instance: TelegramUserSyncManager;
-  private app: FirebaseApp | null = null;
-  private database: Database | null = null;
+class TelegramUserSync {
+  private static instance: TelegramUserSync;
   private isInitialized = false;
-  private readonly DEBUG = process.env.NEXT_PUBLIC_DEBUG === 'true';
-  private readonly MAX_RETRIES = 25; // 5 seconds / 200ms
-  private readonly RETRY_INTERVAL = 200;
+  private cachedUser: TelegramWebAppUser | null = null;
 
   private constructor() {}
 
-  public static getInstance(): TelegramUserSyncManager {
-    if (!TelegramUserSyncManager.instance) {
-      TelegramUserSyncManager.instance = new TelegramUserSyncManager();
+  public static getInstance(): TelegramUserSync {
+    if (!TelegramUserSync.instance) {
+      TelegramUserSync.instance = new TelegramUserSync();
     }
-    return TelegramUserSyncManager.instance;
+    return TelegramUserSync.instance;
   }
 
   /**
-   * Main entry point - detects Telegram user and syncs to Firebase
+   * Detect Telegram WebApp context and get user data
    */
-  public async syncTelegramUser(): Promise<void> {
-    // Only run in client-side environment
-    if (typeof window === 'undefined') {
-      return;
-    }
-
+  public async detectTelegramUser(): Promise<TelegramWebAppUser | null> {
     try {
-      // Wait for Telegram WebApp to be available
-      const telegramUser = await this.waitForTelegramUser();
+      console.log('[Telegram Sync] 🔍 Detecting Telegram WebApp context...');
+
+      // Only run in browser environment
+      if (typeof window === 'undefined') {
+        console.log('[Telegram Sync] ❌ Not in browser environment');
+        return null;
+      }
+
+      // Check for Telegram WebApp
+      const telegram = (window as any).Telegram?.WebApp;
+      
+      if (!telegram) {
+        console.log('[Telegram Sync] ❌ Telegram WebApp not available');
+        console.log('[Telegram Sync] ℹ️ This app must be opened from Telegram Mini App');
+        return null;
+      }
+
+      console.log('[Telegram Sync] ✅ Telegram WebApp detected');
+
+      // Initialize Telegram WebApp
+      console.log('[Telegram Sync] 🚀 Initializing Telegram WebApp...');
+      telegram.ready();
+
+      // Wait for initialization
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Get user data
+      const user = telegram.initDataUnsafe?.user;
+      
+      if (!user || !user.id || typeof user.id !== 'number') {
+        console.log('[Telegram Sync] ❌ No valid Telegram user found');
+        console.log('[Telegram Sync] 🔍 initDataUnsafe:', telegram.initDataUnsafe);
+        return null;
+      }
+
+      // Validate user ID (no browser fallbacks)
+      const userId = user.id.toString();
+      if (userId.includes('browser') || userId.includes('timestamp') || userId.length < 5) {
+        console.log('[Telegram Sync] ❌ Invalid user ID detected:', userId);
+        return null;
+      }
+
+      console.log('[Telegram Sync] ✅ Valid Telegram user detected:', {
+        id: user.id,
+        first_name: user.first_name,
+        last_name: user.last_name || '',
+        username: user.username || '',
+        photo_url: user.photo_url || ''
+      });
+
+      this.cachedUser = user;
+      return user;
+
+    } catch (error) {
+      console.error('[Telegram Sync] ❌ Error detecting Telegram user:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Sync Telegram user to Firebase via API route
+   */
+  public async syncUserToFirebase(telegramUser: TelegramWebAppUser): Promise<SyncResponse | null> {
+    try {
+      console.log('[Telegram Sync] 🚀 Syncing user to Firebase via API...');
+      console.log('[Telegram Sync] 📤 Sending user data:', {
+        id: telegramUser.id,
+        first_name: telegramUser.first_name,
+        username: telegramUser.username || 'N/A'
+      });
+
+      const response = await fetch('/api/sync-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          telegramUser
+        })
+      });
+
+      console.log('[Telegram Sync] 📡 API response status:', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('[Telegram Sync] ❌ API error:', errorData);
+        return {
+          success: false,
+          operation: 'create',
+          user: null,
+          path: '',
+          error: errorData.error || 'API request failed'
+        };
+      }
+
+      const result: SyncResponse = await response.json();
+      
+      console.log('[Telegram Sync] ✅ API sync successful:', {
+        operation: result.operation,
+        path: result.path,
+        userId: result.user?.id
+      });
+
+      return result;
+
+    } catch (error) {
+      console.error('[Telegram Sync] ❌ Sync error:', error);
+      return {
+        success: false,
+        operation: 'create',
+        user: null,
+        path: '',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Complete sync process: detect + sync
+   */
+  public async performCompleteSync(): Promise<boolean> {
+    try {
+      console.log('[Telegram Sync] 🎯 Starting complete sync process...');
+
+      // Step 1: Detect Telegram user
+      const telegramUser = await this.detectTelegramUser();
       
       if (!telegramUser) {
-        // Exit silently if not in Telegram Mini WebApp
-        return;
+        console.log('[Telegram Sync] ⚠️ No Telegram user detected - sync aborted');
+        return false;
       }
 
-      const userId = telegramUser.id.toString();
+      // Step 2: Sync to Firebase
+      const syncResult = await this.syncUserToFirebase(telegramUser);
       
-      // Check cache first
-      const cachedUser = this.getCachedUser(userId);
-      if (cachedUser) {
-        this.debugLog('Using cached user, updating lastSeen only');
-        await this.updateLastSeen(userId);
-        return;
+      if (!syncResult || !syncResult.success) {
+        console.log('[Telegram Sync] ❌ Firebase sync failed:', syncResult?.error);
+        return false;
       }
 
-      // Initialize Firebase only after confirming Telegram user
-      await this.initializeFirebase();
+      console.log('[Telegram Sync] 🎉 Complete sync successful!');
+      console.log('[Telegram Sync] 📍 User saved at:', syncResult.path);
       
-      if (!this.database) {
-        this.debugLog('Firebase not available, exiting');
-        return;
-      }
-
-      // Sync user data to Firebase
-      await this.syncUserToFirebase(telegramUser);
-      
-      // Cache the user
-      this.cacheUser(telegramUser);
-      
-    } catch (error) {
-      this.debugLog('Error in syncTelegramUser:', error);
-    }
-  }
-
-  /**
-   * Wait for Telegram WebApp to be available with retry mechanism
-   */
-  private async waitForTelegramUser(): Promise<TelegramUser | null> {
-    return new Promise((resolve) => {
-      let attempts = 0;
-
-      const checkTelegram = () => {
-        attempts++;
-
-        try {
-          const telegram = (window as any).Telegram?.WebApp as TelegramWebApp;
-          const user = telegram?.initDataUnsafe?.user;
-
-          if (user && user.id) {
-            this.debugLog('Telegram user detected:', user);
-            resolve(user);
-            return;
-          }
-        } catch (error) {
-          this.debugLog('Error checking Telegram:', error);
-        }
-
-        if (attempts >= this.MAX_RETRIES) {
-          this.debugLog('Telegram WebApp not available after retries, exiting');
-          resolve(null);
-          return;
-        }
-
-        setTimeout(checkTelegram, this.RETRY_INTERVAL);
-      };
-
-      checkTelegram();
-    });
-  }
-
-  /**
-   * Initialize Firebase only once and only after Telegram user is confirmed
-   */
-  private async initializeFirebase(): Promise<void> {
-    if (this.isInitialized && this.app && this.database) {
-      return;
-    }
-
-    try {
-      const firebaseConfig = {
-        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-        databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-      };
-
-      // Validate required config
-      if (!firebaseConfig.databaseURL || !firebaseConfig.projectId) {
-        this.debugLog('Firebase config incomplete');
-        return;
-      }
-
-      // Initialize Firebase app (only once)
-      if (getApps().length === 0) {
-        this.app = initializeApp(firebaseConfig);
-      } else {
-        this.app = getApps()[0];
-      }
-
-      this.database = getDatabase(this.app);
       this.isInitialized = true;
-      
-      this.debugLog('Firebase initialized successfully');
-    } catch (error) {
-      this.debugLog('Firebase initialization failed:', error);
-    }
-  }
-
-  /**
-   * Sync user data to Firebase with safe update
-   */
-  private async syncUserToFirebase(telegramUser: TelegramUser): Promise<void> {
-    if (!this.database) return;
-
-    const userId = telegramUser.id.toString();
-    const userRef = ref(this.database, `users/${userId}`);
-
-    try {
-      // Prepare user data - only the 3 required fields
-      const userData = {
-        name: this.combineName(telegramUser.first_name, telegramUser.last_name),
-        profileUrl: telegramUser.photo_url || '',
-        lastSeen: Date.now()
-      };
-
-      // Check if user exists
-      const snapshot = await get(userRef);
-      
-      if (snapshot.exists()) {
-        // User exists - update only our 3 fields
-        await update(userRef, userData);
-        this.debugLog('Updated existing user:', userId);
-      } else {
-        // User doesn't exist - create with minimal data
-        await set(userRef, userData);
-        this.debugLog('Created new user:', userId);
-      }
+      return true;
 
     } catch (error) {
-      this.debugLog('Error syncing user to Firebase:', error);
-      throw error;
+      console.error('[Telegram Sync] ❌ Complete sync error:', error);
+      return false;
     }
   }
 
   /**
-   * Update only lastSeen for cached users
+   * Check if user is in Telegram WebApp environment
    */
-  private async updateLastSeen(userId: string): Promise<void> {
-    if (!this.database) {
-      await this.initializeFirebase();
-    }
-    
-    if (!this.database) return;
-
-    try {
-      const userRef = ref(this.database, `users/${userId}`);
-      await update(userRef, {
-        lastSeen: Date.now()
-      });
-      
-      this.debugLog('Updated lastSeen for user:', userId);
-    } catch (error) {
-      this.debugLog('Error updating lastSeen:', error);
-    }
+  public isTelegramWebApp(): boolean {
+    if (typeof window === 'undefined') return false;
+    return !!(window as any).Telegram?.WebApp;
   }
 
   /**
-   * Combine first and last name
+   * Get cached Telegram user
    */
-  private combineName(firstName: string, lastName?: string): string {
-    return lastName ? `${firstName} ${lastName}`.trim() : firstName;
+  public getCachedUser(): TelegramWebAppUser | null {
+    return this.cachedUser;
   }
 
   /**
-   * Cache user in localStorage
+   * Check if sync is initialized
    */
-  private cacheUser(telegramUser: TelegramUser): void {
-    try {
-      const userId = telegramUser.id.toString();
-      const cachedUser: CachedUser = {
-        userId,
-        name: this.combineName(telegramUser.first_name, telegramUser.last_name),
-        profileUrl: telegramUser.photo_url || '',
-        lastCached: Date.now()
-      };
-
-      localStorage.setItem(`user_${userId}`, JSON.stringify(cachedUser));
-      this.debugLog('User cached:', userId);
-    } catch (error) {
-      this.debugLog('Error caching user:', error);
-    }
-  }
-
-  /**
-   * Get cached user from localStorage
-   */
-  private getCachedUser(userId: string): CachedUser | null {
-    try {
-      const cached = localStorage.getItem(`user_${userId}`);
-      if (cached) {
-        const user = JSON.parse(cached) as CachedUser;
-        // Cache is valid for 24 hours
-        if (Date.now() - user.lastCached < 24 * 60 * 60 * 1000) {
-          return user;
-        } else {
-          // Remove expired cache
-          localStorage.removeItem(`user_${userId}`);
-        }
-      }
-    } catch (error) {
-      this.debugLog('Error reading cached user:', error);
-    }
-    return null;
-  }
-
-  /**
-   * Debug logging (only when enabled)
-   */
-  private debugLog(message: string, data?: any): void {
-    if (this.DEBUG) {
-      if (data) {
-        console.log(`[TelegramUserSync] ${message}`, data);
-      } else {
-        console.log(`[TelegramUserSync] ${message}`);
-      }
-    }
+  public isSync(): boolean {
+    return this.isInitialized;
   }
 }
 
-// Export singleton instance and main function
-export const telegramUserSync = TelegramUserSyncManager.getInstance();
+// Export singleton instance
+export const telegramUserSync = TelegramUserSync.getInstance();
 
 /**
- * Main function to sync Telegram user
- * Call this once when your app initializes
+ * Main sync function - detects Telegram user and syncs to Firebase
  */
-export const syncTelegramUser = (): Promise<void> => {
-  return telegramUserSync.syncTelegramUser();
+export const syncTelegramUser = async (): Promise<boolean> => {
+  return telegramUserSync.performCompleteSync();
 };
 
-// Auto-sync when module is imported (only in client-side)
+/**
+ * Check if running in Telegram WebApp
+ */
+export const isTelegramWebApp = (): boolean => {
+  return telegramUserSync.isTelegramWebApp();
+};
+
+/**
+ * Get current Telegram user (if cached)
+ */
+export const getTelegramUser = (): TelegramWebAppUser | null => {
+  return telegramUserSync.getCachedUser();
+};
+
+/**
+ * Detect Telegram user without syncing
+ */
+export const detectTelegramUser = async (): Promise<TelegramWebAppUser | null> => {
+  return telegramUserSync.detectTelegramUser();
+};
+
+// Auto-sync when module loads (client-side only)
 if (typeof window !== 'undefined') {
-  // Wait for DOM to be ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-      setTimeout(() => syncTelegramUser(), 100);
-    });
-  } else {
-    // DOM is already ready
-    setTimeout(() => syncTelegramUser(), 100);
-  }
+  // Wait for DOM and Telegram WebApp to be ready
+  const autoSync = async () => {
+    try {
+      // Wait for page load
+      if (document.readyState === 'loading') {
+        await new Promise(resolve => {
+          document.addEventListener('DOMContentLoaded', resolve);
+        });
+      }
+
+      // Additional wait for Telegram WebApp
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      console.log('[Auto Sync] 🚀 Starting automatic Telegram user sync...');
+      const success = await syncTelegramUser();
+      
+      if (success) {
+        console.log('[Auto Sync] ✅ Automatic sync completed');
+      } else {
+        console.log('[Auto Sync] ⚠️ Automatic sync skipped (not Telegram WebApp or error)');
+      }
+    } catch (error) {
+      console.error('[Auto Sync] ❌ Automatic sync error:', error);
+    }
+  };
+
+  autoSync();
 }
 
 export default telegramUserSync;
