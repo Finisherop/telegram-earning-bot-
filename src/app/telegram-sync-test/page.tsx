@@ -12,7 +12,8 @@ import {
   syncTelegramToFirebase, 
   isTelegramWebApp, 
   getCurrentTelegramUser,
-  updateTelegramUserInFirebase 
+  updateTelegramUserInFirebase,
+  setTelegramUserData 
 } from '@/lib/telegramFirebaseSync';
 
 interface TestStatus {
@@ -136,11 +137,52 @@ const TelegramSyncTestPage = () => {
       
       if (success) {
         addLog(`✅ Coins updated to ${newCoins}`);
+        addLog(`📍 Verified path: telegram_users/${status.telegramUser.id}`);
       } else {
         addLog('❌ Coins update failed');
       }
     } catch (error) {
       addLog(`❌ Update error: ${error}`);
+    } finally {
+      setStatus(prev => ({ ...prev, isLoading: false }));
+    }
+  };
+
+  const testSetUserData = async () => {
+    if (!status.telegramUser) {
+      addLog('❌ No Telegram user available for setUserData test');
+      return;
+    }
+
+    setStatus(prev => ({ ...prev, isLoading: true }));
+    addLog('🧪 Testing setTelegramUserData function...');
+
+    try {
+      const testData = {
+        id: status.telegramUser.id,
+        telegramId: status.telegramUser.id,
+        username: status.telegramUser.username || '',
+        first_name: status.telegramUser.first_name || '',
+        last_name: status.telegramUser.last_name || '',
+        photo_url: status.telegramUser.photo_url || '',
+        coins: Math.floor(Math.random() * 500),
+        xp: Math.floor(Math.random() * 100),
+        level: 1,
+        vipTier: 'free',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      const success = await setTelegramUserData(status.telegramUser.id.toString(), testData);
+      
+      if (success) {
+        addLog('✅ setTelegramUserData successful');
+        addLog(`📍 Verified path: telegram_users/${status.telegramUser.id}`);
+      } else {
+        addLog('❌ setTelegramUserData failed');
+      }
+    } catch (error) {
+      addLog(`❌ setUserData error: ${error}`);
     } finally {
       setStatus(prev => ({ ...prev, isLoading: false }));
     }
@@ -221,7 +263,7 @@ const TelegramSyncTestPage = () => {
               🧪 Test Controls
             </h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <button
                 onClick={testDirectSync}
                 disabled={status.isLoading}
@@ -236,6 +278,14 @@ const TelegramSyncTestPage = () => {
                 className="bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {status.isLoading ? '⏳ Updating...' : '🪙 Test Update Coins'}
+              </button>
+
+              <button
+                onClick={testSetUserData}
+                disabled={status.isLoading}
+                className="bg-purple-500 text-white px-6 py-3 rounded-lg hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {status.isLoading ? '⏳ Testing...' : '🎯 Test SetUserData'}
               </button>
             </div>
 
@@ -294,10 +344,12 @@ const TelegramSyncTestPage = () => {
           
           <div className="space-y-2 text-sm text-blue-800">
             <div><strong>1. Environment:</strong> This page must be opened inside Telegram Mini WebApp</div>
-            <div><strong>2. Direct Sync:</strong> Tests the complete Telegram → Firebase data flow</div>
+            <div><strong>2. Direct Sync:</strong> Tests the complete Telegram → Firebase data flow with host verification</div>
             <div><strong>3. Update Test:</strong> Tests updating existing user data in Firebase</div>
-            <div><strong>4. Verification:</strong> Check Firebase Console at <code className="bg-blue-100 px-1 rounded">telegram_users/{'{user_id}'}</code></div>
-            <div><strong>5. Logs:</strong> Monitor console and logs panel for detailed operation status</div>
+            <div><strong>4. SetUserData Test:</strong> Tests the setTelegramUserData function with path verification</div>
+            <div><strong>5. Host Verification:</strong> Logs show "[Firebase] Connected Host:" with firebaseio.com URL</div>
+            <div><strong>6. Path Verification:</strong> Check Firebase Console at <code className="bg-blue-100 px-1 rounded">telegram_users/{'{user_id}'}</code></div>
+            <div><strong>7. Logs:</strong> Monitor console and logs panel for detailed operation status including fallback usage</div>
           </div>
         </div>
       </div>

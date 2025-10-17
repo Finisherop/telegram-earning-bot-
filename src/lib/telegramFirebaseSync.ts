@@ -46,7 +46,7 @@ class TelegramFirebaseSync {
   }
 
   /**
-   * Initialize Firebase Database
+   * Initialize Firebase Database with fallback hardcoded URLs for Telegram WebApp
    */
   private async initializeFirebase(): Promise<boolean> {
     if (this.isInitialized && this.database) {
@@ -54,18 +54,25 @@ class TelegramFirebaseSync {
     }
 
     try {
+      // Firebase config with fallback hardcoded URLs for Telegram WebApp environment
       const firebaseConfig = {
-        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-        databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyC_SO0ZnItNVoWif48MyMeznuLsA-jq52k",
+        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "tgfjf-5bbfe.firebaseapp.com",
+        databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || "https://tgfjf-5bbfe-default-rtdb.firebaseio.com",
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "tgfjf-5bbfe",
+        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "tgfjf-5bbfe.firebasestorage.app",
+        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "898327972915",
+        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:898327972915:web:8450b0cfdf69134474e746"
       };
 
+      console.log('[Firebase] 🔧 Config loaded:', {
+        databaseURL: firebaseConfig.databaseURL,
+        projectId: firebaseConfig.projectId,
+        usingFallback: !process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL
+      });
+
       if (!firebaseConfig.databaseURL || !firebaseConfig.projectId) {
-        console.error('[Firebase] ❌ Missing databaseURL or projectId');
+        console.error('[Firebase] ❌ Missing databaseURL or projectId even with fallbacks');
         return false;
       }
 
@@ -77,9 +84,23 @@ class TelegramFirebaseSync {
       }
 
       this.database = getDatabase(app);
-      this.isInitialized = true;
+      
+      // Log connected host for verification
+      const dbInfo = (this.database as any)._repoInfo_;
+      const host = dbInfo?.host || 'unknown';
+      console.log('[Firebase] Connected Host:', host);
 
-      console.log('[Firebase] ✅ Database initialized');
+      // Verify host includes firebaseio.com
+      if (!host.includes('firebaseio.com')) {
+        console.error('[Firebase] ❌ Invalid host detected:', host);
+        console.error('[Firebase] ❌ Expected host to include "firebaseio.com"');
+        console.error('[Firebase] 🚫 Blocking all Firebase writes due to invalid host');
+        this.database = null;
+        return false;
+      }
+
+      this.isInitialized = true;
+      console.log('[Firebase] ✅ Database initialized with valid host');
       return true;
     } catch (error) {
       console.error('[Firebase] ❌ Initialization failed:', error);
@@ -194,10 +215,19 @@ class TelegramFirebaseSync {
       console.log('[Firebase] 📝 Writing for Telegram ID:', telegramUser.id);
       console.log('[Firebase] 📍 Path:', userPath);
 
-      // STEP 4: Safe write to Firebase
+      // STEP 4: Safe write to Firebase with detailed logging
       const userRef = ref(this.database, userPath);
       
+      console.log('📤 Writing user:', telegramUser.id);
+      console.log('[Firebase] 📊 User data to write:', {
+        id: userData.id,
+        telegramId: userData.telegramId,
+        username: userData.username,
+        first_name: userData.first_name
+      });
+      
       await set(userRef, userData);
+      console.log('✅ Write complete for:', telegramUser.id);
       console.log('[Firebase] ✅ Firebase write successful');
 
       // STEP 5: Verification read
@@ -246,7 +276,10 @@ class TelegramFirebaseSync {
         return false;
       }
 
+      // Verify path format
       const userPath = `telegram_users/${telegramUser.id}`;
+      console.log('[Firebase] 🎯 Verified path format:', userPath);
+      
       const userRef = ref(this.database, userPath);
 
       // Add updatedAt timestamp
@@ -258,7 +291,9 @@ class TelegramFirebaseSync {
       console.log('[Firebase] 🔄 Updating Telegram ID:', telegramUser.id);
       console.log('[Firebase] 📝 Update data:', Object.keys(updateData));
 
+      console.log('📤 Writing user:', telegramUser.id);
       await set(userRef, updateData);
+      console.log('✅ Write complete for:', telegramUser.id);
       console.log('[Firebase] ✅ Update successful');
 
       // Verify update
@@ -273,6 +308,55 @@ class TelegramFirebaseSync {
 
     } catch (error) {
       console.error('[Update] ❌ Update failed:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Verify that setTelegramUserData writes to correct path
+   */
+  public async setTelegramUserData(userId: string, userData: FirebaseUserData): Promise<boolean> {
+    try {
+      if (!this.database) {
+        const initialized = await this.initializeFirebase();
+        if (!initialized) {
+          console.error('[SetUserData] ❌ Firebase not initialized');
+          return false;
+        }
+      }
+
+      // Verify path format: telegram_users/{userId}
+      const userPath = `telegram_users/${userId}`;
+      console.log('[SetUserData] 🎯 Writing to verified path:', userPath);
+      
+      const userRef = ref(this.database!, userPath);
+
+      console.log('📤 Writing user:', userId);
+      console.log('[SetUserData] 📊 Data to write:', {
+        id: userData.id,
+        telegramId: userData.telegramId,
+        username: userData.username,
+        first_name: userData.first_name
+      });
+
+      await set(userRef, userData);
+      console.log('✅ Write complete for:', userId);
+
+      // Immediate verification
+      const snapshot = await get(userRef);
+      if (snapshot.exists()) {
+        console.log('[SetUserData] 📦 Write verification successful:', {
+          path: userPath,
+          data: snapshot.val()
+        });
+        return true;
+      } else {
+        console.error('[SetUserData] ❌ Write verification failed - no data at path:', userPath);
+        return false;
+      }
+
+    } catch (error) {
+      console.error('[SetUserData] ❌ Write failed:', error);
       return false;
     }
   }
@@ -324,6 +408,13 @@ export const isTelegramWebApp = (): boolean => {
  */
 export const getCurrentTelegramUser = async (): Promise<TelegramWebAppUser | null> => {
   return telegramFirebaseSync.getCurrentTelegramUser();
+};
+
+/**
+ * Set Telegram user data to Firebase (verifies path: telegram_users/{userId})
+ */
+export const setTelegramUserData = async (userId: string, userData: FirebaseUserData): Promise<boolean> => {
+  return telegramFirebaseSync.setTelegramUserData(userId, userData);
 };
 
 // Auto-sync when module loads (client-side only)
