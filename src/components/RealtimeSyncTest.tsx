@@ -133,10 +133,10 @@ const RealtimeSyncTest = () => {
     if (navigator.onLine) {
       // This would typically be done by disconnecting network
       addToLog('💡 To test offline mode, disconnect your network and try updates');
-      toast.info('Disconnect network to test offline mode');
+      toast('Disconnect network to test offline mode', { icon: 'ℹ️' });
     } else {
       addToLog('📱 Currently offline - localStorage fallback active');
-      toast.info('Offline mode active - using localStorage');
+      toast('Offline mode active - using localStorage', { icon: '📱' });
     }
   };
 

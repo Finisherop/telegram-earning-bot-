@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { User } from '@/types';
 import { TelegramService } from '@/lib/telegram';
@@ -75,9 +75,9 @@ const Referral = ({ user, onUserUpdate }: ReferralProps) => {
   }, [user.telegramId]);
 
   // Function to get current user ID from Telegram WebApp
-  const getCurrentUserId = () => {
+  const getCurrentUserId = useCallback(() => {
     return window.Telegram?.WebApp?.initDataUnsafe?.user?.id?.toString() || user.telegramId;
-  };
+  }, [user.telegramId]);
 
   // Function to calculate referral reward based on user's VIP tier
   const calculateReferralReward = (vipTier: string = 'free', referralMultiplier: number = 1) => {
@@ -86,7 +86,7 @@ const Referral = ({ user, onUserUpdate }: ReferralProps) => {
   };
 
   // Function to update user rewards for confirmed referrals
-  const updateUserRewards = async (confirmedCount: number) => {
+  const updateUserRewards = useCallback(async (confirmedCount: number) => {
     if (!realtimeDb || isProcessingRewards) return;
 
     try {
@@ -156,7 +156,7 @@ const Referral = ({ user, onUserUpdate }: ReferralProps) => {
     } finally {
       setIsProcessingRewards(false);
     }
-  };
+  }, [user.vipTier, user.referralMultiplier, isProcessingRewards, getCurrentUserId, onUserUpdate]);
 
   // Function to listen to referred users and track their status
   useEffect(() => {
@@ -220,7 +220,7 @@ const Referral = ({ user, onUserUpdate }: ReferralProps) => {
       listenersRef.current.forEach(cleanup => cleanup());
       listenersRef.current = [];
     };
-  }, [user.telegramId, user.vipTier, user.referralMultiplier, isProcessingRewards]);
+  }, [user.telegramId, user.vipTier, user.referralMultiplier, isProcessingRewards, getCurrentUserId, updateUserRewards]);
 
   // Cleanup listeners on component unmount
   useEffect(() => {

@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useTelegramUser } from '@/hooks/useTelegramUser';
 
 export default function UserDataDisplay() {
@@ -46,9 +47,11 @@ export default function UserDataDisplay() {
         <div className="space-y-3">
           <div className="flex items-center space-x-3">
             {user.photo_url ? (
-              <img
+              <Image
                 src={user.photo_url}
                 alt={user.first_name}
+                width={48}
+                height={48}
                 className="w-12 h-12 rounded-full object-cover"
               />
             ) : (

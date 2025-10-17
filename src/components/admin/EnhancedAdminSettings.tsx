@@ -13,7 +13,12 @@ import {
 import { getUser } from '@/lib/firebaseService';
 import toast from 'react-hot-toast';
 
-const EnhancedAdminSettings = () => {
+interface EnhancedAdminSettingsProps {
+  users?: User[];
+  updateUser?: (userId: string, updateData: Partial<User>) => Promise<void>;
+}
+
+const EnhancedAdminSettings = ({ users, updateUser }: EnhancedAdminSettingsProps) => {
   const [settings, setSettings] = useState<AdminSettingsType | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

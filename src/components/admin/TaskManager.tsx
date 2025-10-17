@@ -6,9 +6,14 @@ import { Task } from '@/types';
 import { createTask, getTasks } from '@/lib/firebaseService';
 import toast from 'react-hot-toast';
 
-const TaskManager = () => {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
+interface TaskManagerProps {
+  tasks?: Task[];
+  createTask?: (taskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>;
+}
+
+const TaskManager = ({ tasks: propTasks, createTask: propCreateTask }: TaskManagerProps) => {
+  const [tasks, setTasks] = useState<Task[]>(propTasks || []);
+  const [loading, setLoading] = useState(!propTasks);
   const [creating, setCreating] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   
@@ -23,8 +28,13 @@ const TaskManager = () => {
   });
 
   useEffect(() => {
-    loadTasks();
-  }, []);
+    if (propTasks) {
+      setTasks(propTasks);
+      setLoading(false);
+    } else {
+      loadTasks();
+    }
+  }, [propTasks]);
 
   const loadTasks = async () => {
     try {
@@ -52,7 +62,8 @@ const TaskManager = () => {
 
     setCreating(true);
     try {
-      await createTask({
+      const createTaskFn = propCreateTask || createTask;
+      await createTaskFn({
         title: formData.title.trim(),
         description: formData.description.trim() || formData.title.trim(),
         reward: formData.reward,
@@ -74,7 +85,9 @@ const TaskManager = () => {
       });
       
       setShowCreateForm(false);
-      await loadTasks(); // Reload tasks
+      if (!propTasks) {
+        await loadTasks(); // Reload tasks only if not using props
+      }
     } catch (error) {
       console.error('[TaskManager] Failed to create task:', error);
       toast.error('❌ Failed to create task');

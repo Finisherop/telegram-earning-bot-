@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import Image from 'next/image';
 import { WithdrawalRequest, User } from '@/types';
 import { getWithdrawalRequests, updateWithdrawalStatus, getUser } from '@/lib/firebaseService';
 import toast from 'react-hot-toast';
@@ -10,15 +11,28 @@ interface WithdrawalWithUser extends WithdrawalRequest {
   user?: User | null;
 }
 
-const AdminApprovals = () => {
+interface AdminApprovalsProps {
+  withdrawals?: WithdrawalRequest[];
+  updateWithdrawalStatus?: (withdrawalId: string, status: 'pending' | 'approved' | 'rejected' | 'paid', adminNotes?: string) => Promise<void>;
+}
+
+const AdminApprovals = ({ withdrawals: propWithdrawals, updateWithdrawalStatus: propUpdateWithdrawalStatus }: AdminApprovalsProps) => {
   const [withdrawals, setWithdrawals] = useState<WithdrawalWithUser[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!propWithdrawals);
   const [processing, setProcessing] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'paid'>('pending');
 
   useEffect(() => {
-    loadWithdrawals();
-  }, []);
+    if (propWithdrawals) {
+      const withdrawalsWithUsers = propWithdrawals.map(w => ({ ...w, user: null }));
+      setWithdrawals(withdrawalsWithUsers);
+      setLoading(false);
+      // Load user data for each withdrawal
+      loadUserDataForWithdrawals(withdrawalsWithUsers);
+    } else {
+      loadWithdrawals();
+    }
+  }, [propWithdrawals]);
 
   const loadWithdrawals = async () => {
     try {
@@ -44,12 +58,29 @@ const AdminApprovals = () => {
     }
   };
 
+  const loadUserDataForWithdrawals = async (withdrawalsList: WithdrawalWithUser[]) => {
+    const withdrawalsWithUsers = await Promise.all(
+      withdrawalsList.map(async (withdrawal) => {
+        try {
+          const user = await getUser(withdrawal.userId);
+          return { ...withdrawal, user };
+        } catch (error) {
+          return withdrawal;
+        }
+      })
+    );
+    setWithdrawals(withdrawalsWithUsers);
+  };
+
   const handleApprove = async (withdrawalId: string) => {
     setProcessing(withdrawalId);
     try {
-      await updateWithdrawalStatus(withdrawalId, 'approved', 'Approved by admin');
+      const updateFn = propUpdateWithdrawalStatus || updateWithdrawalStatus;
+      await updateFn(withdrawalId, 'approved', 'Approved by admin');
       toast.success('Withdrawal request approved!');
-      await loadWithdrawals();
+      if (!propWithdrawals) {
+        await loadWithdrawals();
+      }
     } catch (error) {
       toast.error('Failed to approve withdrawal');
     } finally {
@@ -60,9 +91,12 @@ const AdminApprovals = () => {
   const handleReject = async (withdrawalId: string, reason: string = 'Rejected by admin') => {
     setProcessing(withdrawalId);
     try {
-      await updateWithdrawalStatus(withdrawalId, 'rejected', reason);
+      const updateFn = propUpdateWithdrawalStatus || updateWithdrawalStatus;
+      await updateFn(withdrawalId, 'rejected', reason);
       toast.success('Withdrawal request rejected');
-      await loadWithdrawals();
+      if (!propWithdrawals) {
+        await loadWithdrawals();
+      }
     } catch (error) {
       toast.error('Failed to reject withdrawal');
     } finally {
@@ -73,9 +107,12 @@ const AdminApprovals = () => {
   const handleMarkPaid = async (withdrawalId: string) => {
     setProcessing(withdrawalId);
     try {
-      await updateWithdrawalStatus(withdrawalId, 'paid', 'Payment completed');
+      const updateFn = propUpdateWithdrawalStatus || updateWithdrawalStatus;
+      await updateFn(withdrawalId, 'paid', 'Payment completed');
       toast.success('Withdrawal marked as paid!');
-      await loadWithdrawals();
+      if (!propWithdrawals) {
+        await loadWithdrawals();
+      }
     } catch (error) {
       toast.error('Failed to mark as paid');
     } finally {
@@ -199,11 +236,13 @@ const AdminApprovals = () => {
               <div className="flex flex-col md:flex-row md:items-center justify-between space-y-4 md:space-y-0">
                 {/* User Info */}
                 <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
+                  <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center overflow-hidden">
                     {withdrawal.user?.profilePic ? (
-                      <img
+                      <Image
                         src={withdrawal.user.profilePic}
                         alt="User"
+                        width={48}
+                        height={48}
                         className="w-full h-full rounded-full object-cover"
                       />
                     ) : (

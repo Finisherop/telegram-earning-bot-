@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import Image from 'next/image';
 import { User } from '@/types';
 import { TelegramService } from '@/lib/telegram';
 import { getWithdrawalRequests } from '@/lib/firebaseService';
@@ -132,7 +133,7 @@ const Profile = ({ user: propUser }: ProfileProps) => {
     };
 
     loadUserProfile();
-  }, [telegramUser?.id, propUser?.telegramId]);
+  }, [telegramUser?.id, propUser?.telegramId, propUser?.firstName, propUser?.username, telegramUser?.first_name, telegramUser?.username]);
 
   const getVIPBadge = () => {
     if (!firebaseUser || firebaseUser.vipTier === 'free') return null;
@@ -240,9 +241,11 @@ const Profile = ({ user: propUser }: ProfileProps) => {
               transition={{ duration: 0.2 }}
             >
               {firebaseUser.profilePic ? (
-                <img
+                <Image
                   src={firebaseUser.profilePic}
                   alt="Profile"
+                  width={96}
+                  height={96}
                   className="w-full h-full rounded-full object-cover"
                 />
               ) : (

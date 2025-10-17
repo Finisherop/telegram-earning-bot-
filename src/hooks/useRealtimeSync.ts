@@ -436,7 +436,7 @@ export function useOptimisticUpdate<T>(
   };
 }
 
-export default {
+const useRealtimeSyncHooks = {
   useUserData,
   useAllUsers,
   useTasks,
@@ -444,3 +444,5 @@ export default {
   useSyncStatus,
   useOptimisticUpdate
 };
+
+export default useRealtimeSyncHooks;
