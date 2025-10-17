@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User } from '@/types';
 import { useUserData, useTasks, useSyncStatus } from '@/hooks/useRealtimeSync';
+import { getCachedTelegramUser, detectTelegramUser } from '@/lib/telegramWebAppIntegration';
 import EnhancedDashboard from './user/EnhancedDashboard';
 import Task from './user/Task';
 import Referral from './user/Referral';
@@ -28,41 +29,51 @@ const UserDashboard = () => {
     if (typeof window !== 'undefined') {
       const initializeUser = async () => {
         try {
-          const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
-          let userId: string;
-          let userInfo: any = {};
+          console.log('[UserDashboard] 🚀 Initializing user dashboard...');
+
+          // First, try to get cached Telegram user
+          let tgUser = getCachedTelegramUser();
           
+          if (!tgUser) {
+            console.log('[UserDashboard] 🔍 No cached user, detecting Telegram user...');
+            // If no cached user, detect with retry logic
+            tgUser = await detectTelegramUser();
+          }
+
           if (tgUser?.id) {
-            // Real Telegram user only
-            userId = String(tgUser.id);
-            userInfo = {
+            // Real Telegram user found
+            const userId = String(tgUser.id);
+            const userInfo = {
               firstName: tgUser.first_name || 'User',
               lastName: tgUser.last_name || '',
               username: tgUser.username || '',
               profilePic: tgUser.photo_url || ''
             };
-            console.log('[UserDashboard] Real Telegram user detected:', userId, userInfo);
+            
+            console.log('[UserDashboard] ✅ Telegram user initialized:', {
+              id: userId,
+              name: `${userInfo.firstName} ${userInfo.lastName}`.trim(),
+              username: userInfo.username || 'N/A'
+            });
+
+            setTelegramId(userId);
+            
+            // Initialize user in Firebase if not exists
+            const { initializeUser: initUser } = await import('@/lib/firebaseService');
+            await initUser(userId);
+            
+            // Update user info if we have new data
+            if (userInfo.firstName && userInfo.firstName !== 'User') {
+              const { safeUpdateUser } = await import('@/lib/firebaseService');
+              await safeUpdateUser(userId, userInfo);
+            }
           } else {
             // NO browser fallback - exit silently
-            console.log('[UserDashboard] ⚠️ Not in Telegram WebApp environment - no user created');
+            console.log('[UserDashboard] ❌ No Telegram user detected - dashboard not initialized');
             return;
           }
-          
-          setTelegramId(userId);
-          
-          // Initialize user in Firebase if not exists
-          const { initializeUser: initUser } = await import('@/lib/firebaseService');
-          await initUser(userId);
-          
-          // Update user info if we have new data
-          if (userInfo.firstName && userInfo.firstName !== 'User') {
-            const { safeUpdateUser } = await import('@/lib/firebaseService');
-            await safeUpdateUser(userId, userInfo);
-          }
-          
         } catch (error) {
-          console.error('[UserDashboard] Error initializing user:', error);
-          // NO fallback - exit silently if not Telegram WebApp
+          console.error('[UserDashboard] ❌ Error initializing user:', error);
           return;
         }
       };

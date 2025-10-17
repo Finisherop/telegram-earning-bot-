@@ -8,7 +8,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { writeTelegramUserToFirebase, updateTelegramUserInFirebase } from '@/lib/telegramFirebaseWriter';
+import { 
+  detectTelegramUser, 
+  saveTelegramUserToFirebase, 
+  updateTelegramUserInFirebase,
+  getCachedTelegramUser 
+} from '@/lib/telegramWebAppIntegration';
 
 interface TestResult {
   timestamp: Date;
@@ -25,20 +30,32 @@ const FirebaseTestPage = () => {
   const [results, setResults] = useState<TestResult[]>([]);
 
   useEffect(() => {
-    // Check for Telegram user
-    const checkTelegram = () => {
-      const user = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
+    // Check for Telegram user using the new integration
+    const checkTelegram = async () => {
+      console.log('[Firebase Test] 🔍 Checking for Telegram user...');
+      
+      // First try cached user
+      let user = getCachedTelegramUser();
+      
+      if (!user) {
+        console.log('[Firebase Test] 🔍 No cached user, detecting...');
+        // If no cached user, detect with retry logic
+        user = await detectTelegramUser();
+      }
+
       if (user?.id) {
         setTelegramUser(user);
-        console.log('[Firebase Test] Telegram user detected:', user);
+        console.log('[Firebase Test] ✅ Telegram user detected:', {
+          id: user.id,
+          name: `${user.first_name} ${user.last_name || ''}`.trim(),
+          username: user.username || 'N/A'
+        });
       } else {
-        console.log('[Firebase Test] No Telegram user found');
+        console.log('[Firebase Test] ❌ No Telegram user found');
       }
     };
 
-    // Check immediately and after delay
     checkTelegram();
-    setTimeout(checkTelegram, 2000);
   }, []);
 
   const addResult = (operation: string, success: boolean, userId?: string, path?: string, error?: string) => {
@@ -54,13 +71,18 @@ const FirebaseTestPage = () => {
   };
 
   const testWriteUser = async () => {
+    if (!telegramUser) {
+      addResult('Write User', false, undefined, undefined, 'No Telegram user available');
+      return;
+    }
+
     setIsLoading(true);
-    console.log('[Firebase Test] 🧪 Testing user write...');
+    console.log('[Firebase Test] 🧪 Testing user write with full Telegram object...');
     
     try {
-      const success = await writeTelegramUserToFirebase();
-      const userId = telegramUser?.id?.toString();
-      const path = userId ? `telegram_users/${userId}` : undefined;
+      const success = await saveTelegramUserToFirebase(telegramUser);
+      const userId = telegramUser.id.toString();
+      const path = `telegram_users/${userId}`;
       
       addResult('Write User', success, userId, path);
       
@@ -71,7 +93,7 @@ const FirebaseTestPage = () => {
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      addResult('Write User', false, undefined, undefined, errorMessage);
+      addResult('Write User', false, telegramUser.id.toString(), undefined, errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -87,10 +109,10 @@ const FirebaseTestPage = () => {
     const userId = telegramUser.id.toString();
     const newCoins = Math.floor(Math.random() * 1000);
     
-    console.log('[Firebase Test] 🧪 Testing coins update...');
+    console.log('[Firebase Test] 🧪 Testing coins update with Telegram user object...');
     
     try {
-      const success = await updateTelegramUserInFirebase(userId, { coins: newCoins });
+      const success = await updateTelegramUserInFirebase(telegramUser, { coins: newCoins });
       const path = `telegram_users/${userId}`;
       
       addResult('Update Coins', success, userId, path);
