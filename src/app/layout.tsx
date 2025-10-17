@@ -3,7 +3,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { Toaster } from 'react-hot-toast';
 import EnhancedErrorBoundary from '@/components/EnhancedErrorBoundary';
-import UserCaptureInitializer from '@/components/UserCaptureInitializer';
+import TelegramUserSyncInitializer from '@/components/TelegramUserSyncInitializer';
 import SilentErrorInitializer from '@/components/SilentErrorInitializer';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -109,7 +109,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <SilentErrorInitializer />
         <EnhancedErrorBoundary>
-          <UserCaptureInitializer />
+          <TelegramUserSyncInitializer />
           {children}
         </EnhancedErrorBoundary>
         <Toaster
